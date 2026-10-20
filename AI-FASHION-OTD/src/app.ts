@@ -1,4 +1,3 @@
-
 import express from "express";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -7,6 +6,7 @@ import rateLimit from "express-rate-limit";
 
 import corsMiddleware from "./config/cors";
 import authRoutes from "./modules/auth/auth.routes";
+import eventRoutes from "./modules/events/events.routes";
 
 const app = express();
 
@@ -48,6 +48,9 @@ app.get("/health", (_req, res) => {
 
 // Authentication routes
 app.use("/api/auth", authLimiter, authRoutes);
+
+// Event routes
+app.use("/api/events", eventRoutes);
 
 // Handle unknown routes
 app.use((_req, res) => {
