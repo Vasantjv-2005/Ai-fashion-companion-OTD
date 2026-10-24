@@ -1,5 +1,124 @@
-
 import { Schema, model, Types } from "mongoose";
+
+export const CLOTHING_CATEGORIES = [
+  "shirt",
+  "tshirt",
+  "top",
+  "blouse",
+  "trousers",
+  "jeans",
+  "shorts",
+  "skirt",
+  "dress",
+  "jacket",
+  "coat",
+  "sweater",
+  "hoodie",
+  "suit",
+  "shoes",
+  "accessory",
+  "other",
+] as const;
+
+export const CLOTHING_COLORS = [
+  "black",
+  "white",
+  "gray",
+  "navy",
+  "blue",
+  "light_blue",
+  "teal",
+  "green",
+  "olive",
+  "yellow",
+  "orange",
+  "red",
+  "burgundy",
+  "pink",
+  "purple",
+  "brown",
+  "tan",
+  "beige",
+  "cream",
+  "gold",
+  "silver",
+  "multicolor",
+] as const;
+
+export const CLOTHING_FABRICS = [
+  "cotton",
+  "denim",
+  "wool",
+  "linen",
+  "silk",
+  "leather",
+  "suede",
+  "polyester",
+  "nylon",
+  "rayon",
+  "viscose",
+  "acrylic",
+  "cashmere",
+  "spandex",
+  "canvas",
+  "rubber",
+  "synthetic_blend",
+  "natural_blend",
+  "other",
+] as const;
+
+export const CLOTHING_PATTERNS = [
+  "solid",
+  "striped",
+  "checked",
+  "plaid",
+  "polka_dot",
+  "floral",
+  "graphic",
+  "abstract",
+  "animal_print",
+  "colorblock",
+  "other",
+] as const;
+
+export const CLOTHING_STYLES = [
+  "classic",
+  "minimalist",
+  "preppy",
+  "bohemian",
+  "streetwear",
+  "sporty",
+  "workwear",
+  "vintage",
+  "romantic",
+  "edgy",
+  "avant_garde",
+  "utility",
+  "elegant",
+  "casual",
+  "other",
+] as const;
+
+export const CLOTHING_SEASONS = [
+  "spring",
+  "summer",
+  "autumn",
+  "winter",
+  "all_season",
+] as const;
+
+export const CLOTHING_OCCASIONS = [
+  "everyday",
+  "work",
+  "business",
+  "formal",
+  "party",
+  "wedding",
+  "athletic",
+  "travel",
+  "outdoor",
+  "lounge",
+] as const;
 
 export interface IWardrobeItem {
   _id: Types.ObjectId;
@@ -20,20 +139,59 @@ export interface IWardrobeItem {
   updatedAt: Date;
 }
 
+const nullableEnum = (values: readonly string[]) => ({
+  type: String,
+  default: null,
+  trim: true,
+  lowercase: true,
+  enum: [...values, null],
+});
+
 const wardrobeItemSchema = new Schema<IWardrobeItem>(
   {
-    name: { type: String, required: true, trim: true },
-    category: { type: String, required: true, trim: true },
-    color: { type: String, required: true, trim: true },
-    secondary_color: { type: String, default: null },
-    fabric: { type: String, default: null },
-    pattern: { type: String, default: null },
-    style: { type: String, default: null },
-    season: { type: String, default: null },
-    occasion: { type: String, default: null },
-    brand: { type: String, default: null },
-    description: { type: String, default: null },
-    is_favorite: { type: Boolean, default: false },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 1,
+      maxlength: 120,
+    },
+    category: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      enum: CLOTHING_CATEGORIES,
+    },
+    color: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      enum: CLOTHING_COLORS,
+    },
+    secondary_color: nullableEnum(CLOTHING_COLORS),
+    fabric: nullableEnum(CLOTHING_FABRICS),
+    pattern: nullableEnum(CLOTHING_PATTERNS),
+    style: nullableEnum(CLOTHING_STYLES),
+    season: nullableEnum(CLOTHING_SEASONS),
+    occasion: nullableEnum(CLOTHING_OCCASIONS),
+    brand: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 100,
+    },
+    description: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 1000,
+    },
+    is_favorite: {
+      type: Boolean,
+      default: false,
+    },
     user_id: {
       type: Schema.Types.ObjectId,
       required: true,
