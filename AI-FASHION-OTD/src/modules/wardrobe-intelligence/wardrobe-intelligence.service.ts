@@ -1,8 +1,7 @@
-
 import type {
   ClothingItemInference,
   ClothingReviewStatus,
-} from "../wardrobe/types";
+} from "./wardrobe-intelligence.types";
 
 export function getReviewStatus(
   confidence: number,
