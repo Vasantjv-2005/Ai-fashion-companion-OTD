@@ -1,6 +1,6 @@
 
 import { WardrobeItem } from "../../models/WardrobeItem";
-import type { ClothingItemInference } from "./types";
+import type { ClothingItemInference } from "./wardrobe.types";
 
 export async function createWardrobeItem(
   userId: string,
