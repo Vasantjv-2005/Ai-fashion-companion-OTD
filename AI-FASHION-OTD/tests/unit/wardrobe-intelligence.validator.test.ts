@@ -1,67 +1,176 @@
 
 import { describe, expect, it } from "vitest";
-import {
-    validateClothingInference,
-    validateClothingInferenceList,
-} from "../../src/modules/wardrobe-intelligence/wardrobe-intelligence.validator";
+import { validateClothingInference } from "../../src/modules/wardrobe-intelligence/wardrobe-intelligence.validator";
 
-const validItem = {
+const validInference = {
     name: "Black Cotton Shirt",
-    category: "tops",
-    clothingType: "shirt",
+    category: "shirt",
     color: "black",
-    style: "casual",
-    confidence: 0.92,
+    secondaryColor: null,
+
+    attributes: {
+        style: "casual",
+        sleeveLength: "full",
+        fabric: "cotton",
+        pattern: "solid",
+        season: "winter",
+        occasion: "everyday",
+        brand: null,
+    },
+
+    confidence: {
+        overall: 0.95,
+        category: 0.98,
+        color: 0.99,
+        style: 0.90,
+        fabric: 0.85,
+    },
+
+    image: {
+        imageUrl: "https://example.com/shirt.jpg",
+        storageKey: "wardrobe/shirt-001",
+    },
 };
 
-describe("Clothing inference validation", () => {
-    it("accepts valid clothing objects", () => {
-        const validItems = [
-            validItem,
-            { ...validItem, clothingType: "jeans", category: "bottoms" },
-            { ...validItem, clothingType: "dress", category: "dresses" },
-            { ...validItem, clothingType: "jacket", category: "outerwear" },
-            { ...validItem, clothingType: "shoes", category: "shoes" },
-            { ...validItem, clothingType: "accessory", category: "accessories" },
-            { ...validItem, sleeveType: "long-sleeve" },
-            { ...validItem, pattern: "striped" },
-            { ...validItem, material: "cotton" },
-            { ...validItem, formality: "formal" },
-            { ...validItem, season: ["summer", "winter"] },
-        ];
+// 10 valid clothing objects
+const validSamples = [
+    validInference,
+    {
+        ...validInference,
+        name: "White T-Shirt",
+        category: "tshirt",
+        color: "white",
+        attributes: { ...validInference.attributes, sleeveLength: "short", season: "summer" },
+    },
+    {
+        ...validInference,
+        name: "Beige Top",
+        category: "top",
+        color: "beige",
+        attributes: { ...validInference.attributes, style: "minimalist" },
+    },
+    {
+        ...validInference,
+        name: "Blue Blouse",
+        category: "blouse",
+        color: "blue",
+        attributes: { ...validInference.attributes, style: "elegant", fabric: "silk" },
+    },
+    {
+        ...validInference,
+        name: "Gray Trousers",
+        category: "trousers",
+        color: "gray",
+        attributes: { ...validInference.attributes, style: "workwear" },
+    },
+    {
+        ...validInference,
+        name: "Blue Jeans",
+        category: "jeans",
+        color: "blue",
+        attributes: { ...validInference.attributes, fabric: "denim", pattern: "solid" },
+    },
+    {
+        ...validInference,
+        name: "Green Shorts",
+        category: "shorts",
+        color: "green",
+        attributes: { ...validInference.attributes, sleeveLength: "not-applicable", season: "summer" },
+    },
+    {
+        ...validInference,
+        name: "Pink Skirt",
+        category: "skirt",
+        color: "pink",
+        attributes: { ...validInference.attributes, pattern: "floral" },
+    },
+    {
+        ...validInference,
+        name: "Red Dress",
+        category: "dress",
+        color: "red",
+        attributes: { ...validInference.attributes, style: "romantic", occasion: "party" },
+    },
+    {
+        ...validInference,
+        name: "Navy Jacket",
+        category: "jacket",
+        color: "navy",
+        attributes: { ...validInference.attributes, fabric: "wool", season: "winter" },
+    },
+];
 
-        for (const item of validItems) {
-            expect(validateClothingInference(item).success).toBe(true);
-        }
+// 10 invalid clothing objects
+const invalidSamples: unknown[] = [
+    { ...validInference, category: "electronics" },
+    { ...validInference, color: "transparent" },
+    { ...validInference, secondaryColor: "neon" },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, style: "sport" },
+    },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, sleeveLength: "long" },
+    },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, fabric: "organic cotton" },
+    },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, pattern: "polka-dots" },
+    },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, season: "monsoon" },
+    },
+    {
+        ...validInference,
+        attributes: { ...validInference.attributes, occasion: "daily wear" },
+    },
+    {
+        ...validInference,
+        confidence: { ...validInference.confidence, overall: 1.5 },
+    },
+];
+
+describe("Clothing Inference Validation", () => {
+    validSamples.forEach((sample, index) => {
+        it(`accepts valid clothing object ${index + 1}`, () => {
+            expect(validateClothingInference(sample).success).toBe(true);
+        });
     });
 
-    it("rejects invalid clothing objects", () => {
-        const invalidItems = [
-            { ...validItem, name: "" },
-            { ...validItem, category: "invalid-category" },
-            { ...validItem, clothingType: "invalid-type" },
-            { ...validItem, color: "" },
-            { ...validItem, style: "invalid-style" },
-            { ...validItem, confidence: -0.1 },
-            { ...validItem, confidence: 1.1 },
-            { ...validItem, confidence: NaN },
-            { ...validItem, sleeveType: "invalid-sleeve" },
-            { ...validItem, pattern: "invalid-pattern" },
-            { ...validItem, material: "invalid-material" },
-            { ...validItem, season: ["summer", "summer"] },
-            { ...validItem, unexpectedField: "not allowed" },
-        ];
-
-        for (const item of invalidItems) {
-            expect(validateClothingInference(item).success).toBe(false);
-        }
+    invalidSamples.forEach((sample, index) => {
+        it(`rejects invalid clothing object ${index + 1}`, () => {
+            expect(validateClothingInference(sample).success).toBe(false);
+        });
     });
 
-    it("rejects an empty prediction list", () => {
-        expect(validateClothingInferenceList([]).success).toBe(false);
+    it("rejects a missing clothing name", () => {
+        const { name, ...data } = validInference;
+        expect(validateClothingInference(data).success).toBe(false);
     });
 
-    it("accepts a valid prediction list", () => {
-        expect(validateClothingInferenceList([validItem]).success).toBe(true);
+    it("rejects an invalid image URL", () => {
+        const data = {
+            ...validInference,
+            image: { ...validInference.image, imageUrl: "not-a-url" },
+        };
+        expect(validateClothingInference(data).success).toBe(false);
+    });
+
+    it("accepts null optional attributes", () => {
+        const data = {
+            ...validInference,
+            attributes: {
+                ...validInference.attributes,
+                style: null,
+                fabric: null,
+                pattern: null,
+            },
+        };
+        expect(validateClothingInference(data).success).toBe(true);
     });
 });
