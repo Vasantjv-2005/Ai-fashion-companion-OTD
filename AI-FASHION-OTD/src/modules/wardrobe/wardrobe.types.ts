@@ -1,25 +1,24 @@
 
 export type ClothingCategory =
-  | "shirt"
-  | "tshirt"
-  | "trousers"
-  | "jeans"
-  | "dress"
-  | "skirt"
-  | "jacket"
-  | "coat"
-  | "sweater"
-  | "shoes"
-  | "accessory"
-  | "other";
+  (typeof import("../../models/WardrobeItem").CLOTHING_CATEGORIES)[number];
+
+export type ClothingColor =
+  (typeof import("../../models/WardrobeItem").CLOTHING_COLORS)[number];
+
+export type ClothingFabric =
+  (typeof import("../../models/WardrobeItem").CLOTHING_FABRICS)[number];
+
+export type ClothingPattern =
+  (typeof import("../../models/WardrobeItem").CLOTHING_PATTERNS)[number];
 
 export type ClothingStyle =
-  | "casual"
-  | "formal"
-  | "sport"
-  | "traditional"
-  | "party"
-  | "other";
+  (typeof import("../../models/WardrobeItem").CLOTHING_STYLES)[number];
+
+export type ClothingSeason =
+  (typeof import("../../models/WardrobeItem").CLOTHING_SEASONS)[number];
+
+export type ClothingOccasion =
+  (typeof import("../../models/WardrobeItem").CLOTHING_OCCASIONS)[number];
 
 export type SleeveLength =
   | "sleeveless"
@@ -32,10 +31,10 @@ export type SleeveLength =
 export interface ClothingAttributes {
   style: ClothingStyle | null;
   sleeveLength: SleeveLength;
-  fabric: string | null;
-  pattern: string | null;
-  season: string | null;
-  occasion: string | null;
+  fabric: ClothingFabric | null;
+  pattern: ClothingPattern | null;
+  season: ClothingSeason | null;
+  occasion: ClothingOccasion | null;
   brand: string | null;
 }
 
@@ -55,8 +54,8 @@ export interface ClothingImageReference {
 export interface ClothingItemInference {
   name: string;
   category: ClothingCategory;
-  color: string;
-  secondaryColor: string | null;
+  color: ClothingColor;
+  secondaryColor: ClothingColor | null;
   attributes: ClothingAttributes;
   confidence: ClothingConfidence;
   image: ClothingImageReference;
