@@ -2,81 +2,56 @@
 import { z } from "zod";
 
 import {
-    CLOTHING_CATEGORIES,
-    CLOTHING_SEASONS,
-    CLOTHING_STYLES,
-} from "../wardrobe/types";
+  CLOTHING_CATEGORIES,
+  CLOTHING_COLORS,
+  CLOTHING_FABRICS,
+  CLOTHING_PATTERNS,
+  CLOTHING_STYLES,
+  CLOTHING_SEASONS,
+  CLOTHING_OCCASIONS,
+} from "../../models/WardrobeItem";
 
-import {
-    CLOTHING_TYPES,
-    SLEEVE_TYPES,
-    CLOTHING_PATTERNS,
-    CLOTHING_MATERIALS,
-    CLOTHING_FORMALITIES,
-} from "./wardrobe-intelligence.types";
-
-const nameSchema = z.string().trim().min(1).max(100);
-
-const colorSchema = z.string().trim().min(1).max(50);
-
-const confidenceSchema = z
-    .number()
-    .finite()
-    .min(0)
-    .max(1);
+const confidenceScore = z.number().min(0).max(1);
 
 export const clothingInferenceSchema = z.object({
-    name: nameSchema,
+  name: z.string().trim().min(1).max(120),
 
-    category: z.enum(CLOTHING_CATEGORIES),
+  category: z.enum(CLOTHING_CATEGORIES),
 
-    clothingType: z.enum(CLOTHING_TYPES),
+  color: z.enum(CLOTHING_COLORS),
+  secondaryColor: z.enum(CLOTHING_COLORS).nullable(),
 
-    color: colorSchema,
+  attributes: z.object({
+    style: z.enum(CLOTHING_STYLES).nullable(),
+    sleeveLength: z.enum([
+      "sleeveless",
+      "short",
+      "three-quarter",
+      "full",
+      "not-applicable",
+      "unknown",
+    ]),
+    fabric: z.enum(CLOTHING_FABRICS).nullable(),
+    pattern: z.enum(CLOTHING_PATTERNS).nullable(),
+    season: z.enum(CLOTHING_SEASONS).nullable(),
+    occasion: z.enum(CLOTHING_OCCASIONS).nullable(),
+    brand: z.string().nullable(),
+  }),
 
-    secondaryColor: z
-        .string()
-        .trim()
-        .min(1)
-        .max(50)
-        .nullable()
-        .optional(),
+  confidence: z.object({
+    overall: confidenceScore,
+    category: confidenceScore,
+    color: confidenceScore,
+    style: confidenceScore.nullable(),
+    fabric: confidenceScore.nullable(),
+  }),
 
-    sleeveType: z.enum(SLEEVE_TYPES).optional(),
+  image: z.object({
+    imageUrl: z.string().url(),
+    storageKey: z.string().min(1),
+  }),
+});
 
-    pattern: z.enum(CLOTHING_PATTERNS).optional(),
-
-    material: z.enum(CLOTHING_MATERIALS).optional(),
-
-    style: z.enum(CLOTHING_STYLES),
-
-    formality: z.enum(CLOTHING_FORMALITIES).optional(),
-
-    season: z
-        .array(z.enum(CLOTHING_SEASONS))
-        .min(1)
-        .max(CLOTHING_SEASONS.length)
-        .refine(
-            (seasons) => new Set(seasons).size === seasons.length,
-            "Duplicate seasons are not allowed.",
-        )
-        .optional(),
-
-    confidence: confidenceSchema,
-}).strict();
-
-export const clothingInferenceListSchema = z
-    .array(clothingInferenceSchema)
-    .min(1, "At least one clothing prediction is required.");
-
-export type ValidatedClothingInference = z.infer<
-    typeof clothingInferenceSchema
->;
-
-export function validateClothingInference(input: unknown) {
-    return clothingInferenceSchema.safeParse(input);
-}
-
-export function validateClothingInferenceList(input: unknown) {
-    return clothingInferenceListSchema.safeParse(input);
+export function validateClothingInference(data: unknown) {
+  return clothingInferenceSchema.safeParse(data);
 }
