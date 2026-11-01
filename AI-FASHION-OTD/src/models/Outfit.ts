@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-const OUTFIT_STYLES = [
+export const OUTFIT_STYLES = [
     "casual",
     "formal",
     "smart-casual",
@@ -12,7 +12,9 @@ const OUTFIT_STYLES = [
     "other",
 ] as const;
 
-const OUTFIT_SEASONS = [
+export type OutfitStyle = (typeof OUTFIT_STYLES)[number];
+
+export const OUTFIT_SEASONS = [
     "spring",
     "summer",
     "autumn",
@@ -20,13 +22,14 @@ const OUTFIT_SEASONS = [
     "all-season",
 ] as const;
 
+export type OutfitSeason = (typeof OUTFIT_SEASONS)[number];
+
 const outfitSchema = new Schema(
     {
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         name: {
@@ -100,7 +103,7 @@ const outfitSchema = new Schema(
         timestamps: true,
         collection: "outfits",
         versionKey: false,
-    }
+    },
 );
 
 outfitSchema.index({ userId: 1, createdAt: -1 });

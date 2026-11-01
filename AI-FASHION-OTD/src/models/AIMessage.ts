@@ -1,10 +1,12 @@
 import mongoose, { Schema } from "mongoose";
 
-const AI_MESSAGE_ROLES = [
+export const AI_MESSAGE_ROLES = [
     "user",
     "assistant",
     "system",
 ] as const;
+
+export type AIMessageRole = (typeof AI_MESSAGE_ROLES)[number];
 
 const aiMessageSchema = new Schema(
     {
@@ -12,7 +14,6 @@ const aiMessageSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         conversationId: {
@@ -20,7 +21,6 @@ const aiMessageSchema = new Schema(
             required: true,
             trim: true,
             maxlength: 100,
-            index: true,
         },
 
         role: {
@@ -82,7 +82,7 @@ const aiMessageSchema = new Schema(
         timestamps: true,
         collection: "ai_messages",
         versionKey: false,
-    }
+    },
 );
 
 aiMessageSchema.index({
@@ -98,7 +98,7 @@ export const AIMessage =
     (mongoose.models.AIMessage as mongoose.Model<AIMessageDocument>) ||
     mongoose.model<AIMessageDocument>(
         "AIMessage",
-        aiMessageSchema
+        aiMessageSchema,
     );
 
 export default AIMessage;

@@ -1,10 +1,12 @@
 import mongoose, { Schema } from "mongoose";
 
-const OUTFIT_POLL_VISIBILITY = [
+export const OUTFIT_POLL_VISIBILITY = [
     "private",
     "followers",
     "public",
 ] as const;
+
+export type OutfitPollVisibility = (typeof OUTFIT_POLL_VISIBILITY)[number];
 
 const outfitPollSchema = new Schema(
     {
@@ -12,7 +14,6 @@ const outfitPollSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         title: {
@@ -50,7 +51,6 @@ const outfitPollSchema = new Schema(
         isClosed: {
             type: Boolean,
             default: false,
-            index: true,
         },
 
         closedAt: {
@@ -68,7 +68,7 @@ const outfitPollSchema = new Schema(
         timestamps: true,
         collection: "outfit_polls",
         versionKey: false,
-    }
+    },
 );
 
 outfitPollSchema.index({ creatorId: 1, createdAt: -1 });
@@ -81,7 +81,7 @@ export const OutfitPoll =
     (mongoose.models.OutfitPoll as mongoose.Model<OutfitPollDocument>) ||
     mongoose.model<OutfitPollDocument>(
         "OutfitPoll",
-        outfitPollSchema
+        outfitPollSchema,
     );
 
 export default OutfitPoll;

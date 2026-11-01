@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 export const VIRTUAL_TRY_ON_STATUSES = [
@@ -8,18 +7,22 @@ export const VIRTUAL_TRY_ON_STATUSES = [
     "failed",
 ] as const;
 
+export type VirtualTryOnStatus = (typeof VIRTUAL_TRY_ON_STATUSES)[number];
+
 export const VIRTUAL_TRY_ON_TYPES = [
     "single_item",
     "full_outfit",
 ] as const;
 
+export type VirtualTryOnType = (typeof VIRTUAL_TRY_ON_TYPES)[number];
+
 export interface VirtualTryOnDocument extends mongoose.Document {
     userId: mongoose.Types.ObjectId;
     wardrobeItemIds: mongoose.Types.ObjectId[];
-    tryOnType: (typeof VIRTUAL_TRY_ON_TYPES)[number];
+    tryOnType: VirtualTryOnType;
     userImageUrl: string;
     generatedImageUrl?: string;
-    status: (typeof VIRTUAL_TRY_ON_STATUSES)[number];
+    status: VirtualTryOnStatus;
     aiProvider?: string;
     prompt?: string;
     errorMessage?: string;
@@ -34,7 +37,6 @@ const virtualTryOnSchema = new Schema<VirtualTryOnDocument>(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
         wardrobeItemIds: [
             {
@@ -102,7 +104,7 @@ virtualTryOnSchema.index({
     status: 1,
 });
 
-const VirtualTryOn =
+export const VirtualTryOn =
     mongoose.models.VirtualTryOn ||
     mongoose.model<VirtualTryOnDocument>(
         "VirtualTryOn",

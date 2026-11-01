@@ -6,7 +6,6 @@ const outfitPollOptionSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "OutfitPoll",
             required: true,
-            index: true,
         },
 
         outfitId: {
@@ -61,7 +60,7 @@ const outfitPollOptionSchema = new Schema(
         timestamps: true,
         collection: "outfit_poll_options",
         versionKey: false,
-    }
+    },
 );
 
 outfitPollOptionSchema.index({ pollId: 1, position: 1 });
@@ -74,7 +73,7 @@ export const OutfitPollOption =
     (mongoose.models.OutfitPollOption as mongoose.Model<OutfitPollOptionDocument>) ||
     mongoose.model<OutfitPollOptionDocument>(
         "OutfitPollOption",
-        outfitPollOptionSchema
+        outfitPollOptionSchema,
     );
 
 export default OutfitPollOption;

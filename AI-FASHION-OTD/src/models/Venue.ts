@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 export const VENUE_TYPES = [
@@ -14,9 +13,11 @@ export const VENUE_TYPES = [
     "other",
 ] as const;
 
+export type VenueType = (typeof VENUE_TYPES)[number];
+
 export interface VenueDocument extends mongoose.Document {
     name: string;
-    venueType: (typeof VENUE_TYPES)[number];
+    venueType: VenueType;
     description?: string;
     address: string;
     city?: string;
@@ -121,7 +122,6 @@ const venueSchema = new Schema<VenueDocument>(
         isActive: {
             type: Boolean,
             default: true,
-            index: true,
         },
     },
     {
@@ -142,7 +142,7 @@ venueSchema.index({
     createdAt: -1,
 });
 
-const Venue =
+export const Venue =
     mongoose.models.Venue ||
     mongoose.model<VenueDocument>("Venue", venueSchema);
 

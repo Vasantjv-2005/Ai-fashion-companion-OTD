@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 export interface SocialCommentDocument extends mongoose.Document {
@@ -19,13 +18,11 @@ const socialCommentSchema = new Schema<SocialCommentDocument>(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
         postId: {
             type: Schema.Types.ObjectId,
             ref: "OutfitShare",
             required: true,
-            index: true,
         },
         parentCommentId: {
             type: Schema.Types.ObjectId,
@@ -76,7 +73,7 @@ socialCommentSchema.index({
     createdAt: -1,
 });
 
-const SocialComment =
+export const SocialComment =
     mongoose.models.SocialComment ||
     mongoose.model<SocialCommentDocument>(
         "SocialComment",

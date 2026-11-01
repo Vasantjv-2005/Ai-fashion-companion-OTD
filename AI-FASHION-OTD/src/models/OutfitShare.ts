@@ -1,10 +1,12 @@
 import mongoose, { Schema } from "mongoose";
 
-const OUTFIT_SHARE_VISIBILITY = [
+export const OUTFIT_SHARE_VISIBILITY = [
     "private",
     "followers",
     "public",
 ] as const;
+
+export type OutfitShareVisibility = (typeof OUTFIT_SHARE_VISIBILITY)[number];
 
 const outfitShareSchema = new Schema(
     {
@@ -12,14 +14,12 @@ const outfitShareSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "Outfit",
             required: true,
-            index: true,
         },
 
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         title: {
@@ -47,13 +47,11 @@ const outfitShareSchema = new Schema(
             type: String,
             unique: true,
             sparse: true,
-            index: true,
         },
 
         isActive: {
             type: Boolean,
             default: true,
-            index: true,
         },
 
         expiresAt: {
@@ -71,7 +69,7 @@ const outfitShareSchema = new Schema(
         timestamps: true,
         collection: "outfit_shares",
         versionKey: false,
-    }
+    },
 );
 
 outfitShareSchema.index({ userId: 1, createdAt: -1 });
@@ -84,7 +82,7 @@ export const OutfitShare =
     (mongoose.models.OutfitShare as mongoose.Model<OutfitShareDocument>) ||
     mongoose.model<OutfitShareDocument>(
         "OutfitShare",
-        outfitShareSchema
+        outfitShareSchema,
     );
 
 export default OutfitShare;

@@ -1,4 +1,3 @@
-
 import mongoose, {
     Schema,
     type Document,
@@ -25,7 +24,6 @@ const aiConversationSchema = new Schema<IAIConversation>(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         title: {
@@ -64,7 +62,6 @@ aiConversationSchema.index({
     updatedAt: -1,
 });
 
-// Reuse the existing model during development and hot reloads.
 export const AIConversation: Model<IAIConversation> =
     (mongoose.models.AIConversation as Model<IAIConversation> | undefined) ??
     mongoose.model<IAIConversation>(

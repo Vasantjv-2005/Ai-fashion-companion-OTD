@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-const USER_PREFERENCE_STYLES = [
+export const USER_PREFERENCE_STYLES = [
     "casual",
     "formal",
     "smart-casual",
@@ -12,7 +12,7 @@ const USER_PREFERENCE_STYLES = [
     "other",
 ] as const;
 
-const USER_PREFERENCE_SEASONS = [
+export const USER_PREFERENCE_SEASONS = [
     "spring",
     "summer",
     "autumn",
@@ -20,7 +20,7 @@ const USER_PREFERENCE_SEASONS = [
     "all-season",
 ] as const;
 
-const USER_PREFERENCE_CATEGORIES = [
+export const USER_PREFERENCE_CATEGORIES = [
     "tops",
     "bottoms",
     "dresses",
@@ -32,6 +32,14 @@ const USER_PREFERENCE_CATEGORIES = [
     "other",
 ] as const;
 
+export const USER_PREFERENCE_FITS = [
+    "slim",
+    "regular",
+    "relaxed",
+    "oversized",
+    "no-preference",
+] as const;
+
 const userPreferenceSchema = new Schema(
     {
         userId: {
@@ -39,7 +47,6 @@ const userPreferenceSchema = new Schema(
             ref: "User",
             required: true,
             unique: true,
-            index: true,
         },
 
         preferredStyles: {
@@ -108,7 +115,7 @@ const userPreferenceSchema = new Schema(
 
         preferredFit: {
             type: String,
-            enum: ["slim", "regular", "relaxed", "oversized", "no-preference"],
+            enum: USER_PREFERENCE_FITS,
             default: "no-preference",
         },
 
@@ -131,10 +138,8 @@ const userPreferenceSchema = new Schema(
         timestamps: true,
         collection: "user_preferences",
         versionKey: false,
-    }
+    },
 );
-
-userPreferenceSchema.index({ userId: 1 }, { unique: true });
 
 export type UserPreferenceDocument = mongoose.InferSchemaType<
     typeof userPreferenceSchema
@@ -144,7 +149,7 @@ export const UserPreference =
     (mongoose.models.UserPreference as mongoose.Model<UserPreferenceDocument>) ||
     mongoose.model<UserPreferenceDocument>(
         "UserPreference",
-        userPreferenceSchema
+        userPreferenceSchema,
     );
 
 export default UserPreference;

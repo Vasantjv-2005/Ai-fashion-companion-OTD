@@ -6,6 +6,8 @@ const AVATAR_SOURCES = [
     "preset",
 ] as const;
 
+export type AvatarSource = (typeof AVATAR_SOURCES)[number];
+
 const avatarSchema = new Schema(
     {
         userId: {
@@ -13,7 +15,6 @@ const avatarSchema = new Schema(
             ref: "User",
             required: true,
             unique: true,
-            index: true,
         },
 
         imageFileId: {
@@ -56,13 +57,10 @@ const avatarSchema = new Schema(
         timestamps: true,
         collection: "avatars",
         versionKey: false,
-    }
+    },
 );
 
-avatarSchema.index({ userId: 1 }, { unique: true });
-
-export type AvatarDocument =
-    mongoose.InferSchemaType<typeof avatarSchema>;
+export type AvatarDocument = mongoose.InferSchemaType<typeof avatarSchema>;
 
 export const Avatar =
     (mongoose.models.Avatar as mongoose.Model<AvatarDocument>) ||

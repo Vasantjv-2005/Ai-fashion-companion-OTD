@@ -1,0 +1,36 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HTTP_STATUS = exports.API_CONSTANTS = void 0;
+exports.API_CONSTANTS = {
+    API_PREFIX: "/api",
+    AUTH: "/auth",
+    WARDROBE: "/wardrobe",
+    OUTFITS: "/outfits",
+    AI: "/ai",
+    PROFILE: "/profile",
+    PREFERENCES: "/preferences",
+    EVENTS: "/events",
+    GROUPS: "/groups",
+    AVATAR: "/avatar",
+    SHOPPING: "/shopping",
+    SOCIAL: "/social",
+    TRENDS: "/trends",
+    VIBES: "/vibes",
+    VENUES: "/venues",
+    WEATHER: "/weather",
+    VIRTUAL_TRY_ON: "/virtual-try-on",
+    HEALTH: "/health",
+};
+exports.HTTP_STATUS = {
+    OK: 200,
+    CREATED: 201,
+    NO_CONTENT: 204,
+    BAD_REQUEST: 400,
+    UNAUTHORIZED: 401,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    CONFLICT: 409,
+    TOO_MANY_REQUESTS: 429,
+    INTERNAL_SERVER_ERROR: 500,
+    SERVICE_UNAVAILABLE: 503,
+};

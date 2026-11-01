@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const upload_middleware_1 = require("../../middlewares/upload.middleware");
+const virtual_try_on_controller_1 = require("./virtual-try-on.controller");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authMiddleware);
+router.post("/", upload_middleware_1.uploadSingleImage, virtual_try_on_controller_1.createTryOnController);
+router.get("/", virtual_try_on_controller_1.listTryOnsController);
+router.get("/:id", virtual_try_on_controller_1.getTryOnController);
+router.delete("/:id", virtual_try_on_controller_1.deleteTryOnController);
+exports.default = router;

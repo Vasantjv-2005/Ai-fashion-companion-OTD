@@ -5,7 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { AUTH_CONSTANTS } from "../../constants/auth.constants";
 import { User } from "../../models/User";
-import { RefreshToken } from "../../models/RefreshToken";
+import RefreshToken from "../../models/RefreshToken";
 
 import type {
     AuthResult,
@@ -75,6 +75,7 @@ async function createAuthResult(user: {
     email: string;
 }): Promise<AuthResult> {
     const refreshToken = randomBytes(48).toString("hex");
+
     const expiresAt = new Date(
         Date.now() +
         AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
@@ -113,9 +114,7 @@ export async function registerUser(
 
     if (existingUser) {
         throw new AuthServiceError(
-            AUTH_CONSTANTS
-                ? "An account with this email already exists."
-                : "Email already registered.",
+            "An account with this email already exists.",
             409,
         );
     }
@@ -135,7 +134,6 @@ export async function registerUser(
             email: user.email,
         });
     } catch (error: unknown) {
-        // Handle duplicate emails even when two requests race.
         if (
             typeof error === "object" &&
             error !== null &&
@@ -226,7 +224,6 @@ export async function refreshSession(
         );
     }
 
-    // Atomically revoke the old token to prevent ordinary reuse.
     const revokedToken = await RefreshToken.findOneAndUpdate(
         {
             _id: storedToken._id,

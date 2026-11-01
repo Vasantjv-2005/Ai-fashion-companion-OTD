@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 const outfitPollVoteSchema = new Schema(
@@ -7,21 +6,18 @@ const outfitPollVoteSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "OutfitPoll",
             required: true,
-            index: true,
         },
 
         optionId: {
             type: Schema.Types.ObjectId,
             ref: "OutfitPollOption",
             required: true,
-            index: true,
         },
 
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         votedAt: {
@@ -34,13 +30,13 @@ const outfitPollVoteSchema = new Schema(
         timestamps: true,
         collection: "outfit_poll_votes",
         versionKey: false,
-    }
+    },
 );
 
 // Prevent duplicate votes for the same option by the same user.
 outfitPollVoteSchema.index(
     { pollId: 1, optionId: 1, userId: 1 },
-    { unique: true }
+    { unique: true },
 );
 
 // Efficiently retrieve votes for a poll.
@@ -53,7 +49,7 @@ export const OutfitPollVote =
     (mongoose.models.OutfitPollVote as mongoose.Model<OutfitPollVoteDocument>) ||
     mongoose.model<OutfitPollVoteDocument>(
         "OutfitPollVote",
-        outfitPollVoteSchema
+        outfitPollVoteSchema,
     );
 
 export default OutfitPollVote;

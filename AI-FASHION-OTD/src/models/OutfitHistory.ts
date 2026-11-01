@@ -6,7 +6,6 @@ const outfitHistorySchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         outfitId: {
@@ -71,7 +70,7 @@ const outfitHistorySchema = new Schema(
         timestamps: true,
         collection: "outfit_histories",
         versionKey: false,
-    }
+    },
 );
 
 outfitHistorySchema.index({ userId: 1, wornAt: -1 });
@@ -84,7 +83,7 @@ export const OutfitHistory =
     (mongoose.models.OutfitHistory as mongoose.Model<OutfitHistoryDocument>) ||
     mongoose.model<OutfitHistoryDocument>(
         "OutfitHistory",
-        outfitHistorySchema
+        outfitHistorySchema,
     );
 
 export default OutfitHistory;

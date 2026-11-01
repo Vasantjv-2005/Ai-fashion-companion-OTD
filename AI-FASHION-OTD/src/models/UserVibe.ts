@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 export const USER_VIBE_MOODS = [
@@ -14,6 +13,8 @@ export const USER_VIBE_MOODS = [
     "adventurous",
 ] as const;
 
+export type UserVibeMood = (typeof USER_VIBE_MOODS)[number];
+
 export const USER_VIBE_OCCASIONS = [
     "daily",
     "work",
@@ -26,13 +27,15 @@ export const USER_VIBE_OCCASIONS = [
     "special_event",
 ] as const;
 
+export type UserVibeOccasion = (typeof USER_VIBE_OCCASIONS)[number];
+
 export interface UserVibeDocument extends mongoose.Document {
     userId: mongoose.Types.ObjectId;
-    mood: (typeof USER_VIBE_MOODS)[number];
+    mood: UserVibeMood;
     preferredStyles: string[];
     preferredColors: string[];
     preferredSeasons: string[];
-    occasion?: (typeof USER_VIBE_OCCASIONS)[number];
+    occasion?: UserVibeOccasion;
     notes?: string;
     isActive: boolean;
     createdAt: Date;
@@ -45,7 +48,6 @@ const userVibeSchema = new Schema<UserVibeDocument>(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
         mood: {
             type: String,
@@ -103,14 +105,13 @@ const userVibeSchema = new Schema<UserVibeDocument>(
     },
 );
 
-// Quickly retrieve a user's active vibe preferences.
 userVibeSchema.index({
     userId: 1,
     isActive: 1,
     updatedAt: -1,
 });
 
-const UserVibe =
+export const UserVibe =
     mongoose.models.UserVibe ||
     mongoose.model<UserVibeDocument>("UserVibe", userVibeSchema);
 

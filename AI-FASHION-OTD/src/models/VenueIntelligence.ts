@@ -1,4 +1,3 @@
-
 import mongoose, { Schema } from "mongoose";
 
 export const VENUE_INTELLIGENCE_TYPES = [
@@ -10,8 +9,9 @@ export const VENUE_INTELLIGENCE_TYPES = [
     "general",
 ] as const;
 
-export interface VenueIntelligenceDocument
-    extends mongoose.Document {
+export type VenueIntelligenceType = (typeof VENUE_INTELLIGENCE_TYPES)[number];
+
+export interface VenueIntelligenceDocument extends mongoose.Document {
     venueId?: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     venueName: string;
@@ -24,8 +24,7 @@ export interface VenueIntelligenceDocument
     weatherSummary?: string;
     temperatureCelsius?: number;
     indoor?: boolean;
-    intelligenceType:
-    (typeof VENUE_INTELLIGENCE_TYPES)[number];
+    intelligenceType: VenueIntelligenceType;
     summary: string;
     recommendations: string[];
     source?: string;
@@ -34,119 +33,117 @@ export interface VenueIntelligenceDocument
     updatedAt: Date;
 }
 
-const venueIntelligenceSchema =
-    new Schema<VenueIntelligenceDocument>(
-        {
-            venueId: {
-                type: Schema.Types.ObjectId,
-                ref: "Venue",
-            },
-            userId: {
-                type: Schema.Types.ObjectId,
-                ref: "User",
-                required: true,
-                index: true,
-            },
-            venueName: {
-                type: String,
-                required: true,
-                trim: true,
-                maxlength: 200,
-            },
-            venueType: {
-                type: String,
-                trim: true,
-                maxlength: 100,
-            },
-            occasion: {
-                type: String,
-                trim: true,
-                maxlength: 100,
-            },
-            dressCode: {
-                type: String,
-                trim: true,
-                maxlength: 200,
-            },
-            recommendedStyles: {
-                type: [
-                    {
-                        type: String,
-                        trim: true,
-                        lowercase: true,
-                    },
-                ],
-                default: [],
-            },
-            recommendedColors: {
-                type: [
-                    {
-                        type: String,
-                        trim: true,
-                        lowercase: true,
-                    },
-                ],
-                default: [],
-            },
-            recommendedClothing: {
-                type: [
-                    {
-                        type: String,
-                        trim: true,
-                    },
-                ],
-                default: [],
-            },
-            weatherSummary: {
-                type: String,
-                trim: true,
-                maxlength: 500,
-            },
-            temperatureCelsius: {
-                type: Number,
-                min: -100,
-                max: 100,
-            },
-            indoor: {
-                type: Boolean,
-            },
-            intelligenceType: {
-                type: String,
-                enum: VENUE_INTELLIGENCE_TYPES,
-                default: "general",
-                required: true,
-            },
-            summary: {
-                type: String,
-                required: true,
-                trim: true,
-                maxlength: 3000,
-            },
-            recommendations: {
-                type: [
-                    {
-                        type: String,
-                        trim: true,
-                        maxlength: 500,
-                    },
-                ],
-                default: [],
-            },
-            source: {
-                type: String,
-                trim: true,
-                maxlength: 500,
-            },
-            expiresAt: {
-                type: Date,
-            },
+const venueIntelligenceSchema = new Schema<VenueIntelligenceDocument>(
+    {
+        venueId: {
+            type: Schema.Types.ObjectId,
+            ref: "Venue",
         },
-        {
-            timestamps: true,
-            collection: "venue_intelligence",
-            versionKey: false,
+        userId: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
         },
-    );
+        venueName: {
+            type: String,
+            required: true,
+            trim: true,
+            maxlength: 200,
+        },
+        venueType: {
+            type: String,
+            trim: true,
+            maxlength: 100,
+        },
+        occasion: {
+            type: String,
+            trim: true,
+            maxlength: 100,
+        },
+        dressCode: {
+            type: String,
+            trim: true,
+            maxlength: 200,
+        },
+        recommendedStyles: {
+            type: [
+                {
+                    type: String,
+                    trim: true,
+                    lowercase: true,
+                },
+            ],
+            default: [],
+        },
+        recommendedColors: {
+            type: [
+                {
+                    type: String,
+                    trim: true,
+                    lowercase: true,
+                },
+            ],
+            default: [],
+        },
+        recommendedClothing: {
+            type: [
+                {
+                    type: String,
+                    trim: true,
+                },
+            ],
+            default: [],
+        },
+        weatherSummary: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+        },
+        temperatureCelsius: {
+            type: Number,
+            min: -100,
+            max: 100,
+        },
+        indoor: {
+            type: Boolean,
+        },
+        intelligenceType: {
+            type: String,
+            enum: VENUE_INTELLIGENCE_TYPES,
+            default: "general",
+            required: true,
+        },
+        summary: {
+            type: String,
+            required: true,
+            trim: true,
+            maxlength: 3000,
+        },
+        recommendations: {
+            type: [
+                {
+                    type: String,
+                    trim: true,
+                    maxlength: 500,
+                },
+            ],
+            default: [],
+        },
+        source: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+        },
+        expiresAt: {
+            type: Date,
+        },
+    },
+    {
+        timestamps: true,
+        collection: "venue_intelligence",
+        versionKey: false,
+    },
+);
 
 venueIntelligenceSchema.index({
     userId: 1,
@@ -162,7 +159,7 @@ venueIntelligenceSchema.index({
     expiresAt: 1,
 });
 
-const VenueIntelligence =
+export const VenueIntelligence =
     mongoose.models.VenueIntelligence ||
     mongoose.model<VenueIntelligenceDocument>(
         "VenueIntelligence",

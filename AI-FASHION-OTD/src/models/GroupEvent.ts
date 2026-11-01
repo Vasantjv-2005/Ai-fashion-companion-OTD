@@ -1,7 +1,6 @@
-
 import mongoose, { Schema } from "mongoose";
 
-const GROUP_EVENT_TYPES = [
+export const GROUP_EVENT_TYPES = [
     "party",
     "wedding",
     "birthday",
@@ -13,11 +12,15 @@ const GROUP_EVENT_TYPES = [
     "other",
 ] as const;
 
-const GROUP_EVENT_VISIBILITY = [
+export type GroupEventType = (typeof GROUP_EVENT_TYPES)[number];
+
+export const GROUP_EVENT_VISIBILITY = [
     "private",
     "invite-only",
     "public",
 ] as const;
+
+export type GroupEventVisibility = (typeof GROUP_EVENT_VISIBILITY)[number];
 
 const groupEventSchema = new Schema(
     {
@@ -25,7 +28,6 @@ const groupEventSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         title: {
@@ -97,7 +99,6 @@ const groupEventSchema = new Schema(
         isCancelled: {
             type: Boolean,
             default: false,
-            index: true,
         },
 
         cancelledAt: {
@@ -109,7 +110,7 @@ const groupEventSchema = new Schema(
         timestamps: true,
         collection: "group_events",
         versionKey: false,
-    }
+    },
 );
 
 groupEventSchema.index({ creatorId: 1, startsAt: 1 });
@@ -122,7 +123,7 @@ export const GroupEvent =
     (mongoose.models.GroupEvent as mongoose.Model<GroupEventDocument>) ||
     mongoose.model<GroupEventDocument>(
         "GroupEvent",
-        groupEventSchema
+        groupEventSchema,
     );
 
 export default GroupEvent;

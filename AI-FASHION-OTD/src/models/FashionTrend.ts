@@ -1,7 +1,6 @@
-
 import mongoose, { Schema } from "mongoose";
 
-const FASHION_TREND_CATEGORIES = [
+export const FASHION_TREND_CATEGORIES = [
     "clothing",
     "colors",
     "footwear",
@@ -12,6 +11,8 @@ const FASHION_TREND_CATEGORIES = [
     "styling",
     "other",
 ] as const;
+
+export type FashionTrendCategory = (typeof FASHION_TREND_CATEGORIES)[number];
 
 const fashionTrendSchema = new Schema(
     {
@@ -43,7 +44,6 @@ const fashionTrendSchema = new Schema(
             type: String,
             enum: FASHION_TREND_CATEGORIES,
             required: true,
-            index: true,
         },
 
         season: {
@@ -112,14 +112,13 @@ const fashionTrendSchema = new Schema(
         isActive: {
             type: Boolean,
             default: true,
-            index: true,
         },
     },
     {
         timestamps: true,
         collection: "fashion_trends",
         versionKey: false,
-    }
+    },
 );
 
 fashionTrendSchema.index({ category: 1, isActive: 1 });
@@ -132,7 +131,7 @@ export const FashionTrend =
     (mongoose.models.FashionTrend as mongoose.Model<FashionTrendDocument>) ||
     mongoose.model<FashionTrendDocument>(
         "FashionTrend",
-        fashionTrendSchema
+        fashionTrendSchema,
     );
 
 export default FashionTrend;

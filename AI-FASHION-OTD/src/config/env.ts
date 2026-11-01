@@ -1,5 +1,20 @@
+import path from "node:path";
+import dotenv from "dotenv";
 
-import "dotenv/config";
+// Load .env from process.cwd() or project root directory
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
+// Legacy environment variable fallbacks
+if (!process.env.JWT_ACCESS_SECRET && process.env.JWT_SECRET) {
+    process.env.JWT_ACCESS_SECRET = process.env.JWT_SECRET;
+}
+if (!process.env.JWT_REFRESH_SECRET && process.env.JWT_SECRET) {
+    process.env.JWT_REFRESH_SECRET = process.env.JWT_SECRET;
+}
+if (!process.env.FRONTEND_URL && process.env.CLIENT_URL) {
+    process.env.FRONTEND_URL = process.env.CLIENT_URL;
+}
 
 import { z } from "zod";
 
@@ -17,6 +32,11 @@ const envSchema = z.object({
     JWT_ACCESS_SECRET: z
         .string()
         .min(32, "JWT_ACCESS_SECRET must contain at least 32 characters."),
+
+    JWT_REFRESH_SECRET: z
+        .string()
+        .min(32, "JWT_REFRESH_SECRET must contain at least 32 characters.")
+        .optional(),
 
     AI_SERVICE_URL: z
         .string()
@@ -48,5 +68,3 @@ if (!parsedEnv.success) {
 }
 
 export const env = parsedEnv.data;
-
-export type Environment = typeof env;

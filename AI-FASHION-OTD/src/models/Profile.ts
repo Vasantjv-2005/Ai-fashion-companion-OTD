@@ -1,6 +1,6 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-const PROFILE_STYLES = [
+export const PROFILE_STYLES = [
     "casual",
     "formal",
     "smart-casual",
@@ -12,7 +12,9 @@ const PROFILE_STYLES = [
     "other",
 ] as const;
 
-const PROFILE_SEASONS = [
+export type ProfileStyle = (typeof PROFILE_STYLES)[number];
+
+export const PROFILE_SEASONS = [
     "spring",
     "summer",
     "autumn",
@@ -20,35 +22,49 @@ const PROFILE_SEASONS = [
     "all-season",
 ] as const;
 
-const profileSchema = new Schema(
+export type ProfileSeason = (typeof PROFILE_SEASONS)[number];
+
+export interface IProfile extends Document {
+    userId: mongoose.Types.ObjectId;
+    displayName?: string;
+    bio?: string;
+    avatarFileId?: mongoose.Types.ObjectId;
+    preferredStyles: ProfileStyle[];
+    preferredColors: string[];
+    preferredSeasons: ProfileSeason[];
+    preferredCategories: string[];
+    bodyType?: string;
+    heightCm?: number;
+    fashionGoals: string[];
+    isProfileComplete: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const ProfileSchema = new Schema<IProfile>(
     {
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
             unique: true,
-            index: true,
         },
-
         displayName: {
             type: String,
             trim: true,
             minlength: 2,
             maxlength: 100,
         },
-
         bio: {
             type: String,
             trim: true,
             maxlength: 500,
             default: "",
         },
-
         avatarFileId: {
             type: Schema.Types.ObjectId,
             default: undefined,
         },
-
         preferredStyles: {
             type: [
                 {
@@ -58,7 +74,6 @@ const profileSchema = new Schema(
             ],
             default: [],
         },
-
         preferredColors: {
             type: [
                 {
@@ -69,7 +84,6 @@ const profileSchema = new Schema(
             ],
             default: [],
         },
-
         preferredSeasons: {
             type: [
                 {
@@ -79,31 +93,26 @@ const profileSchema = new Schema(
             ],
             default: [],
         },
-
         preferredCategories: {
             type: [String],
             default: [],
         },
-
         bodyType: {
             type: String,
             trim: true,
             maxlength: 50,
             default: undefined,
         },
-
         heightCm: {
             type: Number,
             min: 50,
             max: 300,
             default: undefined,
         },
-
         fashionGoals: {
             type: [String],
             default: [],
         },
-
         isProfileComplete: {
             type: Boolean,
             default: false,
@@ -113,17 +122,13 @@ const profileSchema = new Schema(
         timestamps: true,
         collection: "profiles",
         versionKey: false,
-    }
+    },
 );
 
-profileSchema.index({ userId: 1 }, { unique: true });
+export type ProfileDocument = IProfile;
 
-export type ProfileDocument = mongoose.InferSchemaType<
-    typeof profileSchema
->;
-
-export const Profile =
-    (mongoose.models.Profile as mongoose.Model<ProfileDocument>) ||
-    mongoose.model<ProfileDocument>("Profile", profileSchema);
+export const Profile: Model<IProfile> =
+    mongoose.models.Profile ||
+    mongoose.model<IProfile>("Profile", ProfileSchema);
 
 export default Profile;

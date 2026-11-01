@@ -6,7 +6,6 @@ const eventSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
         title: {
             type: String,
@@ -31,7 +30,6 @@ const eventSchema = new Schema(
         date: {
             type: Date,
             required: true,
-            index: true,
         },
         location: {
             type: String,
@@ -50,7 +48,7 @@ const eventSchema = new Schema(
     {
         timestamps: true,
         collection: "events",
-    }
+    },
 );
 
 eventSchema.index({ userId: 1, date: 1 });

@@ -1,23 +1,29 @@
 import mongoose, { Schema } from "mongoose";
 
-const GROUP_MEMBER_ROLES = [
+export const GROUP_MEMBER_ROLES = [
     "organizer",
     "member",
 ] as const;
 
-const GROUP_MEMBER_STATUSES = [
+export type GroupMemberRole = (typeof GROUP_MEMBER_ROLES)[number];
+
+export const GROUP_MEMBER_STATUSES = [
     "invited",
     "accepted",
     "declined",
     "removed",
 ] as const;
 
-const GROUP_MEMBER_RSVP = [
+export type GroupMemberStatus = (typeof GROUP_MEMBER_STATUSES)[number];
+
+export const GROUP_MEMBER_RSVP = [
     "pending",
     "attending",
     "not-attending",
     "maybe",
 ] as const;
+
+export type GroupMemberRsvp = (typeof GROUP_MEMBER_RSVP)[number];
 
 const groupEventMemberSchema = new Schema(
     {
@@ -25,14 +31,12 @@ const groupEventMemberSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "GroupEvent",
             required: true,
-            index: true,
         },
 
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         role: {
@@ -81,13 +85,13 @@ const groupEventMemberSchema = new Schema(
         timestamps: true,
         collection: "group_event_members",
         versionKey: false,
-    }
+    },
 );
 
 // A user can have only one membership record per group event.
 groupEventMemberSchema.index(
     { groupEventId: 1, userId: 1 },
-    { unique: true }
+    { unique: true },
 );
 
 groupEventMemberSchema.index({ userId: 1, status: 1 });
@@ -99,7 +103,7 @@ export const GroupEventMember =
     (mongoose.models.GroupEventMember as mongoose.Model<GroupEventMemberDocument>) ||
     mongoose.model<GroupEventMemberDocument>(
         "GroupEventMember",
-        groupEventMemberSchema
+        groupEventMemberSchema,
     );
 
 export default GroupEventMember;

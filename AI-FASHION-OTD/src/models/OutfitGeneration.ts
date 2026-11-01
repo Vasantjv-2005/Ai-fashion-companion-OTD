@@ -7,13 +7,14 @@ const GENERATION_STATUSES = [
     "failed",
 ] as const;
 
+export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
+
 const outfitGenerationSchema = new Schema(
     {
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
-            index: true,
         },
 
         occasion: {
@@ -139,7 +140,7 @@ const outfitGenerationSchema = new Schema(
         timestamps: true,
         collection: "outfit_generations",
         versionKey: false,
-    }
+    },
 );
 
 outfitGenerationSchema.index({ userId: 1, createdAt: -1 });
@@ -152,7 +153,7 @@ export const OutfitGeneration =
     (mongoose.models.OutfitGeneration as mongoose.Model<OutfitGenerationDocument>) ||
     mongoose.model<OutfitGenerationDocument>(
         "OutfitGeneration",
-        outfitGenerationSchema
+        outfitGenerationSchema,
     );
 
 export default OutfitGeneration;

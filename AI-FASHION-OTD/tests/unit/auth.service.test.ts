@@ -52,6 +52,11 @@ vi.mock("../../src/models/User", () => ({
 }));
 
 vi.mock("../../src/models/RefreshToken", () => ({
+    default: {
+        create: mocks.refreshTokenCreate,
+        findOne: mocks.refreshTokenFindOne,
+        updateOne: mocks.refreshTokenUpdateOne,
+    },
     RefreshToken: {
         create: mocks.refreshTokenCreate,
         findOne: mocks.refreshTokenFindOne,
