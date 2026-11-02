@@ -11,6 +11,7 @@ export interface ClosetItem {
   formality: 1 | 2 | 3 | 4 | 5; // 1 = Casual, 5 = Black Tie
   icon: string;
   imageUrl?: string;
+  description?: string;
 }
 
 export interface UserProfile {

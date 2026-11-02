@@ -41,6 +41,7 @@ import { useCloset, type ClosetItem } from '../context/ClosetContext';
 import { NotificationPopover } from './ui/NotificationPopover';
 import { SettingsModal } from './ui/SettingsModal';
 import { MobileBottomNav } from './ui/MobileBottomNav';
+import { EditPieceModal } from './EditPieceModal';
 
 interface AppStudioProps {
   onOpenAddPiece: () => void;
@@ -138,7 +139,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackToLanding,
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const { closet, profile, deleteClosetItem } = useCloset();
+  const { closet, profile, deleteClosetItem, updateClosetItem } = useCloset();
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<StudioTab>('home');
@@ -150,6 +151,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [selectedClosetItem, setSelectedClosetItem] = useState<ClosetItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<ClosetItem | null>(null);
+  const [itemToEdit, setItemToEdit] = useState<ClosetItem | null>(null);
 
   // Home search bar
   const [homeSearchQuery, setHomeSearchQuery] = useState('');
@@ -277,7 +279,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       item.name.toLowerCase().includes(closetSearch.toLowerCase()) ||
       item.brand.toLowerCase().includes(closetSearch.toLowerCase()) ||
       item.color.toLowerCase().includes(closetSearch.toLowerCase()) ||
-      item.subType.toLowerCase().includes(closetSearch.toLowerCase());
+      item.subType.toLowerCase().includes(closetSearch.toLowerCase()) ||
+      (item.description ? item.description.toLowerCase().includes(closetSearch.toLowerCase()) : false);
     const matchesCategory =
       closetCategoryFilter === 'all' || item.category === closetCategoryFilter;
     const matchesFormality =
@@ -2360,6 +2363,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <p className="text-[11px] text-[var(--gold-primary)] font-mono font-semibold">
                 {selectedClosetItem.brand} • {selectedClosetItem.subType}
               </p>
+              {selectedClosetItem.description && (
+                <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-relaxed bg-[var(--pill-bg)] p-2 rounded-lg border border-[var(--border-card)]">
+                  {selectedClosetItem.description}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -2381,21 +2389,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 flex gap-2">
+            <div className="pt-2 flex flex-col sm:flex-row gap-2">
               <button
+                type="button"
+                onClick={() => setItemToEdit(selectedClosetItem)}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--border-gold)] text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Piece</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   setItemToDelete(selectedClosetItem);
                   setSelectedClosetItem(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                className="flex-1 py-2.5 px-3 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Delete Piece</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setSelectedClosetItem(null)}
-                className="px-4 py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black font-semibold cursor-pointer"
+                className="py-2.5 px-4 rounded-xl bg-black text-white dark:bg-white dark:text-black font-semibold cursor-pointer hover:opacity-90 transition-opacity"
               >
                 Done
               </button>
@@ -2446,6 +2465,18 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit Garment Piece Modal */}
+      <EditPieceModal
+        isOpen={Boolean(itemToEdit)}
+        item={itemToEdit}
+        onClose={() => setItemToEdit(null)}
+        onSave={(updatedItem) => {
+          updateClosetItem(updatedItem.id, updatedItem);
+          setSelectedClosetItem(updatedItem);
+          setItemToEdit(null);
+        }}
+      />
 
       {/* Global Notifications Popover */}
       <NotificationPopover
