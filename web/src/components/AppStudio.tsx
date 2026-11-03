@@ -34,7 +34,8 @@ import {
   Layers,
   Umbrella,
   Building,
-  MoreHorizontal
+  MoreHorizontal,
+  LocateFixed
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
@@ -42,11 +43,17 @@ import { NotificationPopover } from './ui/NotificationPopover';
 import { SettingsModal } from './ui/SettingsModal';
 import { MobileBottomNav } from './ui/MobileBottomNav';
 import { EditPieceModal } from './EditPieceModal';
+import { OccasionModal } from './ui/OccasionModal';
+import { VenueCategoryModal } from './ui/VenueCategoryModal';
+import { GarmentConstraintsSection } from './ui/GarmentConstraintsSection';
+import { StylistReviewSummary } from './ui/StylistReviewSummary';
 
-interface AppStudioProps {
+export interface AppStudioProps {
   onOpenAddPiece: () => void;
   onOpenProfile: () => void;
   onBackToLanding?: () => void;
+  activeTab?: StudioTab;
+  onTabChange?: (tab: StudioTab) => void;
 }
 
 export type StudioTab =
@@ -137,12 +144,29 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
   onBackToLanding,
+  activeTab: controlledActiveTab,
+  onTabChange,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { closet, profile, deleteClosetItem, updateClosetItem } = useCloset();
 
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<StudioTab>('home');
+  const [internalTab, setInternalTab] = useState<StudioTab>(controlledActiveTab || 'home');
+  const [prevControlledTab, setPrevControlledTab] = useState<StudioTab | undefined>(controlledActiveTab);
+
+  if (controlledActiveTab !== prevControlledTab) {
+    setPrevControlledTab(controlledActiveTab);
+    setInternalTab(controlledActiveTab || 'home');
+  }
+
+  const activeTab = internalTab;
+
+  const setActiveTab = (tab: StudioTab) => {
+    setInternalTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Modals state
@@ -197,17 +221,126 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Plan Your Look Wizard State (Screenshots 1 & 2)
   const [plannerStep, setPlannerStep] = useState<1 | 2 | 3>(1);
   const [selectedOccasion, setSelectedOccasion] = useState('Date');
+  const [isOccasionModalOpen, setIsOccasionModalOpen] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<Venue>(CURATED_VENUES[0]);
   const [destinationSearch, setDestinationSearch] = useState("L'amore, Banjara Hills, Hyderabad");
   const [selectedVenueCategory, setSelectedVenueCategory] = useState('Restaurant');
-  const [selectedDate] = useState('Mon, 14 Oct 2024');
-  const [selectedTime] = useState('8:00 PM');
+  const [isVenueCategoryModalOpen, setIsVenueCategoryModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('Today, 14 Oct');
+  const [selectedTime, setSelectedTime] = useState('8:00 PM');
   const [venueInfoTab, setVenueInfoTab] = useState<'about' | 'ambience' | 'dress_code' | 'photos'>('about');
 
+  // Location Permission State (Client-Side Geolocation API)
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'detected' | 'denied' | 'unsupported' | 'error'>('idle');
+  const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationFeedback, setLocationFeedback] = useState<string | null>(null);
+
+  const handleRequestLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setLocationStatus('unsupported');
+      setLocationFeedback('Geolocation is not supported by your browser.');
+      return;
+    }
+    setLocationStatus('requesting');
+    setLocationFeedback('Detecting local geographic coordinates...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        setLocationStatus('detected');
+        setLocationFeedback('Location detected. Geographic context applied to your styling session.');
+      },
+      (err) => {
+        if (err.code === 1) { // PERMISSION_DENIED
+          setLocationStatus('denied');
+          setLocationFeedback('Location access was declined. Manual destination will be used.');
+        } else if (err.code === 3) { // TIMEOUT
+          setLocationStatus('error');
+          setLocationFeedback('Location request timed out. Continuing with manual destination.');
+        } else {
+          setLocationStatus('error');
+          setLocationFeedback('Location temporarily unavailable. Continuing with manual destination.');
+        }
+      },
+      { timeout: 8000, maximumAge: 60000, enableHighAccuracy: false }
+    );
+  };
+
+  const handleClearLocation = () => {
+    setLocationStatus('idle');
+    setLocationCoords(null);
+    setLocationFeedback(null);
+  };
+
   // Step 2 State (Screenshot 1)
-  const [selectedMood, setSelectedMood] = useState('Confident');
+  const [selectedMoods, setSelectedMoods] = useState<string[]>(['Confident']);
+  const [vibeFeedback, setVibeFeedback] = useState<string | null>(null);
+  const [customVibeInput, setCustomVibeInput] = useState('');
+  const [isCustomVibeActive, setIsCustomVibeActive] = useState(false);
   const [selectedWeatherCond, setSelectedWeatherCond] = useState('Partly Cloudy');
+  const [weatherNote, setWeatherNote] = useState('24°C • Mild & comfortable conditions');
+  const [isWeatherSkipped, setIsWeatherSkipped] = useState(false);
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>(['Light & Breezy']);
+
+  const handleToggleMood = (moodName: string) => {
+    if (selectedMoods.includes(moodName)) {
+      setSelectedMoods((prev) => prev.filter((m) => m !== moodName));
+      setVibeFeedback(null);
+    } else {
+      if (selectedMoods.length >= 2) {
+        setVibeFeedback('Maximum 2 style vibes allowed. Deselect one to choose another.');
+        setTimeout(() => setVibeFeedback(null), 3000);
+      } else {
+        setSelectedMoods((prev) => [...prev, moodName]);
+        setVibeFeedback(null);
+      }
+    }
+  };
+
+  const handleAddCustomVibe = () => {
+    const clean = customVibeInput.trim();
+    if (!clean) return;
+    if (selectedMoods.length >= 2) {
+      setVibeFeedback('Maximum 2 style vibes allowed. Deselect one first.');
+      setTimeout(() => setVibeFeedback(null), 3000);
+      return;
+    }
+    if (!selectedMoods.some((m) => m.toLowerCase() === clean.toLowerCase())) {
+      setSelectedMoods((prev) => [...prev, clean]);
+    }
+    setCustomVibeInput('');
+    setIsCustomVibeActive(false);
+  };
+
+  // Explicit Garment Constraints (Include & Avoid)
+  const [mustInclude, setMustInclude] = useState<string[]>([]);
+  const [avoidItems, setAvoidItems] = useState<string[]>([]);
+
+  const handleAddInclude = (item: string) => {
+    const clean = item.trim();
+    if (!clean) return;
+    if (!mustInclude.some((i) => i.toLowerCase() === clean.toLowerCase())) {
+      setMustInclude((prev) => [...prev, clean]);
+    }
+  };
+
+  const handleRemoveInclude = (item: string) => {
+    setMustInclude((prev) => prev.filter((i) => i.toLowerCase() !== item.toLowerCase()));
+  };
+
+  const handleAddAvoid = (item: string) => {
+    const clean = item.trim();
+    if (!clean) return;
+    if (!avoidItems.some((i) => i.toLowerCase() === clean.toLowerCase())) {
+      setAvoidItems((prev) => [...prev, clean]);
+    }
+  };
+
+  const handleRemoveAvoid = (item: string) => {
+    setAvoidItems((prev) => prev.filter((i) => i.toLowerCase() !== item.toLowerCase()));
+  };
 
   // Recommendation & Chat State (Step 3)
   const [currentOutfitTitle, setCurrentOutfitTitle] = useState('The Parisian Minimalist');
@@ -1037,10 +1170,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     
                     {/* Question 1: What's the occasion? */}
                     <div className="space-y-3">
-                      <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
-                        1. What's the occasion?
-                      </h3>
-                      <p className="text-xs text-[var(--text-muted)]">Select one or choose multiple.</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
+                            1. What's the occasion?
+                          </h3>
+                          <p className="text-xs text-[var(--text-muted)]">Select your primary setting or explore secondary occasions.</p>
+                        </div>
+                        <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
+                          Selected: {selectedOccasion}
+                        </span>
+                      </div>
                       
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {[
@@ -1051,18 +1191,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Office', img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=300&q=80' },
                           { name: 'College', img: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Travel', img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=300&q=80' },
-                          { name: 'More', isMore: true },
+                          { name: 'More (8+)', isMore: true },
                         ].map((occ) => {
                           const isSelected = selectedOccasion === occ.name;
                           return (
                             <div
                               key={occ.name}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isSelected}
                               onClick={() => {
-                                if (!occ.isMore) setSelectedOccasion(occ.name);
+                                if (occ.isMore) {
+                                  setIsOccasionModalOpen(true);
+                                } else {
+                                  setSelectedOccasion(occ.name);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  if (occ.isMore) setIsOccasionModalOpen(true);
+                                  else setSelectedOccasion(occ.name);
+                                }
                               }}
                               className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
                                 isSelected
-                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md'
+                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
                               }`}
                             >
@@ -1070,7 +1224,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 {occ.img ? (
                                   <img src={occ.img} alt={occ.name} className="w-full h-full object-cover" />
                                 ) : (
-                                  <MoreHorizontal className="w-6 h-6 text-neutral-400" />
+                                  <div className="flex flex-col items-center justify-center gap-1 text-[var(--gold-primary)]">
+                                    <MoreHorizontal className="w-6 h-6" />
+                                    <span className="text-[9px] uppercase font-mono font-bold tracking-wider">Directory</span>
+                                  </div>
                                 )}
                                 {isSelected && (
                                   <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center border border-white">
@@ -1085,14 +1242,43 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           );
                         })}
                       </div>
+
+                      {/* Active Secondary Occasion Indicator */}
+                      {!['Date', 'Casual Outing', 'Party', 'Wedding', 'Office', 'College', 'Travel'].includes(selectedOccasion) && (
+                        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black text-white dark:bg-white dark:text-black shadow-md animate-in fade-in">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-mono tracking-wider opacity-75 block">Specialized Occasion Active</span>
+                              <span className="font-playfair font-bold text-sm">{selectedOccasion}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsOccasionModalOpen(true)}
+                            className="px-3 py-1 rounded-full border border-white/30 dark:border-black/30 text-xs font-semibold hover:bg-white/10 dark:hover:bg-black/10 transition-colors cursor-pointer"
+                          >
+                            Change Occasion
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Question 2: Where are you going? */}
                     <div className="space-y-3">
-                      <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
-                        2. Where are you going?
-                      </h3>
-                      <p className="text-xs text-[var(--text-muted)]">Search for a specific place or choose a category.</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
+                            2. Where are you going?
+                          </h3>
+                          <p className="text-xs text-[var(--text-muted)]">Enter your venue or pick an architectural setting archetype.</p>
+                        </div>
+                        <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
+                          Setting: {selectedVenueCategory}
+                        </span>
+                      </div>
 
                       {/* Destination search bar */}
                       <div className="relative">
@@ -1101,14 +1287,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           type="text"
                           value={destinationSearch}
                           onChange={(e) => setDestinationSearch(e.target.value)}
-                          placeholder="e.g. L'amore, Banjara Hills, Hyderabad"
+                          placeholder="e.g. L'amore, Soho House, or enter any destination name..."
+                          aria-label="Destination or venue"
                           className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] font-semibold outline-none focus:border-[var(--gold-primary)]"
                         />
                         {destinationSearch && (
                           <button
                             type="button"
                             onClick={() => setDestinationSearch('')}
-                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-heading)]"
+                            aria-label="Clear destination"
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1125,18 +1313,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Movie / Theater', img: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Resort', img: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Outdoor', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80' },
-                          { name: 'More', isMore: true },
+                          { name: 'More (14+)', isMore: true },
                         ].map((cat) => {
                           const isSelected = selectedVenueCategory === cat.name;
                           return (
                             <div
                               key={cat.name}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isSelected}
                               onClick={() => {
-                                if (!cat.isMore) setSelectedVenueCategory(cat.name);
+                                if (cat.isMore) {
+                                  setIsVenueCategoryModalOpen(true);
+                                } else {
+                                  setSelectedVenueCategory(cat.name);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  if (cat.isMore) setIsVenueCategoryModalOpen(true);
+                                  else setSelectedVenueCategory(cat.name);
+                                }
                               }}
                               className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
                                 isSelected
-                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md'
+                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
                               }`}
                             >
@@ -1144,7 +1346,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 {cat.img ? (
                                   <img src={cat.img} alt={cat.name} className="w-full h-full object-cover" />
                                 ) : (
-                                  <MoreHorizontal className="w-6 h-6 text-neutral-400" />
+                                  <div className="flex flex-col items-center justify-center gap-1 text-[var(--gold-primary)]">
+                                    <MoreHorizontal className="w-5 h-5" />
+                                    <span className="text-[9px] uppercase font-mono font-bold tracking-wider">All Venues</span>
+                                  </div>
                                 )}
                                 {isSelected && (
                                   <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center border border-white">
@@ -1159,38 +1364,220 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           );
                         })}
                       </div>
+
+                      {/* Active Custom Category Indicator */}
+                      {!['Restaurant', 'Café', 'Bar / Club', 'Mall', 'Movie / Theater', 'Resort', 'Outdoor'].includes(selectedVenueCategory) && (
+                        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black text-white dark:bg-white dark:text-black shadow-md animate-in fade-in">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-mono tracking-wider opacity-75 block">Setting Taxonomy Active</span>
+                              <span className="font-playfair font-bold text-sm">{selectedVenueCategory}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsVenueCategoryModalOpen(true)}
+                            className="px-3 py-1 rounded-full border border-white/30 dark:border-black/30 text-xs font-semibold hover:bg-white/10 dark:hover:bg-black/10 transition-colors cursor-pointer"
+                          >
+                            Explore Settings
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Question 3 & 4: Date, Time & Weather */}
+                    {/* Question 3 & 4: Date, Time, Weather & Geolocation */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Date & Time */}
+                      {/* Date & Time Context */}
                       <div className="p-4 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] space-y-3">
-                        <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
-                          3. When are you going? <span className="text-[11px] text-[var(--text-muted)] font-normal">(Optional)</span>
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]">
-                            <Calendar className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                            <span className="font-semibold">{selectedDate}</span>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
+                            3. When are you going?
+                          </h4>
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase">Timing</span>
+                        </div>
+
+                        {/* Date selection chips */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Date:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              'Today, 14 Oct',
+                              'Tomorrow, 15 Oct',
+                              'Saturday, 19 Oct',
+                            ].map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => setSelectedDate(d)}
+                                className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                  selectedDate === d
+                                    ? 'bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs'
+                                    : 'bg-[var(--pill-bg)] border-[var(--border-card)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
+                                }`}
+                              >
+                                {d}
+                              </button>
+                            ))}
                           </div>
-                          <div className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]">
-                            <Clock className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                            <span className="font-semibold">{selectedTime}</span>
+                        </div>
+
+                        {/* Time selection chips */}
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Time of Day:</span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {[
+                              { label: 'Morning', time: '9:00 AM' },
+                              { label: 'Afternoon', time: '2:00 PM' },
+                              { label: 'Evening', time: '8:00 PM' },
+                              { label: 'Night', time: '10:30 PM' },
+                            ].map((t) => (
+                              <button
+                                key={t.label}
+                                type="button"
+                                onClick={() => setSelectedTime(t.time)}
+                                className={`text-[11px] p-1.5 rounded-lg border text-center transition-all cursor-pointer ${
+                                  selectedTime === t.time
+                                    ? 'bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs'
+                                    : 'bg-[var(--pill-bg)] border-[var(--border-card)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
+                                }`}
+                              >
+                                <span className="block font-bold">{t.label}</span>
+                                <span className="text-[10px] opacity-75">{t.time}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>
 
-                      {/* Auto-detected Weather */}
+                      {/* Weather & Location Context */}
                       <div className="p-4 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] space-y-3">
-                        <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
-                          4. Weather <span className="text-[10px] text-[var(--gold-primary)] font-mono font-bold uppercase">(Auto-detected)</span>
-                        </h4>
-                        <div className="flex items-center gap-3">
-                          <CloudSun className="w-8 h-8 text-amber-500 shrink-0" />
-                          <div className="text-xs">
-                            <span className="font-bold text-sm text-[var(--text-heading)]">28°C Partly Cloudy</span>
-                            <p className="text-[11px] text-[var(--text-muted)]">Hyderabad, India • Feels like 29°C</p>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
+                            4. Weather & Location
+                          </h4>
+                          <span className="text-[10px] text-[var(--gold-primary)] font-mono font-bold uppercase">
+                            Contextual
+                          </span>
+                        </div>
+
+                        {/* Geolocation Trigger (100% Optional, Browser API only) */}
+                        <div className="p-2.5 rounded-xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase font-mono text-[var(--text-muted)]">
+                              Local Coordinates (Optional)
+                            </span>
+                            {locationStatus === 'detected' && (
+                              <button
+                                type="button"
+                                onClick={handleClearLocation}
+                                className="text-[10px] text-[var(--text-muted)] hover:underline cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            )}
                           </div>
+
+                          {locationStatus === 'idle' && (
+                            <button
+                              type="button"
+                              onClick={handleRequestLocation}
+                              className="w-full py-2 px-3 rounded-lg border border-[var(--border-card)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-heading)] hover:border-[var(--gold-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <LocateFixed className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                              <span>Detect My Location</span>
+                            </button>
+                          )}
+
+                          {locationStatus === 'requesting' && (
+                            <p className="text-[11px] text-[var(--gold-primary)] font-medium animate-pulse flex items-center gap-1.5">
+                              <LocateFixed className="w-3.5 h-3.5 animate-spin" />
+                              <span>Requesting browser permission...</span>
+                            </p>
+                          )}
+
+                          {locationStatus === 'detected' && locationCoords && (
+                            <div className="space-y-0.5">
+                              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Location detected</span>
+                              </p>
+                              <p className="text-[10px] text-[var(--text-muted)] font-mono">
+                                Calibrated for zone ({locationCoords.latitude.toFixed(2)}°N, {locationCoords.longitude.toFixed(2)}°E)
+                              </p>
+                            </div>
+                          )}
+
+                          {locationStatus === 'denied' && (
+                            <p className="text-[11px] text-[var(--text-muted)]">
+                              Location access declined. Using manual destination above.
+                            </p>
+                          )}
+
+                          {(locationStatus === 'unsupported' || locationStatus === 'error') && (
+                            <p className="text-[11px] text-[var(--text-muted)]">
+                              {locationFeedback || 'Location unavailable. Using manual destination.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Weather Feel Selector */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase font-mono text-[var(--text-muted)]">
+                              Prevailing Weather:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIsWeatherSkipped(!isWeatherSkipped)}
+                              className="text-[10px] text-[var(--gold-primary)] font-medium hover:underline cursor-pointer"
+                            >
+                              {isWeatherSkipped ? 'Add Weather' : 'Skip Weather'}
+                            </button>
+                          </div>
+
+                          {!isWeatherSkipped ? (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--pill-bg)]">
+                                <CloudSun className="w-6 h-6 text-amber-500 shrink-0" />
+                                <div className="text-xs">
+                                  <span className="font-bold text-[var(--text-heading)]">{selectedWeatherCond}</span>
+                                  <p className="text-[10px] text-[var(--text-muted)]">{weatherNote}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-1">
+                                {[
+                                  { name: 'Sunny', note: '28°C • Warm' },
+                                  { name: 'Partly Cloudy', note: '24°C • Mild' },
+                                  { name: 'Rainy', note: '18°C • Damp' },
+                                  { name: 'Cold', note: '9°C • Crisp' },
+                                ].map((w) => (
+                                  <button
+                                    key={w.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedWeatherCond(w.name);
+                                      setWeatherNote(w.note);
+                                    }}
+                                    className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                                      selectedWeatherCond === w.name
+                                        ? 'bg-black text-white dark:bg-white dark:text-black font-semibold'
+                                        : 'bg-[var(--bg-card)] border-[var(--border-card)] text-[var(--text-body)]'
+                                    }`}
+                                  >
+                                    {w.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-xl bg-[var(--pill-bg)] text-[11px] text-[var(--text-muted)] italic">
+                              Weather context skipped. Outfits will be styled without climate biasing.
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1208,11 +1595,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         onClick={() => setPlannerStep(2)}
                         className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-md"
                       >
-                        <span>Next: Set Mood & Weather</span>
+                        <span>Next: Set Mood & Constraints</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
-
                   </div>
 
                   {/* Right Column (4 cols): Venue Preview Card (Screenshot 2) */}
@@ -1302,12 +1688,27 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   {/* Left Column (8 cols): Mood, Weather & Preferences */}
                   <div className="lg:col-span-8 space-y-6">
                     
-                    {/* 1. What's your mood today? (10 Cards from Screenshot 1) */}
+                    {/* 1. What's your mood today? (Multi-select up to 2) */}
                     <div className="space-y-3">
-                      <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
-                        1. What's your mood today?
-                      </h3>
-                      <p className="text-xs text-[var(--text-muted)]">Select your current vibe or choose multiple.</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
+                            1. What's your mood today?
+                          </h3>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            Select up to 2 style vibes ({selectedMoods.length}/2 selected).
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
+                          {selectedMoods.length}/2 Selected
+                        </span>
+                      </div>
+
+                      {vibeFeedback && (
+                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium animate-in fade-in">
+                          {vibeFeedback}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                         {[
@@ -1320,18 +1721,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { id: 'Trendy', label: 'Trendy', img: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=300&q=80' },
                           { id: 'Bold', label: 'Bold', img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=300&q=80' },
                           { id: 'Comfortable', label: 'Comfortable', img: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=300&q=80' },
-                          { id: 'Other', label: 'Other', isPlus: true },
+                          { id: 'Other', label: '+ Custom', isCustom: true },
                         ].map((m) => {
-                          const isSelected = selectedMood === m.id;
+                          const isSelected = selectedMoods.includes(m.id);
                           return (
                             <div
                               key={m.id}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isSelected}
                               onClick={() => {
-                                if (!m.isPlus) setSelectedMood(m.id);
+                                if (m.isCustom) {
+                                  setIsCustomVibeActive(!isCustomVibeActive);
+                                } else {
+                                  handleToggleMood(m.id);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  if (m.isCustom) setIsCustomVibeActive(!isCustomVibeActive);
+                                  else handleToggleMood(m.id);
+                                }
                               }}
                               className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
                                 isSelected
-                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md'
+                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
                               }`}
                             >
@@ -1339,7 +1754,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 {m.img ? (
                                   <img src={m.img} alt={m.label} className="w-full h-full object-cover" />
                                 ) : (
-                                  <Plus className="w-6 h-6 text-neutral-400" />
+                                  <div className="flex flex-col items-center justify-center gap-1 text-[var(--gold-primary)]">
+                                    <Plus className="w-6 h-6" />
+                                    <span className="text-[9px] uppercase font-mono font-bold tracking-wider">Custom</span>
+                                  </div>
                                 )}
                                 {isSelected && (
                                   <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center border border-white">
@@ -1354,24 +1772,63 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           );
                         })}
                       </div>
+
+                      {/* Custom Vibe Input Trigger */}
+                      {isCustomVibeActive && (
+                        <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-2 animate-in fade-in">
+                          <span className="text-[11px] font-semibold text-[var(--text-heading)] block">
+                            Define your unique style vibe:
+                          </span>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={customVibeInput}
+                              onChange={(e) => setCustomVibeInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAddCustomVibe();
+                                }
+                              }}
+                              placeholder="e.g. Vintage Riviera, Stealth Wealth, Cyber Minimal..."
+                              className="flex-1 px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddCustomVibe}
+                              disabled={!customVibeInput.trim()}
+                              className="px-4 py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold disabled:opacity-40 cursor-pointer"
+                            >
+                              Add Vibe
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* 2. What's the weather like? (7 Buttons from Screenshot 1) */}
+                    {/* 2. What's the weather like? (Synchronized Weather Context) */}
                     <div className="space-y-3">
-                      <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
-                        2. What's the weather like?
-                      </h3>
-                      <p className="text-xs text-[var(--text-muted)]">We'll adjust the outfit to keep you comfortable and stylish.</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
+                            2. What's the weather like?
+                          </h3>
+                          <p className="text-xs text-[var(--text-muted)]">We'll adjust layer weight and textures accordingly.</p>
+                        </div>
+                        <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
+                          {selectedWeatherCond}
+                        </span>
+                      </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-7 gap-2.5">
                         {[
-                          { name: 'Sunny', icon: Sun, color: 'text-amber-500' },
-                          { name: 'Partly Cloudy', icon: CloudSun, color: 'text-amber-400' },
-                          { name: 'Cloudy', icon: CloudRain, color: 'text-neutral-400' },
-                          { name: 'Rainy', icon: CloudRain, color: 'text-sky-500' },
-                          { name: 'Windy', icon: Wind, color: 'text-teal-500' },
-                          { name: 'Cold', icon: Snowflake, color: 'text-blue-400' },
-                          { name: 'Hot', icon: Thermometer, color: 'text-rose-500' },
+                          { name: 'Sunny', icon: Sun, color: 'text-amber-500', note: '28°C • Warm & Bright' },
+                          { name: 'Partly Cloudy', icon: CloudSun, color: 'text-amber-400', note: '24°C • Mild & Pleasant' },
+                          { name: 'Cloudy', icon: CloudRain, color: 'text-neutral-400', note: '20°C • Overcast & Temperate' },
+                          { name: 'Rainy', icon: CloudRain, color: 'text-sky-500', note: '18°C • Damp & Wet Conditions' },
+                          { name: 'Windy', icon: Wind, color: 'text-teal-500', note: '19°C • Crisp & Breezy' },
+                          { name: 'Cold', icon: Snowflake, color: 'text-blue-400', note: '8°C • Crisp & Layering Required' },
+                          { name: 'Hot', icon: Thermometer, color: 'text-rose-500', note: '34°C • High Heat & Breathable' },
                         ].map((w) => {
                           const Icon = w.icon;
                           const isSelected = selectedWeatherCond === w.name;
@@ -1379,10 +1836,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             <button
                               key={w.name}
                               type="button"
-                              onClick={() => setSelectedWeatherCond(w.name)}
+                              onClick={() => {
+                                setSelectedWeatherCond(w.name);
+                                setWeatherNote(w.note);
+                              }}
                               className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                                 isSelected
-                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md'
+                                  ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.02]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
                               }`}
                             >
@@ -1394,7 +1854,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </div>
                     </div>
 
-                    {/* 3. Any additional preferences? (Screenshot 1) */}
+                    {/* 3. Any additional preferences? (Comfort & Layering) */}
                     <div className="space-y-3">
                       <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
                         3. Any additional preferences? <span className="text-[11px] text-[var(--text-muted)] font-normal">(Optional)</span>
@@ -1406,7 +1866,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Light & Breezy', icon: Wind },
                           { name: 'Warm & Cozy', icon: Sparkles },
                           { name: 'Rain Friendly', icon: Umbrella },
-                          { name: 'Breathable', icon: Sun },
+                          { name: 'Breathable Linens', icon: Sun },
+                          { name: 'Relaxed Fit', icon: Clock },
+                          { name: 'Smart & Structured', icon: Sparkles },
                           { name: 'Indoor-to-Outdoor', icon: Building },
                           { name: 'All Day Comfort', icon: Clock },
                         ].map((pref) => {
@@ -1437,91 +1899,69 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </div>
                     </div>
 
+                    {/* 4. Explicit Garment Constraints (Include & Avoid) */}
+                    <GarmentConstraintsSection
+                      mustInclude={mustInclude}
+                      avoidItems={avoidItems}
+                      onAddInclude={handleAddInclude}
+                      onRemoveInclude={handleRemoveInclude}
+                      onAddAvoid={handleAddAvoid}
+                      onRemoveAvoid={handleRemoveAvoid}
+                    />
+
                     {/* Navigation Buttons */}
                     <div className="pt-2 flex items-center justify-between">
                       <button
+                        type="button"
                         onClick={() => setPlannerStep(1)}
                         className="px-5 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] cursor-pointer transition-colors"
                       >
-                        ← Back
+                        ← Back to Occasion & Destination
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => setPlannerStep(3)}
                         className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-md"
                       >
-                        <span>Next: Get Outfit Suggestions</span>
+                        <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
+                        <span>Generate Curated Outfit</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
 
                   </div>
 
-                  {/* Right Column (4 cols): Your Current Plan & Weather (Screenshot 1) */}
+                  {/* Right Column (4 cols): StylistReviewSummary Panel */}
                   <div className="lg:col-span-4 space-y-4">
-                    {/* Your Current Plan */}
-                    <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] p-5 space-y-4 shadow-sm">
-                      <div className="flex items-center justify-between pb-2 border-b border-[var(--border-card)]">
-                        <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">
-                          Your Current Plan
-                        </h4>
-                        <button
-                          onClick={() => setPlannerStep(1)}
-                          className="text-[11px] font-semibold text-[var(--gold-primary)] hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <Edit className="w-3 h-3" /> Edit
-                        </button>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="h-32 rounded-2xl overflow-hidden bg-neutral-900">
-                          <img
-                            src={selectedVenue.img}
-                            alt={selectedVenue.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <h5 className="font-bold text-sm text-[var(--text-heading)]">
-                            Dinner at {selectedVenue.name}
-                          </h5>
-                          <div className="space-y-1 text-xs text-[var(--text-muted)] mt-1.5">
-                            <p className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                              <span>{selectedDate}</span>
-                            </p>
-                            <p className="flex items-center gap-1.5">
-                              <Clock className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                              <span>{selectedTime}</span>
-                            </p>
-                            <p className="flex items-center gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                              <span>{selectedVenue.location}</span>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Weather telemetric summary */}
-                      <div className="p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center gap-3">
-                        <CloudSun className="w-7 h-7 text-amber-500 shrink-0" />
-                        <div className="text-xs">
-                          <span className="font-bold text-sm text-[var(--text-heading)]">28°C Partly Cloudy</span>
-                          <p className="text-[10px] text-[var(--text-muted)]">Hyderabad, India • Humidity 56%</p>
-                        </div>
-                      </div>
-
-                      {/* Pro Tip Card */}
-                      <div className="p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] text-xs text-[var(--text-body)] space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold text-[var(--gold-primary)]">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Pro Tip</span>
-                        </div>
-                        <p className="text-[11px] leading-snug">
-                          We'll combine your mood, weather and destination vibe to suggest outfits that look great and feel right.
-                        </p>
-                      </div>
-                    </div>
+                    <StylistReviewSummary
+                      selectedOccasion={selectedOccasion}
+                      selectedDestination={destinationSearch}
+                      selectedVenueCategory={selectedVenueCategory}
+                      selectedVenueImg={selectedVenue.img}
+                      selectedVenueName={selectedVenue.name}
+                      selectedDate={selectedDate}
+                      selectedTime={selectedTime}
+                      weatherSummary={isWeatherSkipped ? 'Climate context skipped' : weatherNote}
+                      weatherCondition={isWeatherSkipped ? 'Climate-Agnostic' : selectedWeatherCond}
+                      locationStatus={locationStatus}
+                      selectedMoods={selectedMoods}
+                      selectedPreferences={selectedPreferences}
+                      mustInclude={mustInclude}
+                      avoidItems={avoidItems}
+                      onEditOccasion={() => setPlannerStep(1)}
+                      onEditDestination={() => setPlannerStep(1)}
+                      onEditMoods={() => {
+                        window.scrollTo({ top: 200, behavior: 'smooth' });
+                      }}
+                      onEditPreferences={() => {
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      onEditConstraints={() => {
+                        window.scrollTo({ top: 600, behavior: 'smooth' });
+                      }}
+                      onGenerate={() => setPlannerStep(3)}
+                    />
                   </div>
 
                 </div>
@@ -1591,16 +2031,34 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         <ul className="space-y-1.5 text-xs text-[var(--text-body)]">
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Venue Alignment:</strong> Styled for {selectedVenue.name}'s {selectedVenue.ambience} setting and {selectedVenue.dressCode} dress code.</span>
+                            <span><strong>Venue Alignment:</strong> Styled for {selectedVenue.name || destinationSearch}'s {selectedVenueCategory} setting and dress code.</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Climate Comfort:</strong> Optimized for {selectedWeatherCond} weather ({selectedPreferences.join(', ')}).</span>
+                            <span><strong>Climate Comfort:</strong> Optimized for {isWeatherSkipped ? 'climate-agnostic comfort' : `${selectedWeatherCond} weather`} ({selectedPreferences.join(', ')}).</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Chromatic Harmony:</strong> High-contrast neutral pairing complementing your calibrated skin undertone and fit.</span>
+                            <span><strong>Chromatic Harmony:</strong> High-contrast neutral pairing complementing your calibrated profile.</span>
                           </li>
+                          {selectedMoods.length > 0 && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-emerald-500 font-bold">✓</span>
+                              <span><strong>Vibe Calibration:</strong> Formulated around your {selectedMoods.join(' & ')} aesthetic.</span>
+                            </li>
+                          )}
+                          {mustInclude.length > 0 && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-emerald-500 font-bold">✓</span>
+                              <span><strong>Hero Inclusions:</strong> Feature anchored around your required pieces ({mustInclude.join(', ')}).</span>
+                            </li>
+                          )}
+                          {avoidItems.length > 0 && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-rose-500 font-bold">✕</span>
+                              <span><strong>Constraint Avoidance:</strong> Excluded {avoidItems.join(', ')} from the silhouette composition.</span>
+                            </li>
+                          )}
                         </ul>
                       </div>
 
@@ -1626,6 +2084,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         >
                           <Calendar className="w-3.5 h-3.5" />
                           <span>Schedule on Calendar</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPlannerStep(2)}
+                          className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer text-[var(--text-heading)] flex items-center gap-1.5"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                          <span>Adjust Plan</span>
                         </button>
 
                         <button
@@ -2531,6 +2998,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           </div>
         </div>
       )}
+
+      {/* Specialized Occasion Directory Modal */}
+      <OccasionModal
+        isOpen={isOccasionModalOpen}
+        onClose={() => setIsOccasionModalOpen(false)}
+        selectedOccasion={selectedOccasion}
+        onSelectOccasion={(occName) => setSelectedOccasion(occName)}
+      />
+
+      {/* Expanded Venue Category Taxonomy Modal */}
+      <VenueCategoryModal
+        isOpen={isVenueCategoryModalOpen}
+        onClose={() => setIsVenueCategoryModalOpen(false)}
+        selectedCategory={selectedVenueCategory}
+        onSelectCategory={(catName) => setSelectedVenueCategory(catName)}
+      />
 
     </div>
   );

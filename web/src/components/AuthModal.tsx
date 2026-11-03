@@ -18,14 +18,17 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess?: (user: unknown) => void;
   onSwitchToOnboarding?: () => void;
+  onModeChange?: (mode: AuthMode) => void;
 }
 
 const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
   initialMode = 'signin',
   onClose,
   onSuccess,
+  onModeChange,
 }) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [prevInitialMode, setPrevInitialMode] = useState(initialMode);
 
   // Form fields
   const [name, setName] = useState('');
@@ -55,6 +58,27 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
     setSocialNotice(null);
     setForgotNotice(null);
   };
+
+  const switchMode = (newMode: AuthMode) => {
+    setMode(newMode);
+    resetForm();
+    onModeChange?.(newMode);
+  };
+
+  // Synchronize internal mode if initialMode prop changes (e.g., routing between /login and /register)
+  if (initialMode !== prevInitialMode) {
+    setPrevInitialMode(initialMode);
+    setMode(initialMode);
+    setName('');
+    setIdentifier('');
+    setPassword('');
+    setShowPassword(false);
+    setTouched({});
+    setFieldErrors({});
+    setServerError(null);
+    setSocialNotice(null);
+    setForgotNotice(null);
+  }
 
   // Handle ESC key to close
   useEffect(() => {
@@ -175,8 +199,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
 
   const handleBack = () => {
     if (mode === 'forgot') {
-      setMode('signin');
-      resetForm();
+      switchMode('signin');
     } else {
       onClose();
     }
@@ -421,8 +444,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setMode('forgot');
-                      resetForm();
+                      switchMode('forgot');
                     }}
                     className="text-[11px] text-[#6B5E51] hover:text-[#1C1612] transition-colors cursor-pointer"
                   >
@@ -507,8 +529,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setMode('signup');
-                  resetForm();
+                  switchMode('signup');
                 }}
                 className="font-bold text-[#1C1612] hover:text-[#A67C1E] underline cursor-pointer ml-1"
               >
@@ -523,8 +544,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setMode('signin');
-                  resetForm();
+                  switchMode('signin');
                 }}
                 className="font-bold text-[#1C1612] hover:text-[#A67C1E] underline cursor-pointer ml-1"
               >
@@ -539,8 +559,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setMode('signin');
-                  resetForm();
+                  switchMode('signin');
                 }}
                 className="font-bold text-[#1C1612] hover:text-[#A67C1E] underline cursor-pointer ml-1"
               >
@@ -559,6 +578,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'signin',
   onClose,
   onSuccess,
+  onSwitchToOnboarding,
+  onModeChange,
 }) => {
   if (!isOpen) return null;
 
@@ -567,6 +588,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       initialMode={initialMode}
       onClose={onClose}
       onSuccess={onSuccess}
+      onSwitchToOnboarding={onSwitchToOnboarding}
+      onModeChange={onModeChange}
     />
   );
 };

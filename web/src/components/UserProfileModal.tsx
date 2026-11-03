@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, User, Check, Sparkles } from 'lucide-react';
-import { useCloset } from '../context/ClosetContext';
+import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface UserProfileModalProps {
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
   const { profile, updateProfile } = useCloset();
   const [name, setName] = useState(profile.name);
+  const [wardrobeFocus, setWardrobeFocus] = useState<WardrobeFocus>(profile.wardrobeFocus || 'personalize');
   const [height, setHeight] = useState(profile.height);
   const [bodyShape, setBodyShape] = useState(profile.bodyShape);
   const [selectedStyles, setSelectedStyles] = useState<string[]>(profile.stylePersonas);
@@ -29,6 +30,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const handleSave = () => {
     updateProfile({
       name,
+      wardrobeFocus,
       height,
       bodyShape,
       stylePersonas: selectedStyles,
@@ -70,6 +72,46 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         {/* Form Fields */}
         <div className="space-y-5 text-xs">
           
+          {/* Wardrobe Styling Focus (Women / Men / Personalize) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+                Wardrobe Styling Focus
+              </label>
+              <span className="text-[10px] text-[var(--gold-primary)] font-mono">Editable Anytime</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'women' as const, label: 'Women', badge: 'Capsule & Fluid', icon: '👗' },
+                { id: 'men' as const, label: 'Men', badge: 'Sartorial & Tailored', icon: '👔' },
+                { id: 'personalize' as const, label: 'Personalize', badge: 'Mixed / Fluid', icon: '✦' },
+              ].map(opt => {
+                const isSelected = wardrobeFocus === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setWardrobeFocus(opt.id)}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
+                      isSelected
+                        ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] shadow-sm'
+                        : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                    }`}
+                  >
+                    <span className="text-xl">{opt.icon}</span>
+                    <span className="font-semibold text-xs text-[var(--text-heading)]">{opt.label}</span>
+                    <span className="text-[9px] font-mono text-[var(--gold-primary)] tracking-tight">
+                      {opt.badge}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-snug">
+              Calibrates your default closet categories, sizing formulas, and silhouette proportion guides.
+            </p>
+          </div>
+
           {/* Biometrics */}
           <div className="grid grid-cols-2 gap-3">
             <div>

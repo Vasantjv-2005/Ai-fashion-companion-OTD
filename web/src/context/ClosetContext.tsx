@@ -14,13 +14,20 @@ export interface ClosetItem {
   description?: string;
 }
 
+export type WardrobeFocus = 'women' | 'men' | 'personalize';
+
 export interface UserProfile {
   name: string;
+  wardrobeFocus?: WardrobeFocus;
   height: string;
+  weight?: string;
   bodyShape: string;
   stylePersonas: string[];
   preferredFit: string;
   palettePreferences: string[];
+  avatarOption?: 'archetype' | 'custom_photo' | 'skipped';
+  avatarArchetype?: string;
+  referencePhotoUrl?: string;
 }
 
 export interface OutfitRecommendation {
@@ -55,11 +62,15 @@ interface ClosetContextType {
 
 const DEFAULT_PROFILE: UserProfile = {
   name: 'Curator',
+  wardrobeFocus: 'personalize',
   height: `5'11" (180 cm)`,
+  weight: '70 kg',
   bodyShape: 'Athletic / V-Taper',
   stylePersonas: ['Old Money Heritage', 'Clean Minimalist'],
   preferredFit: 'Tailored / Regular',
   palettePreferences: ['Espresso & Earth', 'Ivory & Cream', 'Charcoal & Navy'],
+  avatarOption: 'archetype',
+  avatarArchetype: 'classic_tailored',
 };
 
 const INITIAL_CLOSET: ClosetItem[] = [
