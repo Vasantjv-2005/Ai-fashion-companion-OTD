@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Home,
   Shirt,
@@ -47,6 +47,14 @@ import { OccasionModal } from './ui/OccasionModal';
 import { VenueCategoryModal } from './ui/VenueCategoryModal';
 import { GarmentConstraintsSection } from './ui/GarmentConstraintsSection';
 import { StylistReviewSummary } from './ui/StylistReviewSummary';
+import { OutfitResultHeader } from './ui/OutfitResultHeader';
+import { AvatarOutfitCanvas, type OutfitSlotItem } from './ui/AvatarOutfitCanvas';
+import { OutfitSlotsList } from './ui/OutfitSlotsList';
+import { OutfitRationaleCard } from './ui/OutfitRationaleCard';
+import { OutfitActionToolbar } from './ui/OutfitActionToolbar';
+import { OutfitGenerationLoader } from './ui/OutfitGenerationLoader';
+import { GarmentSwapModal } from './ui/GarmentSwapModal';
+import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
@@ -140,6 +148,27 @@ const CURATED_VENUES: Venue[] = [
   },
 ];
 
+function getDynamicDateOptions(): string[] {
+  const now = new Date();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const format = (d: Date) => `${d.getDate()} ${months[d.getMonth()]}`;
+
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+
+  const weekend = new Date(now);
+  const dayOfWeek = now.getDay();
+  const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7;
+  weekend.setDate(now.getDate() + daysUntilSaturday);
+
+  return [
+    `Today, ${format(today)}`,
+    `Tomorrow, ${format(tomorrow)}`,
+    `Saturday, ${format(weekend)}`,
+  ];
+}
+
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
@@ -226,7 +255,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [destinationSearch, setDestinationSearch] = useState("L'amore, Banjara Hills, Hyderabad");
   const [selectedVenueCategory, setSelectedVenueCategory] = useState('Restaurant');
   const [isVenueCategoryModalOpen, setIsVenueCategoryModalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('Today, 14 Oct');
+  // Dynamic relative date options based on current date
+  const [dynamicDateOptions] = useState<string[]>(() => getDynamicDateOptions());
+  const [selectedDate, setSelectedDate] = useState<string>(() => getDynamicDateOptions()[0]);
   const [selectedTime, setSelectedTime] = useState('8:00 PM');
   const [venueInfoTab, setVenueInfoTab] = useState<'about' | 'ambience' | 'dress_code' | 'photos'>('about');
 
@@ -343,8 +374,134 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   // Recommendation & Chat State (Step 3)
-  const [currentOutfitTitle, setCurrentOutfitTitle] = useState('The Parisian Minimalist');
-  const [currentOutfitMatch] = useState(98);
+  const [currentOutfitTitle, setCurrentOutfitTitle] = useState<string | null>(null);
+  const [outfitVariationIndex, setOutfitVariationIndex] = useState(0);
+  const [isSynthesizingOutfit, setIsSynthesizingOutfit] = useState(false);
+
+  // Individual Garment Swapping State (Task 4)
+  const [slotOverrides, setSlotOverrides] = useState<Partial<Record<OutfitSlotItem['slot'], ClosetItem>>>({});
+  const [isGarmentSwapOpen, setIsGarmentSwapOpen] = useState(false);
+  const [activeSwapSlot, setActiveSwapSlot] = useState<OutfitSlotItem | null>(null);
+  const [swapToast, setSwapToast] = useState<string | null>(null);
+
+  // Memoized deterministic ensemble synthesis from active closet & context
+  const synthesizedOutfit = useMemo(() => {
+    const base = synthesizeOutfitResult({
+      closet,
+      occasion: selectedOccasion,
+      venueName: selectedVenue.name || destinationSearch,
+      venueCategory: selectedVenueCategory,
+      weatherCondition: isWeatherSkipped ? 'Climate-Agnostic' : selectedWeatherCond,
+      selectedPreferences,
+      selectedMoods,
+      mustInclude,
+      avoidItems,
+      profile,
+      variationIndex: outfitVariationIndex,
+    });
+    if (currentOutfitTitle) {
+      return { ...base, title: currentOutfitTitle };
+    }
+    return base;
+  }, [
+    closet,
+    selectedOccasion,
+    selectedVenue.name,
+    destinationSearch,
+    selectedVenueCategory,
+    isWeatherSkipped,
+    selectedWeatherCond,
+    selectedPreferences,
+    selectedMoods,
+    mustInclude,
+    avoidItems,
+    profile,
+    outfitVariationIndex,
+    currentOutfitTitle,
+  ]);
+
+  // Effective slots applying individual garment overrides while strictly preserving all other 4 slots
+  const effectiveSlots: OutfitSlotItem[] = useMemo(() => {
+    return synthesizedOutfit.slots.map((baseSlot) => {
+      const override = slotOverrides[baseSlot.slot];
+      if (!override) return baseSlot;
+
+      return {
+        ...baseSlot,
+        closetItemId: override.id,
+        name: override.name,
+        category: override.subType || override.category,
+        brand: override.brand,
+        color: override.color,
+        fit: override.fit,
+        formality: override.formality,
+        imageUrl: override.imageUrl,
+        icon: override.icon,
+        status: 'owned' as const, // Strict verified owned status directly from closet
+        stylingNote: `Hand-selected substitution: ${override.brand || 'Bespoke'} ${override.name} in ${override.color}.`,
+      };
+    });
+  }, [synthesizedOutfit.slots, slotOverrides]);
+
+  // Transparently recomputed harmony score based on active slots
+  const effectiveHarmonyScore = useMemo(() => {
+    const ownedCount = effectiveSlots.filter((s) => s.status === 'owned').length;
+    const wardrobeOwnershipPts = Math.round((ownedCount / Math.max(1, effectiveSlots.length)) * 60);
+
+    const occasionLower = selectedOccasion.toLowerCase();
+    const isFormal =
+      occasionLower.includes('gala') ||
+      occasionLower.includes('black tie') ||
+      occasionLower.includes('formal') ||
+      occasionLower.includes('dinner');
+    const isCasual =
+      occasionLower.includes('brunch') ||
+      occasionLower.includes('weekend') ||
+      occasionLower.includes('casual');
+
+    const formalityPts = isFormal ? 29 : isCasual ? 28 : 30;
+    const climateComfortPts = isWeatherSkipped ? 8 : 9;
+
+    return Math.min(99, Math.max(70, wardrobeOwnershipPts + formalityPts + climateComfortPts));
+  }, [effectiveSlots, selectedOccasion, isWeatherSkipped]);
+
+  // Open garment swap modal for a specific slot
+  const handleOpenSwapModal = (slot: OutfitSlotItem) => {
+    setActiveSwapSlot(slot);
+    setIsGarmentSwapOpen(true);
+  };
+
+  // Apply a swapped garment to a single slot
+  const handleApplySwap = (slotKey: OutfitSlotItem['slot'], newItem: ClosetItem) => {
+    setSlotOverrides((prev) => ({
+      ...prev,
+      [slotKey]: newItem,
+    }));
+    setSwapToast(`Updated ${slotKey.toUpperCase()} with ${newItem.brand ? newItem.brand + ' ' : ''}${newItem.name}`);
+    setTimeout(() => setSwapToast(null), 3500);
+  };
+
+  const handleSaveCurrentLook = () => {
+    const lookId = `curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`;
+    toggleLike(lookId);
+    if (!savedLooksList.some((look) => look.id === lookId)) {
+      setSavedLooksList((prev) => [
+        {
+          id: lookId,
+          title: synthesizedOutfit.title,
+          subtitle: synthesizedOutfit.subtitle,
+          occasion: selectedOccasion,
+          venue: selectedVenue.name || destinationSearch,
+          weather: isWeatherSkipped ? 'Climate-Agnostic' : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
+          img: effectiveSlots[0]?.imageUrl || 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
+          piecesSummary: effectiveSlots.map((s) => s.name).slice(0, 3).join(', '),
+          date: 'Just now',
+        },
+        ...prev,
+      ]);
+    }
+  };
+
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>([
     {
       sender: 'user',
@@ -353,7 +510,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     },
     {
       sender: 'ai',
-      text: "Here are some outfit options for L'amore based on the fine dining ambience, 28°C mild evening conditions and your minimalist style. How does this look feel to you?",
+      text: "Here are some outfit options for L'amore based on the fine dining ambience, 24°C mild evening conditions and your minimalist style. How does this look feel to you?",
       time: '8:03 PM',
     },
   ]);
@@ -379,22 +536,72 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     setChatMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setChatInput('');
 
-    // Responsive intelligent reply
+    // Intelligent local stylist refinement with transparent simulation labeling (Part 4)
     setTimeout(() => {
-      let reply = "I've recalibrated your silhouette. Swapped in lighter layers and adjusted footwear to balance comfort with the restaurant's dress code.";
+      let reply = "I've recalibrated your silhouette. Updated garment selections to align with your styling preferences.";
       const lower = text.toLowerCase();
+
       if (lower.includes('casual')) {
-        reply = "Adapted for elevated casual ease: Swapped formal leather shoes for clean minimalist sneakers and rolled back blazer structure.";
-      } else if (lower.includes('shoes') || lower.includes('boot')) {
-        reply = "Substituted footwear for glazed Chelsea boots to anchor the lower silhouette with confident posture.";
-      } else if (lower.includes('jeans')) {
-        reply = "Replaced denim with charcoal forward-pleat trousers for sharpened sartorial harmony.";
+        // Find casual footwear & relaxed top
+        const casualShoe = closet.find((c) => c.category === 'footwear' && (c.subType.includes('Sneaker') || c.name.includes('Sneaker'))) ||
+                           closet.find((c) => c.category === 'footwear' && c.formality <= 2);
+        if (casualShoe) {
+          setSlotOverrides((prev) => ({ ...prev, footwear: casualShoe }));
+        }
+        reply = "Adapted for elevated casual ease: Swapped formal leather shoes for clean minimalist sneakers and softened overall structure.";
+      } else if (lower.includes('formal')) {
+        // Find formal shoes & formal blazer
+        const formalShoe = closet.find((c) => c.category === 'footwear' && c.formality >= 4);
+        const formalBlazer = closet.find((c) => c.category === 'outerwear' && c.formality >= 4);
+        setSlotOverrides((prev) => ({
+          ...prev,
+          ...(formalShoe ? { footwear: formalShoe } : {}),
+          ...(formalBlazer ? { outerwear: formalBlazer } : {}),
+        }));
+        reply = "Elevated to formal standard: Sharpened shoulders with tailored outerwear and burnished calfskin footwear.";
+      } else if (lower.includes('colour') || lower.includes('color')) {
+        setOutfitVariationIndex((prev) => prev + 1);
+        setSlotOverrides({});
+        reply = "Explored a complementary chromatic palette: Re-balanced tones with earth and tonal neutral contrast.";
+      } else if (lower.includes('comfort')) {
+        const relaxedBottom = closet.find((c) => c.category === 'bottoms' && (c.fit.includes('Relaxed') || c.name.includes('Linen') || c.name.includes('Gurkha')));
+        if (relaxedBottom) {
+          setSlotOverrides((prev) => ({ ...prev, bottom: relaxedBottom }));
+        }
+        reply = "Prioritized ergonomic comfort: Swapped in relaxed-drape breathable trousers while keeping silhouettes clean.";
+      } else if (lower.includes('minimal')) {
+        const minimalTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Crewneck') || c.name.includes('Pima')));
+        if (minimalTop) {
+          setSlotOverrides((prev) => ({ ...prev, top: minimalTop }));
+        }
+        reply = "Tuned to clean minimalism: Stripped back ornamentation in favor of monochrome lines and essential proportions.";
+      } else if (lower.includes('elegant')) {
+        const elegantTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Silk') || c.name.includes('Rollneck')));
+        const watch = closet.find((c) => c.category === 'accessories' && c.subType.includes('Watch'));
+        setSlotOverrides((prev) => ({
+          ...prev,
+          ...(elegantTop ? { top: elegantTop } : {}),
+          ...(watch ? { accessory: watch } : {}),
+        }));
+        reply = "Refined for timeless elegance: Accented with fine-gauge knitwear and rose gold horological detailing.";
+      } else if (lower.includes('footwear') || lower.includes('shoes') || lower.includes('boot')) {
+        const shoes = closet.filter((c) => c.category === 'footwear');
+        const currentShoeId = effectiveSlots.find((s) => s.slot === 'footwear')?.closetItemId;
+        const currentIndex = shoes.findIndex((s) => s.id === currentShoeId);
+        const nextShoe = shoes[(currentIndex + 1) % shoes.length] || shoes[0];
+        if (nextShoe) {
+          setSlotOverrides((prev) => ({ ...prev, footwear: nextShoe }));
+          reply = `Substituted footwear for ${nextShoe.brand} ${nextShoe.name} in ${nextShoe.color}.`;
+        }
+      } else {
+        reply = `Understood: "${text}". Calibrated silhouette nuances from your active wardrobe.`;
       }
+
       setChatMessages((prev) => [
         ...prev,
         { sender: 'ai', text: reply, time: 'Just now' },
       ]);
-    }, 600);
+    }, 500);
   };
 
   // Switch to venue and launch wizard
@@ -422,15 +629,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   });
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-body)] flex flex-col font-sans transition-colors duration-300">
-      <div className="flex-1 flex overflow-hidden">
+    <div className="h-screen h-dvh bg-[var(--bg-canvas)] text-[var(--text-body)] flex overflow-hidden font-sans transition-colors duration-300">
+      <div className="flex-1 flex h-full overflow-hidden">
         
         {/* ========================================================================= */}
-        {/* LEFT NAVIGATION SIDEBAR (Matching Screenshot 3) */}
+        {/* LEFT NAVIGATION SIDEBAR (Fixed/Sticky Viewport, Scrollable Nav) */}
         {/* ========================================================================= */}
-        <aside className="w-64 border-r border-[var(--border-card)] bg-[var(--bg-card)] shrink-0 hidden md:flex flex-col justify-between py-6 px-4">
-          <div className="space-y-6">
-            
+        <aside className="w-64 h-full border-r border-[var(--border-card)] bg-[var(--bg-card)] shrink-0 hidden md:flex flex-col justify-between p-4 overflow-hidden z-20 select-none">
+          {/* Top: Logo */}
+          <div className="shrink-0 pb-3">
             {/* OTD Official Logo & Subtitle */}
             <div
               onClick={onBackToLanding}
@@ -453,8 +660,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </p>
               </div>
             </div>
+          </div>
 
-            {/* Navigation Menu (Matching Screenshot 3) */}
+          {/* Middle: Scrollable Navigation Menu */}
+          <div className="flex-1 overflow-y-auto min-h-0 py-1 space-y-1 pr-0.5">
             <nav className="space-y-1">
               {[
                 { id: 'home', label: 'Home', icon: Home },
@@ -513,8 +722,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             </nav>
           </div>
 
-          {/* Bottom Sidebar Utility Links & Promotional Card (Screenshot 3) */}
-          <div className="space-y-4 pt-4 border-t border-[var(--border-card)]">
+          {/* Bottom Sidebar Utility Links & Promotional Card */}
+          <div className="shrink-0 pt-3 border-t border-[var(--border-card)] space-y-3">
             <div className="space-y-0.5">
               <button
                 onClick={() => setIsSettingsOpen(true)}
@@ -532,13 +741,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               </button>
             </div>
 
-            {/* Bottom Promotional Card: "Build a Smarter Wardrobe." (Exact match to Screenshot 3) */}
+            {/* Bottom Promotional Card: "Build a Smarter Wardrobe." */}
             <div
               onClick={() => {
                 setActiveTab('closet');
                 onOpenAddPiece();
               }}
-              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm"
+              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block"
             >
               <img
                 src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80"
@@ -559,12 +768,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         </aside>
 
         {/* ========================================================================= */}
-        {/* MAIN VIEWPORT (Top Navigation + Active Tab) */}
+        {/* MAIN VIEWPORT (Independently Scrolling, Sticky Header) */}
         {/* ========================================================================= */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
           
           {/* Top Bar (Matching Screenshot 3) */}
-          <header className="h-16 px-6 border-b border-[var(--border-card)] bg-[var(--bg-header)] backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30">
+          <header className="h-16 px-6 border-b border-[var(--border-card)] bg-[var(--bg-header)] backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
             {/* Search Omnibar */}
             <div className="flex-1 max-w-xl relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -1403,11 +1612,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         <div className="space-y-1.5">
                           <span className="text-[10px] uppercase font-mono text-[var(--text-muted)] block">Date:</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {[
-                              'Today, 14 Oct',
-                              'Tomorrow, 15 Oct',
-                              'Saturday, 19 Oct',
-                            ].map((d) => (
+                            {dynamicDateOptions.map((d) => (
                               <button
                                 key={d}
                                 type="button"
@@ -1960,240 +2165,231 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       onEditConstraints={() => {
                         window.scrollTo({ top: 600, behavior: 'smooth' });
                       }}
-                      onGenerate={() => setPlannerStep(3)}
+                      onGenerate={() => {
+                        setIsSynthesizingOutfit(true);
+                        setPlannerStep(3);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
                     />
                   </div>
 
                 </div>
               )}
 
-              {/* STEP 3: RECOMMENDATION & CONVERSATIONAL MODIFIER */}
+              {/* STEP 3: AVATAR-FIRST OUTFIT RESULT EXPERIENCE */}
               {plannerStep === 3 && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                  
-                  {/* Left Column (7 cols): Curated Look Canvas & Editorial Rationale */}
-                  <div className="lg:col-span-7 space-y-6">
-                    <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] p-6 space-y-5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] uppercase font-mono font-bold text-[var(--gold-primary)] tracking-wider">
-                            Curated Ensemble • {selectedOccasion}
-                          </span>
-                          <h3 className="font-playfair text-2xl font-bold text-[var(--text-heading)]">
-                            {currentOutfitTitle}
-                          </h3>
+                <div className="max-w-7xl mx-auto w-full space-y-6 pb-12 animate-fadeIn">
+                  {isSynthesizingOutfit ? (
+                    <OutfitGenerationLoader
+                      occasion={selectedOccasion}
+                      venueName={selectedVenue.name || destinationSearch}
+                      onComplete={() => setIsSynthesizingOutfit(false)}
+                      durationMs={1300}
+                    />
+                  ) : (
+                    <>
+                      {/* Toast Feedback for Garment Swap */}
+                      {swapToast && (
+                        <div className="p-3 rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs font-semibold text-center flex items-center justify-center gap-2 shadow-lg animate-fadeIn border border-[var(--border-gold)]">
+                          <Check className="w-4 h-4 text-[var(--gold-primary)]" />
+                          <span>{swapToast}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-xs font-mono font-bold text-emerald-600 block">
-                            {currentOutfitMatch}% Harmony Score
-                          </span>
-                          <span className="text-[10px] text-[var(--text-muted)]">
-                            Calibrated to your Style DNA
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
-                      {/* Garments Visual Composition */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {closet.slice(0, 4).map((piece) => (
+                      {/* SECTION A: Refined Outfit Header */}
+                      <OutfitResultHeader
+                        title={synthesizedOutfit.title}
+                        subtitle={synthesizedOutfit.subtitle}
+                        occasion={selectedOccasion}
+                        destination={selectedVenue.name || destinationSearch}
+                        venueCategory={selectedVenueCategory}
+                        selectedDate={selectedDate}
+                        selectedTime={selectedTime}
+                        weatherCondition={isWeatherSkipped ? 'Climate-Agnostic' : selectedWeatherCond}
+                        weatherSummary={weatherNote}
+                        selectedMoods={selectedMoods}
+                        harmonyScore={effectiveHarmonyScore}
+                      />
+
+                      {/* SECTION B & C: Main Editorial Two-Column Composition */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                        {/* Left Column (7 cols): Avatar-First Visualization & Editorial Rationale */}
+                        <div className="lg:col-span-7 space-y-6">
+                          <AvatarOutfitCanvas
+                            slots={effectiveSlots}
+                            profile={profile}
+                            occasion={selectedOccasion}
+                            outfitTitle={synthesizedOutfit.title}
+                            isLoading={isSynthesizingOutfit}
+                            onSlotSelect={handleOpenSwapModal}
+                            onChangeSlotItem={handleOpenSwapModal}
+                          />
+
+                          <OutfitRationaleCard
+                            occasion={selectedOccasion}
+                            venueName={selectedVenue.name || destinationSearch}
+                            venueCategory={selectedVenueCategory}
+                            weatherCondition={selectedWeatherCond}
+                            weatherSummary={weatherNote}
+                            isWeatherSkipped={isWeatherSkipped}
+                            selectedPreferences={selectedPreferences}
+                            selectedMoods={selectedMoods}
+                            mustInclude={mustInclude}
+                            avoidItems={avoidItems}
+                            profile={profile}
+                          />
+                        </div>
+
+                        {/* Right Column (5 cols): Actions Toolbar, 5 Standardized Slots & Preserved Stylist Concierge */}
+                        <div className="lg:col-span-5 space-y-6">
+                          <OutfitActionToolbar
+                            isSaved={likedLooks.includes(`curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`)}
+                            onSave={handleSaveCurrentLook}
+                            onRegenerate={() => {
+                              setIsSynthesizingOutfit(true);
+                              setOutfitVariationIndex((prev) => prev + 1);
+                              setSlotOverrides({});
+                            }}
+                            onRefineWithChat={() => {
+                              const chatElem = document.getElementById('stylist-concierge-chat');
+                              if (chatElem) {
+                                chatElem.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }}
+                            onAdjustPlan={() => setPlannerStep(2)}
+                            onNewPlan={() => {
+                              setPlannerStep(1);
+                              setSlotOverrides({});
+                            }}
+                            isRegenerating={isSynthesizingOutfit}
+                            outfitTitle={synthesizedOutfit.title}
+                            occasion={selectedOccasion}
+                          />
+
+                          <OutfitSlotsList
+                            slots={effectiveSlots}
+                            closet={closet}
+                            onSlotClick={handleOpenSwapModal}
+                            onSlotChangeClick={handleOpenSwapModal}
+                          />
+
+                          {/* Preserved Stylist Concierge Chat Box with 7 Refinement Preferences */}
                           <div
-                            key={piece.id}
-                            className="rounded-2xl border border-[var(--border-card)] bg-[var(--pill-bg)]/50 p-2.5 flex flex-col justify-between"
+                            id="stylist-concierge-chat"
+                            className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-sm flex flex-col h-[490px]"
                           >
-                            <div className="h-28 rounded-xl bg-neutral-900 overflow-hidden mb-2 flex items-center justify-center text-3xl">
-                              {piece.imageUrl ? (
-                                <img src={piece.imageUrl} alt={piece.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span>{piece.icon}</span>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-[9px] uppercase font-mono font-bold text-[var(--gold-primary)] block">
-                                {piece.category}
-                              </span>
-                              <h5 className="font-semibold text-xs text-[var(--text-heading)] truncate">
-                                {piece.name}
-                              </h5>
-                              <p className="text-[10px] text-[var(--text-muted)] truncate">
-                                {piece.brand} • {piece.color}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Editorial Rationale: Why This Look? */}
-                      <div className="p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-2.5">
-                        <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)] flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                          <span>Why This Look Works</span>
-                        </h4>
-                        <ul className="space-y-1.5 text-xs text-[var(--text-body)]">
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Venue Alignment:</strong> Styled for {selectedVenue.name || destinationSearch}'s {selectedVenueCategory} setting and dress code.</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Climate Comfort:</strong> Optimized for {isWeatherSkipped ? 'climate-agnostic comfort' : `${selectedWeatherCond} weather`} ({selectedPreferences.join(', ')}).</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold">✓</span>
-                            <span><strong>Chromatic Harmony:</strong> High-contrast neutral pairing complementing your calibrated profile.</span>
-                          </li>
-                          {selectedMoods.length > 0 && (
-                            <li className="flex items-start gap-2">
-                              <span className="text-emerald-500 font-bold">✓</span>
-                              <span><strong>Vibe Calibration:</strong> Formulated around your {selectedMoods.join(' & ')} aesthetic.</span>
-                            </li>
-                          )}
-                          {mustInclude.length > 0 && (
-                            <li className="flex items-start gap-2">
-                              <span className="text-emerald-500 font-bold">✓</span>
-                              <span><strong>Hero Inclusions:</strong> Feature anchored around your required pieces ({mustInclude.join(', ')}).</span>
-                            </li>
-                          )}
-                          {avoidItems.length > 0 && (
-                            <li className="flex items-start gap-2">
-                              <span className="text-rose-500 font-bold">✕</span>
-                              <span><strong>Constraint Avoidance:</strong> Excluded {avoidItems.join(', ')} from the silhouette composition.</span>
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex flex-wrap gap-2.5 pt-1">
-                        <button
-                          onClick={() => {
-                            if (!likedLooks.includes('active-current')) {
-                              setLikedLooks([...likedLooks, 'active-current']);
-                            }
-                          }}
-                          className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
-                        >
-                          <Bookmark className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                          <span>Save to Favorites</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setActiveTab('calendar');
-                          }}
-                          className="px-5 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Calendar className="w-3.5 h-3.5" />
-                          <span>Schedule on Calendar</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setPlannerStep(2)}
-                          className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer text-[var(--text-heading)] flex items-center gap-1.5"
-                        >
-                          <Edit className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                          <span>Adjust Plan</span>
-                        </button>
-
-                        <button
-                          onClick={() => setPlannerStep(1)}
-                          className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer text-[var(--text-muted)]"
-                        >
-                          New Plan
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column (5 cols): AI Stylist Chat & Conversational Modifier */}
-                  <div className="lg:col-span-5 space-y-4">
-                    <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-lg flex flex-col h-[580px]">
-                      
-                      {/* Stylist Concierge Header */}
-                      <div className="p-4 border-b border-[var(--border-card)] flex items-center justify-between bg-[var(--bg-header)]">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-[#FAF5ED] p-1 border border-[#D5C29D] flex items-center justify-center">
-                            <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
-                          </div>
-                          <div>
-                            <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
-                              OTD AI Stylist Concierge
-                            </h4>
-                            <p className="text-[10px] text-emerald-500 font-medium">Ready to tweak look</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Messages Stream */}
-                      <div className="p-4 flex-1 overflow-y-auto space-y-3 text-xs">
-                        {chatMessages.map((msg, i) => (
-                          <div
-                            key={i}
-                            className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                          >
-                            {msg.sender === 'ai' && (
-                              <div className="w-6 h-6 rounded-full bg-[#FAF5ED] p-0.5 border border-[#D5C29D] shrink-0 flex items-center justify-center">
-                                <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
+                            {/* Stylist Concierge Header */}
+                            <div className="p-4 border-b border-[var(--border-card)] flex items-center justify-between bg-[var(--bg-header)]">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-[#FAF5ED] p-1 border border-[#D5C29D] flex items-center justify-center">
+                                  <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
+                                </div>
+                                <div>
+                                  <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
+                                    OTD AI Stylist Concierge
+                                  </h4>
+                                  <p className="text-[10px] text-emerald-500 font-medium flex items-center gap-1">
+                                    <span>● Active Refinement Engine</span>
+                                  </p>
+                                </div>
                               </div>
-                            )}
-                            <div
-                              className={`p-3 rounded-2xl max-w-[85%] leading-relaxed ${
-                                msg.sender === 'user'
-                                  ? 'bg-amber-100/70 dark:bg-amber-950/40 text-[var(--text-heading)] rounded-tr-none'
-                                  : 'bg-[var(--pill-bg)] text-[var(--text-body)] rounded-tl-none border border-[var(--border-card)]'
-                              }`}
-                            >
-                              <p>{msg.text}</p>
+                              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--gold-primary)]">
+                                Local Calibration
+                              </span>
+                            </div>
+
+                            {/* Messages Stream */}
+                            <div className="p-4 flex-1 overflow-y-auto space-y-3 text-xs">
+                              {chatMessages.map((msg, i) => (
+                                <div
+                                  key={i}
+                                  className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                                >
+                                  {msg.sender === 'ai' && (
+                                    <div className="w-6 h-6 rounded-full bg-[#FAF5ED] p-0.5 border border-[#D5C29D] shrink-0 flex items-center justify-center">
+                                      <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
+                                    </div>
+                                  )}
+                                  <div
+                                    className={`p-3 rounded-2xl max-w-[85%] leading-relaxed ${
+                                      msg.sender === 'user'
+                                        ? 'bg-amber-100/70 dark:bg-amber-950/40 text-[var(--text-heading)] rounded-tr-none'
+                                        : 'bg-[var(--pill-bg)] text-[var(--text-body)] rounded-tl-none border border-[var(--border-card)]'
+                                    }`}
+                                  >
+                                    <p>{msg.text}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* 7 Standardized Refinement Preference Chips (Part 4) */}
+                            <div className="p-3 border-t border-[var(--border-card)] bg-[var(--pill-bg)]/40">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold">
+                                  Refinement Preferences:
+                                </p>
+                                <span className="text-[9px] text-[var(--text-muted)] font-mono">
+                                  Click to calibrate look
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-0.5">
+                                {[
+                                  'Make it more casual.',
+                                  'Make it more formal.',
+                                  'Try a different colour combination.',
+                                  'Make it more comfortable.',
+                                  'Prefer minimal styling.',
+                                  'Make it more elegant.',
+                                  'Use different footwear.',
+                                ].map((instruction) => (
+                                  <button
+                                    key={instruction}
+                                    type="button"
+                                    onClick={() => handleSendChat(instruction)}
+                                    className="px-2.5 py-1 rounded-full text-[11px] bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] hover:text-[var(--gold-primary)] transition-all cursor-pointer text-left shadow-2xs"
+                                  >
+                                    "{instruction}"
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Input Box */}
+                            <div className="p-3 border-t border-[var(--border-card)] flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Custom instruction (e.g. 'Swap in something darker or more relaxed')..."
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                                className="flex-1 py-2 px-3.5 text-xs rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSendChat()}
+                                className="w-8 h-8 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center hover:scale-105 transition-all cursor-pointer shrink-0"
+                                aria-label="Send message"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* Quick Modification Chips */}
-                      <div className="p-3 border-t border-[var(--border-card)] bg-[var(--pill-bg)]/40">
-                        <p className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] mb-2 font-semibold">
-                          Quick Tweak Chips:
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            'Make it more casual.',
-                            'Change the shoes.',
-                            "Don't use jeans.",
-                            'Make it more date-ready.',
-                          ].map((instruction) => (
-                            <button
-                              key={instruction}
-                              onClick={() => handleSendChat(instruction)}
-                              className="px-2.5 py-1 rounded-full text-[11px] bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] hover:text-[var(--gold-primary)] transition-all cursor-pointer"
-                            >
-                              "{instruction}"
-                            </button>
-                          ))}
                         </div>
                       </div>
 
-                      {/* Input Box */}
-                      <div className="p-3 border-t border-[var(--border-card)] flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="e.g. 'Swap in something darker or more relaxed'..."
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                          className="flex-1 py-2 px-3.5 text-xs rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)]"
-                        />
-                        <button
-                          onClick={() => handleSendChat()}
-                          className="w-8 h-8 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center hover:scale-105 transition-all cursor-pointer shrink-0"
-                          aria-label="Send message"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-
+                      {/* Modal for Individual Garment Swapping */}
+                      <GarmentSwapModal
+                        key={activeSwapSlot ? activeSwapSlot.slot : 'none'}
+                        isOpen={isGarmentSwapOpen}
+                        onClose={() => setIsGarmentSwapOpen(false)}
+                        slot={activeSwapSlot}
+                        allSlots={effectiveSlots}
+                        closet={closet}
+                        onApplySwap={handleApplySwap}
+                      />
+                    </>
+                  )}
                 </div>
               )}
 
@@ -2679,7 +2875,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <p className="font-playfair text-base sm:text-lg font-bold">
                       {profile.name === 'Curator' ? 'Mustafa Ali' : profile.name} ({profile.height || '178 cm'} • {profile.bodyShape || 'Athletic'})
                     </p>
-                    <p className="text-xs text-amber-300 font-mono">Draped: {currentOutfitTitle} (Size M)</p>
+                    <p className="text-xs text-amber-300 font-mono">Draped: {synthesizedOutfit.title} (Size M)</p>
                   </div>
                 </div>
 
