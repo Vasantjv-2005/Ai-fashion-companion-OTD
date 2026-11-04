@@ -7,6 +7,7 @@ export interface ClosetItem {
   name: string;
   brand: string;
   color: string;
+  secondaryColor?: string;
   fit: 'Slim' | 'Regular' | 'Relaxed / Tailored';
   formality: 1 | 2 | 3 | 4 | 5; // 1 = Casual, 5 = Black Tie
   icon: string;
@@ -176,7 +177,7 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addClosetItem = (item: Omit<ClosetItem, 'id'>) => {
     const newItem: ClosetItem = {
       ...item,
-      id: `custom_${Date.now()}`,
+      id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       isArchived: false,
       createdAt: item.createdAt || new Date().toISOString(),
     };

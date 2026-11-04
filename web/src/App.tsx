@@ -31,9 +31,10 @@ function StudioLayout({
   const location = useLocation();
 
   // Derive active Studio tab from current route path
+  const isUploadRoute = location.pathname === '/closet/add';
   const path = location.pathname.replace(/^\//, '');
   const activeTab: StudioTab =
-    path === 'closet' || path === 'stylist' || path === 'saved' ? path : 'home';
+    isUploadRoute || path === 'closet' ? 'closet' : (path === 'stylist' || path === 'saved' ? path : 'home');
 
   const handleTabChange = (tab: StudioTab) => {
     if (tab === 'home' || tab === 'closet' || tab === 'stylist' || tab === 'saved') {
@@ -46,7 +47,10 @@ function StudioLayout({
       <AppStudio
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
+        isUploadRoute={isUploadRoute}
+        onNavigateToUpload={() => navigate('/closet/add')}
+        onBackFromUpload={() => navigate('/closet')}
+        onOpenAddPiece={() => navigate('/closet/add')}
         onOpenProfile={() => navigate('/profile', { state: { backgroundLocation: location } })}
         onBackToLanding={() => navigate('/')}
       />
@@ -130,7 +134,7 @@ function AppContent() {
         onOpenProfile={() =>
           navigate('/profile', { state: { backgroundLocation: location } })
         }
-        onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
+        onOpenAddPiece={() => navigate('/closet/add')}
         onOpenOnboarding={() =>
           navigate('/onboarding', { state: { backgroundLocation: location } })
         }
@@ -161,7 +165,7 @@ function AppContent() {
 
         {/* Smart Closet Digital Matrix (Screenshot 2: Screen 11) */}
         <WardrobeStudio
-          onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
+          onOpenAddPiece={() => navigate('/closet/add')}
         />
 
         {/* Closet Gap Intelligence Graph */}
@@ -205,6 +209,7 @@ function AppContent() {
         >
           <Route path="/home" element={null} />
           <Route path="/closet" element={null} />
+          <Route path="/closet/add" element={null} />
           <Route path="/stylist" element={null} />
           <Route path="/saved" element={null} />
         </Route>

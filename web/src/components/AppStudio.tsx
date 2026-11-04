@@ -59,6 +59,7 @@ import { OutfitActionToolbar } from './ui/OutfitActionToolbar';
 import { OutfitGenerationLoader } from './ui/OutfitGenerationLoader';
 import { GarmentSwapModal } from './ui/GarmentSwapModal';
 import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
+import { ClosetUploadView } from './ClosetUploadView';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
@@ -66,6 +67,9 @@ export interface AppStudioProps {
   onBackToLanding?: () => void;
   activeTab?: StudioTab;
   onTabChange?: (tab: StudioTab) => void;
+  isUploadRoute?: boolean;
+  onNavigateToUpload?: () => void;
+  onBackFromUpload?: () => void;
 }
 
 export type StudioTab =
@@ -179,6 +183,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackToLanding,
   activeTab: controlledActiveTab,
   onTabChange,
+  isUploadRoute,
+  onNavigateToUpload,
+  onBackFromUpload,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { closet, profile, deleteClosetItem, updateClosetItem, archiveClosetItem, restoreClosetItem } = useCloset();
@@ -820,8 +827,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             {/* Bottom Promotional Card: "Build a Smarter Wardrobe." */}
             <div
               onClick={() => {
-                setActiveTab('closet');
-                onOpenAddPiece();
+                if (onNavigateToUpload) {
+                  onNavigateToUpload();
+                } else {
+                  setActiveTab('closet');
+                  onOpenAddPiece();
+                }
               }}
               className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block"
             >
@@ -1026,7 +1037,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           subtitle: 'Add to your closet',
                           icon: Plus,
                           img: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=300&q=80',
-                          action: () => onOpenAddPiece(),
+                          action: () => (onNavigateToUpload ? onNavigateToUpload() : onOpenAddPiece()),
                         },
                         {
                           title: 'Get Outfit Ideas',
@@ -2476,6 +2487,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 3: DIGITAL CLOSET MATRIX (Full Features, Search, Filters & CRUD) */}
           {/* ========================================================================= */}
           {activeTab === 'closet' && (
+            isUploadRoute ? (
+              <ClosetUploadView
+                onBack={onBackFromUpload || (() => setActiveTab('closet'))}
+                onComplete={onBackFromUpload || (() => setActiveTab('closet'))}
+              />
+            ) : (
             <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               {/* Storage Quota Warning Banner */}
               {storageWarning && (
@@ -2550,7 +2567,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
 
                   <button
-                    onClick={onOpenAddPiece}
+                    onClick={onNavigateToUpload || onOpenAddPiece}
                     className="px-4 sm:px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
                   >
                     <Plus className="w-4 h-4" />
@@ -2683,7 +2700,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
                   <div className="pt-2 flex justify-center">
                     <button
-                      onClick={onOpenAddPiece}
+                      onClick={onNavigateToUpload || onOpenAddPiece}
                       className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
                     >
                       <Plus className="w-4 h-4" />
@@ -2790,6 +2807,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </div>
               )}
             </div>
+            )
           )}
 
           {/* ========================================================================= */}
