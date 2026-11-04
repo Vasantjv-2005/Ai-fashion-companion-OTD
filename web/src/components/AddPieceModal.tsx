@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Camera, Upload, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface AddPieceModalProps {
   isOpen: boolean;
@@ -64,24 +65,48 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
   const [isSuccess, setIsSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const resetState = useCallback(() => {
+    setStage('upload');
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setFileError(null);
+    setIsDragging(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetState();
+    onClose();
+  }, [resetState, onClose]);
+
+  // Handle ESC key to dismiss modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleClose]);
+
   if (!isOpen) return null;
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
     setFileError(null);
     if (!file.type.startsWith('image/')) {
       setFileError('Please select a valid image file (JPEG, PNG, WebP).');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setFileError('Image size exceeds 10MB limit. Please choose a smaller file.');
+    if (file.size > 15 * 1024 * 1024) {
+      setFileError('Image size exceeds 15MB limit. Please choose a smaller file.');
       return;
     }
 
     setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setPreviewUrl(dataUrl);
+    try {
+      // Compress the image before storing to prevent localStorage QuotaExceededError
+      const compressedDataUrl = await compressImageFile(file, 800, 0.82);
+      setPreviewUrl(compressedDataUrl);
 
       // Auto-detect a sensible default name from filename
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
@@ -92,8 +117,23 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
       setTimeout(() => {
         setStage('confirm');
       }, 700);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      // Graceful fallback to raw FileReader if canvas compression fails
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setPreviewUrl(dataUrl);
+
+        const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+
+        setStage('analyzing');
+        setTimeout(() => {
+          setStage('confirm');
+        }, 700);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -144,23 +184,11 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
     }, 700);
   };
 
-  const resetState = () => {
-    setStage('upload');
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setFileError(null);
-    setIsDragging(false);
-  };
-
-  const handleClose = () => {
-    resetState();
-    onClose();
-  };
-
   return (
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="add-garment-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
       onClick={handleClose}
     >
@@ -183,7 +211,7 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
             <Camera className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-playfair text-2xl font-bold text-[var(--text-heading)]">
+            <h3 id="add-garment-title" className="font-playfair text-2xl font-bold text-[var(--text-heading)]">
               Add Garment to Closet
             </h3>
             <p className="text-xs text-[var(--text-muted)] font-medium">

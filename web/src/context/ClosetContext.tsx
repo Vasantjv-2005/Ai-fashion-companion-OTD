@@ -12,6 +12,10 @@ export interface ClosetItem {
   icon: string;
   imageUrl?: string;
   description?: string;
+  isArchived?: boolean;
+  createdAt?: string; // ISO 8601 string for sorting
+  season?: ('spring' | 'summer' | 'autumn' | 'winter' | 'all-season')[]; // backend schema alignment
+  pattern?: string; // backend schema alignment
 }
 
 export type WardrobeFocus = 'women' | 'men' | 'personalize';
@@ -53,6 +57,8 @@ interface ClosetContextType {
   addClosetItem: (item: Omit<ClosetItem, 'id'>) => void;
   deleteClosetItem: (id: string) => void;
   updateClosetItem: (id: string, updates: Partial<ClosetItem>) => void;
+  archiveClosetItem: (id: string) => void;
+  restoreClosetItem: (id: string) => void;
   currentOutfit: OutfitRecommendation | null;
   generateOutfit: (context: { venue: string; occasion: string; vibe: string; weather: string }) => void;
   modifyOutfit: (instruction: string) => void;
@@ -75,44 +81,63 @@ const DEFAULT_PROFILE: UserProfile = {
 
 const INITIAL_CLOSET: ClosetItem[] = [
   // Tops
-  { id: 't1', category: 'tops', subType: 'Knit Rollneck', name: 'Seamless Silk-Cashmere High Neck', brand: 'Brunello Cucinelli', color: 'Ivory Cream', fit: 'Regular', formality: 3, icon: '👕' },
-  { id: 't2', category: 'tops', subType: 'Oxford Shirt', name: 'Sea Island Cotton Button-Down', brand: 'Charvet', color: 'French Blue', fit: 'Slim', formality: 4, icon: '👔' },
-  { id: 't3', category: 'tops', subType: 'Linen Shirt', name: 'Open-Collar Washed Camp Shirt', brand: 'Loro Piana', color: 'Sand White', fit: 'Relaxed / Tailored', formality: 2, icon: '👕' },
-  { id: 't4', category: 'tops', subType: 'Crewneck Tee', name: 'Mercerized Pima Cotton T-Shirt', brand: 'Sunspel', color: 'Jet Black', fit: 'Regular', formality: 1, icon: '👕' },
+  { id: 't1', category: 'tops', subType: 'Knit Rollneck', name: 'Seamless Silk-Cashmere High Neck', brand: 'Brunello Cucinelli', color: 'Ivory Cream', fit: 'Regular', formality: 3, icon: '👕', isArchived: false, createdAt: '2026-10-01T10:00:00.000Z' },
+  { id: 't2', category: 'tops', subType: 'Oxford Shirt', name: 'Sea Island Cotton Button-Down', brand: 'Charvet', color: 'French Blue', fit: 'Slim', formality: 4, icon: '👔', isArchived: false, createdAt: '2026-10-02T10:00:00.000Z' },
+  { id: 't3', category: 'tops', subType: 'Linen Shirt', name: 'Open-Collar Washed Camp Shirt', brand: 'Loro Piana', color: 'Sand White', fit: 'Relaxed / Tailored', formality: 2, icon: '👕', isArchived: false, createdAt: '2026-10-03T10:00:00.000Z' },
+  { id: 't4', category: 'tops', subType: 'Crewneck Tee', name: 'Mercerized Pima Cotton T-Shirt', brand: 'Sunspel', color: 'Jet Black', fit: 'Regular', formality: 1, icon: '👕', isArchived: false, createdAt: '2026-10-04T10:00:00.000Z' },
   
   // Bottoms
-  { id: 'b1', category: 'bottoms', subType: 'Pleated Trousers', name: 'High-Rise Forward-Pleat Wool Trousers', brand: 'Savile Row Bespoke', color: 'Flint Charcoal', fit: 'Relaxed / Tailored', formality: 4, icon: '👖' },
-  { id: 'b2', category: 'bottoms', subType: 'Tailored Chinos', name: 'Brushed Cotton Gurkha Trousers', brand: 'Rota Pantaloni', color: 'Warm Caramel', fit: 'Regular', formality: 3, icon: '👖' },
-  { id: 'b3', category: 'bottoms', subType: 'Selvedge Denim', name: '13.5oz Clean Japanese Raw Denim', brand: 'Kuro', color: 'Deep Indigo', fit: 'Regular', formality: 2, icon: '👖' },
-  { id: 'b4', category: 'bottoms', subType: 'Linen Pants', name: 'Drawstring Linen-Silk Trousers', brand: 'Boglioli', color: 'Oatmeal Beige', fit: 'Relaxed / Tailored', formality: 2, icon: '👖' },
+  { id: 'b1', category: 'bottoms', subType: 'Pleated Trousers', name: 'High-Rise Forward-Pleat Wool Trousers', brand: 'Savile Row Bespoke', color: 'Flint Charcoal', fit: 'Relaxed / Tailored', formality: 4, icon: '👖', isArchived: false, createdAt: '2026-10-05T10:00:00.000Z' },
+  { id: 'b2', category: 'bottoms', subType: 'Tailored Chinos', name: 'Brushed Cotton Gurkha Trousers', brand: 'Rota Pantaloni', color: 'Warm Caramel', fit: 'Regular', formality: 3, icon: '👖', isArchived: false, createdAt: '2026-10-06T10:00:00.000Z' },
+  { id: 'b3', category: 'bottoms', subType: 'Selvedge Denim', name: '13.5oz Clean Japanese Raw Denim', brand: 'Kuro', color: 'Deep Indigo', fit: 'Regular', formality: 2, icon: '👖', isArchived: false, createdAt: '2026-10-07T10:00:00.000Z' },
+  { id: 'b4', category: 'bottoms', subType: 'Linen Pants', name: 'Drawstring Linen-Silk Trousers', brand: 'Boglioli', color: 'Oatmeal Beige', fit: 'Relaxed / Tailored', formality: 2, icon: '👖', isArchived: false, createdAt: '2026-10-08T10:00:00.000Z' },
 
   // Outerwear
-  { id: 'o1', category: 'outerwear', subType: 'Double-Breasted Blazer', name: 'Unstructured Hopsack Navy Blazer', brand: 'Cesare Attolini', color: 'Midnight Navy', fit: 'Regular', formality: 4, icon: '🧥' },
-  { id: 'o2', category: 'outerwear', subType: 'Cashmere Overcoat', name: 'Belted Cashmere Trench Overcoat', brand: 'Loro Piana', color: 'Vicuna Camel', fit: 'Relaxed / Tailored', formality: 4, icon: '🧥' },
-  { id: 'o3', category: 'outerwear', subType: 'Suede Jacket', name: 'Spanish Lambskin Suede Field Jacket', brand: 'Zegna', color: 'Hazelnut Brown', fit: 'Regular', formality: 3, icon: '🧥' },
+  { id: 'o1', category: 'outerwear', subType: 'Double-Breasted Blazer', name: 'Unstructured Hopsack Navy Blazer', brand: 'Cesare Attolini', color: 'Midnight Navy', fit: 'Regular', formality: 4, icon: '🧥', isArchived: false, createdAt: '2026-10-09T10:00:00.000Z' },
+  { id: 'o2', category: 'outerwear', subType: 'Cashmere Overcoat', name: 'Belted Cashmere Trench Overcoat', brand: 'Loro Piana', color: 'Vicuna Camel', fit: 'Relaxed / Tailored', formality: 4, icon: '🧥', isArchived: false, createdAt: '2026-10-10T10:00:00.000Z' },
+  { id: 'o3', category: 'outerwear', subType: 'Suede Jacket', name: 'Spanish Lambskin Suede Field Jacket', brand: 'Zegna', color: 'Hazelnut Brown', fit: 'Regular', formality: 3, icon: '🧥', isArchived: false, createdAt: '2026-10-11T10:00:00.000Z' },
 
   // Footwear
-  { id: 'f1', category: 'footwear', subType: 'Penny Loafers', name: 'Burnished Museum Calf Loafers', brand: 'John Lobb', color: 'Espresso Brown', fit: 'Regular', formality: 4, icon: '👞' },
-  { id: 'f2', category: 'footwear', subType: 'Belgian Loafers', name: 'Chocolate Suede Tassel Slip-ons', brand: 'Baudoin & Lange', color: 'Dark Chocolate', fit: 'Regular', formality: 3, icon: '👞' },
-  { id: 'f3', category: 'footwear', subType: 'Clean Sneaker', name: 'Minimalist Nappa Leather Low-Top', brand: 'Common Projects', color: 'Chalk White', fit: 'Regular', formality: 2, icon: '👟' },
-  { id: 'f4', category: 'footwear', subType: 'Chelsea Boots', name: 'Hand-Patinated Glazed Leather Boots', brand: 'Berluti', color: 'Tobacco Patina', fit: 'Regular', formality: 3, icon: '👢' },
+  { id: 'f1', category: 'footwear', subType: 'Penny Loafers', name: 'Burnished Museum Calf Loafers', brand: 'John Lobb', color: 'Espresso Brown', fit: 'Regular', formality: 4, icon: '👞', isArchived: false, createdAt: '2026-10-12T10:00:00.000Z' },
+  { id: 'f2', category: 'footwear', subType: 'Belgian Loafers', name: 'Chocolate Suede Tassel Slip-ons', brand: 'Baudoin & Lange', color: 'Dark Chocolate', fit: 'Regular', formality: 3, icon: '👞', isArchived: false, createdAt: '2026-10-13T10:00:00.000Z' },
+  { id: 'f3', category: 'footwear', subType: 'Clean Sneaker', name: 'Minimalist Nappa Leather Low-Top', brand: 'Common Projects', color: 'Chalk White', fit: 'Regular', formality: 2, icon: '👟', isArchived: false, createdAt: '2026-10-14T10:00:00.000Z' },
+  { id: 'f4', category: 'footwear', subType: 'Chelsea Boots', name: 'Hand-Patinated Glazed Leather Boots', brand: 'Berluti', color: 'Tobacco Patina', fit: 'Regular', formality: 3, icon: '👢', isArchived: false, createdAt: '2026-10-15T10:00:00.000Z' },
 
   // Accessories
-  { id: 'a1', category: 'accessories', subType: 'Dress Watch', name: 'Rose Gold Ultra-Thin Mechanical', brand: 'A. Lange & Söhne', color: 'Rose Gold', fit: 'Regular', formality: 5, icon: '⌚' },
-  { id: 'a2', category: 'accessories', subType: 'Leather Belt', name: 'Hand-Stitched Bridle Leather Belt', brand: 'Hermès', color: 'Burgundy Noir', fit: 'Regular', formality: 4, icon: '🎗️' },
+  { id: 'a1', category: 'accessories', subType: 'Dress Watch', name: 'Rose Gold Ultra-Thin Mechanical', brand: 'A. Lange & Söhne', color: 'Rose Gold', fit: 'Regular', formality: 5, icon: '⌚', isArchived: false, createdAt: '2026-10-16T10:00:00.000Z' },
+  { id: 'a2', category: 'accessories', subType: 'Leather Belt', name: 'Hand-Stitched Bridle Leather Belt', brand: 'Hermès', color: 'Burgundy Noir', fit: 'Regular', formality: 4, icon: '🎗️', isArchived: false, createdAt: '2026-10-17T10:00:00.000Z' },
 ];
 
 const ClosetContext = createContext<ClosetContextType | undefined>(undefined);
 
 export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [profile, setProfile] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('otd_user_profile');
-    return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+    try {
+      const saved = localStorage.getItem('otd_user_profile');
+      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+    } catch {
+      return DEFAULT_PROFILE;
+    }
   });
 
   const [closet, setCloset] = useState<ClosetItem[]>(() => {
-    const saved = localStorage.getItem('otd_closet_items');
-    return saved ? JSON.parse(saved) : INITIAL_CLOSET;
+    try {
+      const saved = localStorage.getItem('otd_closet_items');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Normalize existing data: ensure isArchived and createdAt are populated
+          return parsed.map((item, index) => ({
+            ...item,
+            isArchived: Boolean(item.isArchived),
+            createdAt: item.createdAt || new Date(Date.now() - (parsed.length - index) * 3600000 * 24).toISOString(),
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse otd_closet_items from localStorage:', e);
+    }
+    return INITIAL_CLOSET;
   });
 
   const [currentOutfit, setCurrentOutfit] = useState<OutfitRecommendation | null>(null);
@@ -120,11 +145,28 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [history, setHistory] = useState<string[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('otd_user_profile', JSON.stringify(profile));
+    try {
+      localStorage.setItem('otd_user_profile', JSON.stringify(profile));
+    } catch (e) {
+      console.warn('Failed to persist user profile:', e);
+    }
   }, [profile]);
 
   useEffect(() => {
-    localStorage.setItem('otd_closet_items', JSON.stringify(closet));
+    try {
+      localStorage.setItem('otd_closet_items', JSON.stringify(closet));
+    } catch (err) {
+      if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22)) {
+        console.error('LocalStorage quota exceeded when saving closet items:', err);
+        window.dispatchEvent(
+          new CustomEvent('otd:storage-quota-exceeded', {
+            detail: {
+              message: 'Browser storage quota reached. Please delete unused garments or use compressed images.',
+            },
+          })
+        );
+      }
+    }
   }, [closet]);
 
   const updateProfile = (newProfile: Partial<UserProfile>) => {
@@ -134,7 +176,9 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addClosetItem = (item: Omit<ClosetItem, 'id'>) => {
     const newItem: ClosetItem = {
       ...item,
-      id: `custom_${Date.now()}`
+      id: `custom_${Date.now()}`,
+      isArchived: false,
+      createdAt: item.createdAt || new Date().toISOString(),
     };
     setCloset(prev => [newItem, ...prev]);
   };
@@ -147,26 +191,40 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCloset(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
+  const archiveClosetItem = (id: string) => {
+    setCloset(prev => prev.map(item => item.id === id ? { ...item, isArchived: true } : item));
+  };
+
+  const restoreClosetItem = (id: string) => {
+    setCloset(prev => prev.map(item => item.id === id ? { ...item, isArchived: false } : item));
+  };
+
   const generateOutfit = (context: { venue: string; occasion: string; vibe: string; weather: string }) => {
     setIsGenerating(true);
     setTimeout(() => {
-      // Intelligent matching from the user's actual closet
-      let selectedTop = closet.find(i => i.category === 'tops' && i.formality >= 3) || closet.find(i => i.category === 'tops')!;
-      let selectedBottom = closet.find(i => i.category === 'bottoms' && i.formality >= 3) || closet.find(i => i.category === 'bottoms')!;
-      let selectedOuterwear = closet.find(i => i.category === 'outerwear' && (context.weather.includes('Breezy') || context.weather.includes('Cool'))) || closet.find(i => i.category === 'outerwear');
-      let selectedShoe = closet.find(i => i.category === 'footwear' && i.formality >= 3) || closet.find(i => i.category === 'footwear')!;
-      let selectedAcc = closet.find(i => i.category === 'accessories') || closet[0];
+      // Intelligent matching strictly from the user's active (non-archived) closet
+      const activeCloset = closet.filter(i => !i.isArchived);
+      if (activeCloset.length === 0) {
+        setIsGenerating(false);
+        return;
+      }
+
+      let selectedTop = activeCloset.find(i => i.category === 'tops' && i.formality >= 3) || activeCloset.find(i => i.category === 'tops') || activeCloset[0];
+      let selectedBottom = activeCloset.find(i => i.category === 'bottoms' && i.formality >= 3) || activeCloset.find(i => i.category === 'bottoms') || activeCloset[0];
+      let selectedOuterwear = activeCloset.find(i => i.category === 'outerwear' && (context.weather.includes('Breezy') || context.weather.includes('Cool'))) || activeCloset.find(i => i.category === 'outerwear');
+      let selectedShoe = activeCloset.find(i => i.category === 'footwear' && i.formality >= 3) || activeCloset.find(i => i.category === 'footwear') || activeCloset[0];
+      let selectedAcc = activeCloset.find(i => i.category === 'accessories') || activeCloset[0];
 
       // Context adjustments based on destination/vibe
       if (context.vibe.toLowerCase().includes('relaxed') || context.occasion.toLowerCase().includes('casual')) {
-        selectedTop = closet.find(i => i.id === 't3' || i.id === 't4') || selectedTop;
-        selectedBottom = closet.find(i => i.id === 'b2' || i.id === 'b3') || selectedBottom;
-        selectedShoe = closet.find(i => i.id === 'f3' || i.id === 'f2') || selectedShoe;
+        selectedTop = activeCloset.find(i => i.id === 't3' || i.id === 't4') || selectedTop;
+        selectedBottom = activeCloset.find(i => i.id === 'b2' || i.id === 'b3') || selectedBottom;
+        selectedShoe = activeCloset.find(i => i.id === 'f3' || i.id === 'f2') || selectedShoe;
       } else if (context.occasion.toLowerCase().includes('date') || context.venue.toLowerCase().includes('rooftop')) {
-        selectedTop = closet.find(i => i.id === 't1') || selectedTop; // Silk-Cashmere High Neck
-        selectedBottom = closet.find(i => i.id === 'b1') || selectedBottom; // Forward Pleat Flannel
-        selectedOuterwear = closet.find(i => i.id === 'o1') || selectedOuterwear; // Navy Blazer
-        selectedShoe = closet.find(i => i.id === 'f2') || selectedShoe; // Suede Tassel Loafer
+        selectedTop = activeCloset.find(i => i.id === 't1') || selectedTop; // Silk-Cashmere High Neck
+        selectedBottom = activeCloset.find(i => i.id === 'b1') || selectedBottom; // Forward Pleat Flannel
+        selectedOuterwear = activeCloset.find(i => i.id === 'o1') || selectedOuterwear; // Navy Blazer
+        selectedShoe = activeCloset.find(i => i.id === 'f2') || selectedShoe; // Suede Tassel Loafer
       }
 
       const pieces: ClosetItem[] = [selectedTop, selectedBottom];
@@ -199,18 +257,19 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setHistory(prev => [...prev, instruction]);
 
     setTimeout(() => {
+      const activeCloset = closet.filter(i => !i.isArchived);
       let updatedPieces = [...currentOutfit.pieces];
       let newRationale = { ...currentOutfit.rationale };
       const lower = instruction.toLowerCase();
 
       if (lower.includes('casual') || lower.includes('relax')) {
         // Swap shoes for sneakers
-        const sneakers = closet.find(i => i.subType === 'Clean Sneaker') || closet.find(i => i.category === 'footwear');
+        const sneakers = activeCloset.find(i => i.subType === 'Clean Sneaker') || activeCloset.find(i => i.category === 'footwear');
         if (sneakers) {
           updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? sneakers : p);
         }
         // Swap formal pants for relaxed chinos/denim
-        const chinos = closet.find(i => i.id === 'b2') || closet.find(i => i.category === 'bottoms');
+        const chinos = activeCloset.find(i => i.id === 'b2') || activeCloset.find(i => i.category === 'bottoms');
         if (chinos) {
           updatedPieces = updatedPieces.map(p => p.category === 'bottoms' ? chinos : p);
         }
@@ -218,21 +277,27 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (lower.includes('shoes') || lower.includes('shoe') || lower.includes('boot')) {
         // Swap footwear to boots or alternative loafers
         const currentShoe = updatedPieces.find(p => p.category === 'footwear');
-        const nextShoe = closet.find(i => i.category === 'footwear' && i.id !== currentShoe?.id) || currentShoe;
+        const nextShoe = activeCloset.find(i => i.category === 'footwear' && i.id !== currentShoe?.id) || currentShoe;
         if (nextShoe) {
           updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? nextShoe : p);
           newRationale.venueAlignment = `Footwear adjusted to ${nextShoe.name} to alter the ground posture and silhouette weight.`;
         }
       } else if (lower.includes('no jeans') || lower.includes('dont use jeans') || lower.includes("don't use jeans")) {
-        const trousers = closet.find(i => i.id === 'b1' || i.id === 'b2')!;
-        updatedPieces = updatedPieces.map(p => p.category === 'bottoms' ? trousers : p);
-        newRationale.venueAlignment = `Substituted denim with tailored ${trousers.name} for greater sartorial formality.`;
+        const trousers = activeCloset.find(i => i.id === 'b1' || i.id === 'b2')!;
+        if (trousers) {
+          updatedPieces = updatedPieces.map(p => p.category === 'bottoms' ? trousers : p);
+          newRationale.venueAlignment = `Substituted denim with tailored ${trousers.name} for greater sartorial formality.`;
+        }
       } else if (lower.includes('attractive') || lower.includes('date') || lower.includes('sharp')) {
-        const luxuryKnit = closet.find(i => i.id === 't1')!;
-        const chelseaBoots = closet.find(i => i.id === 'f4') || closet.find(i => i.id === 'f2')!;
-        updatedPieces = updatedPieces.map(p => p.category === 'tops' ? luxuryKnit : p);
-        updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? chelseaBoots : p);
-        newRationale.venueAlignment = `Elevated allure: Swapped in ${luxuryKnit.name} and ${chelseaBoots.name} for high-definition night appeal.`;
+        const luxuryKnit = activeCloset.find(i => i.id === 't1')!;
+        const chelseaBoots = activeCloset.find(i => i.id === 'f4') || activeCloset.find(i => i.id === 'f2')!;
+        if (luxuryKnit) {
+          updatedPieces = updatedPieces.map(p => p.category === 'tops' ? luxuryKnit : p);
+        }
+        if (chelseaBoots) {
+          updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? chelseaBoots : p);
+        }
+        newRationale.venueAlignment = `Elevated allure: Swapped in ${luxuryKnit?.name || 'knitwear'} and ${chelseaBoots?.name || 'boots'} for high-definition night appeal.`;
       } else {
         // Generic smart tweak
         newRationale.venueAlignment = `Customized based on instruction: "${instruction}". Balanced with existing wardrobe synergy.`;
@@ -258,6 +323,8 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addClosetItem,
         deleteClosetItem,
         updateClosetItem,
+        archiveClosetItem,
+        restoreClosetItem,
         currentOutfit,
         generateOutfit,
         modifyOutfit,

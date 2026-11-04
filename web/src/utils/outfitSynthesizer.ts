@@ -61,24 +61,27 @@ export function synthesizeOutfitResult({
     });
   };
 
+  // Filter out any archived items so only active wardrobe pieces are synthesized
+  const activeCloset = closet.filter((item) => !item.isArchived);
+
   // Filter available items per category
-  const availableTops = closet
+  const availableTops = activeCloset
     .filter((i) => i.category === 'tops' && !isAvoided(i))
     .sort((a, b) => (isMustIncluded(b) ? 1 : 0) - (isMustIncluded(a) ? 1 : 0));
 
-  const availableOuterwear = closet
+  const availableOuterwear = activeCloset
     .filter((i) => i.category === 'outerwear' && !isAvoided(i))
     .sort((a, b) => (isMustIncluded(b) ? 1 : 0) - (isMustIncluded(a) ? 1 : 0));
 
-  const availableBottoms = closet
+  const availableBottoms = activeCloset
     .filter((i) => i.category === 'bottoms' && !isAvoided(i))
     .sort((a, b) => (isMustIncluded(b) ? 1 : 0) - (isMustIncluded(a) ? 1 : 0));
 
-  const availableFootwear = closet
+  const availableFootwear = activeCloset
     .filter((i) => i.category === 'footwear' && !isAvoided(i))
     .sort((a, b) => (isMustIncluded(b) ? 1 : 0) - (isMustIncluded(a) ? 1 : 0));
 
-  const availableAccessories = closet
+  const availableAccessories = activeCloset
     .filter((i) => i.category === 'accessories' && !isAvoided(i))
     .sort((a, b) => (isMustIncluded(b) ? 1 : 0) - (isMustIncluded(a) ? 1 : 0));
 

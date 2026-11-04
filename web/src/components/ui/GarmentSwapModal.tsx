@@ -71,8 +71,9 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
     .filter((s) => s.slot !== slot.slot && s.closetItemId)
     .map((s) => s.closetItemId as string);
 
-  // Filter closet items by category & search query
+  // Filter closet items by category & search query (excluding any archived garments)
   const compatibleItems = closet.filter((item) => {
+    if (item.isArchived) return false;
     if (item.category !== targetCategory) return false;
     if (!searchQuery.trim()) return true;
 

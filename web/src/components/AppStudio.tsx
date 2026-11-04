@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Home,
   Shirt,
@@ -35,7 +35,11 @@ import {
   Umbrella,
   Building,
   MoreHorizontal,
-  LocateFixed
+  LocateFixed,
+  Archive,
+  ArchiveRestore,
+  ArrowUpDown,
+  AlertCircle
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
@@ -177,7 +181,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onTabChange,
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const { closet, profile, deleteClosetItem, updateClosetItem } = useCloset();
+  const { closet, profile, deleteClosetItem, updateClosetItem, archiveClosetItem, restoreClosetItem } = useCloset();
 
   // Navigation tab state
   const [internalTab, setInternalTab] = useState<StudioTab>(controlledActiveTab || 'home');
@@ -516,10 +520,38 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   ]);
   const [chatInput, setChatInput] = useState('');
 
-  // Digital closet filter state
+  // Digital closet filter, archive & sort state
   const [closetSearch, setClosetSearch] = useState('');
   const [closetCategoryFilter, setClosetCategoryFilter] = useState<'all' | ClosetItem['category']>('all');
   const [closetFormalityFilter, setClosetFormalityFilter] = useState<number | 'all'>('all');
+  const [closetViewMode, setClosetViewMode] = useState<'active' | 'archived'>('active');
+  const [closetSortOption, setClosetSortOption] = useState<'recent' | 'oldest' | 'formality-desc' | 'formality-asc' | 'name-asc'>('recent');
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  // Storage quota warning listener
+  useEffect(() => {
+    const handleStorageExceeded = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message: string }>;
+      setStorageWarning(customEvent.detail?.message || 'Storage limit reached.');
+    };
+    window.addEventListener('otd:storage-quota-exceeded', handleStorageExceeded);
+    return () => window.removeEventListener('otd:storage-quota-exceeded', handleStorageExceeded);
+  }, []);
+
+  // Keyboard accessibility for closet modals (Inspection & Delete dialog)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (itemToDelete) {
+          setItemToDelete(null);
+        } else if (selectedClosetItem) {
+          setSelectedClosetItem(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedClosetItem, itemToDelete]);
 
   // Toggle favorite
   const toggleLike = (id: string) => {
@@ -613,20 +645,64 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     setPlannerStep(1);
   };
 
-  const filteredClosetItems = closet.filter((item) => {
-    const matchesSearch =
-      closetSearch === '' ||
-      item.name.toLowerCase().includes(closetSearch.toLowerCase()) ||
-      item.brand.toLowerCase().includes(closetSearch.toLowerCase()) ||
-      item.color.toLowerCase().includes(closetSearch.toLowerCase()) ||
-      item.subType.toLowerCase().includes(closetSearch.toLowerCase()) ||
-      (item.description ? item.description.toLowerCase().includes(closetSearch.toLowerCase()) : false);
-    const matchesCategory =
-      closetCategoryFilter === 'all' || item.category === closetCategoryFilter;
-    const matchesFormality =
-      closetFormalityFilter === 'all' || item.formality === closetFormalityFilter;
-    return matchesSearch && matchesCategory && matchesFormality;
-  });
+  // Partition active and archived closet items
+  const activeClosetItems = useMemo(() => closet.filter((item) => !item.isArchived), [closet]);
+  const archivedClosetItems = useMemo(() => closet.filter((item) => Boolean(item.isArchived)), [closet]);
+
+  // Active pool based on current view mode
+  const currentPool = closetViewMode === 'active' ? activeClosetItems : archivedClosetItems;
+
+  // Filter and sort items (immutable sorting)
+  const filteredAndSortedClosetItems = useMemo(() => {
+    const filtered = currentPool.filter((item) => {
+      const query = closetSearch.trim().toLowerCase();
+      const matchesSearch =
+        query === '' ||
+        item.name.toLowerCase().includes(query) ||
+        item.brand.toLowerCase().includes(query) ||
+        item.color.toLowerCase().includes(query) ||
+        item.subType.toLowerCase().includes(query) ||
+        (item.description ? item.description.toLowerCase().includes(query) : false);
+
+      const matchesCategory =
+        closetCategoryFilter === 'all' || item.category === closetCategoryFilter;
+      const matchesFormality =
+        closetFormalityFilter === 'all' || item.formality === closetFormalityFilter;
+
+      return matchesSearch && matchesCategory && matchesFormality;
+    });
+
+    // Pure immutable sort without mutating the original array
+    return [...filtered].sort((a, b) => {
+      switch (closetSortOption) {
+        case 'recent': {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA !== timeB) return timeB - timeA;
+          return b.id.localeCompare(a.id);
+        }
+        case 'oldest': {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return a.id.localeCompare(b.id);
+        }
+        case 'formality-desc': {
+          if (b.formality !== a.formality) return b.formality - a.formality;
+          return a.name.localeCompare(b.name);
+        }
+        case 'formality-asc': {
+          if (a.formality !== b.formality) return a.formality - b.formality;
+          return a.name.localeCompare(b.name);
+        }
+        case 'name-asc': {
+          return a.name.localeCompare(b.name);
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [currentPool, closetSearch, closetCategoryFilter, closetFormalityFilter, closetSortOption]);
 
   return (
     <div className="h-screen h-dvh bg-[var(--bg-canvas)] text-[var(--text-body)] flex overflow-hidden font-sans transition-colors duration-300">
@@ -2401,27 +2477,110 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* ========================================================================= */}
           {activeTab === 'closet' && (
             <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+              {/* Storage Quota Warning Banner */}
+              {storageWarning && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>{storageWarning}</span>
+                  </div>
+                  <button
+                    onClick={() => setStorageWarning(null)}
+                    className="p-1 text-amber-700 dark:text-amber-300 hover:opacity-75 cursor-pointer"
+                    aria-label="Dismiss storage warning"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Closet Header & View Switcher */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
                     Digital Closet Matrix
                   </h2>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    {closet.length} items cataloged • Ready for AI styling & destination adaptation
+                    {closetViewMode === 'active'
+                      ? `${activeClosetItems.length} active pieces cataloged • Ready for AI styling & destination adaptation`
+                      : `${archivedClosetItems.length} archived pieces • Safely preserved off-rotation`}
                   </p>
                 </div>
-                <button
-                  onClick={onOpenAddPiece}
-                  className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Add New Piece</span>
-                </button>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                  {/* View Mode Toggle: Active vs. Archived */}
+                  <div
+                    role="tablist"
+                    aria-label="Closet view options"
+                    className="flex items-center p-1 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)]"
+                  >
+                    <button
+                      role="tab"
+                      aria-selected={closetViewMode === 'active'}
+                      onClick={() => setClosetViewMode('active')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        closetViewMode === 'active'
+                          ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'
+                      }`}
+                    >
+                      <Shirt className="w-3.5 h-3.5" />
+                      <span>Active</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/20 font-mono">
+                        {activeClosetItems.length}
+                      </span>
+                    </button>
+
+                    <button
+                      role="tab"
+                      aria-selected={closetViewMode === 'archived'}
+                      onClick={() => setClosetViewMode('archived')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        closetViewMode === 'archived'
+                          ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'
+                      }`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Archived</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/20 font-mono">
+                        {archivedClosetItems.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={onOpenAddPiece}
+                    className="px-4 sm:px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add Piece</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Search & Category Filter Bar */}
+              {/* Informational Banner for Archived View */}
+              {closetViewMode === 'archived' && (
+                <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs text-[var(--text-muted)] flex items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Archive className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
+                    <span>
+                      Archived pieces are hidden from active AI outfit recommendations and garment swapping. Click any piece to inspect or restore it to your active rotation.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setClosetViewMode('active')}
+                    className="text-[11px] font-bold text-[var(--gold-primary)] hover:underline shrink-0 cursor-pointer"
+                  >
+                    Back to Active
+                  </button>
+                </div>
+              )}
+
+              {/* Search, Filter & Sorting Bar */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row items-center gap-3">
+                  {/* Search Input */}
                   <div className="relative flex-1 w-full">
                     <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
@@ -2429,38 +2588,68 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       placeholder="Search garments by name, brand, color, or fabric..."
                       value={closetSearch}
                       onChange={(e) => setClosetSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--gold-primary)]"
+                      aria-label="Search garments in closet"
+                      className="w-full pl-10 pr-9 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--gold-primary)]"
                     />
+                    {closetSearch && (
+                      <button
+                        onClick={() => setClosetSearch('')}
+                        aria-label="Clear search"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-heading)]"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
-                  {/* Formality Filter */}
-                  <select
-                    value={closetFormalityFilter}
-                    onChange={(e) =>
-                      setClosetFormalityFilter(
-                        e.target.value === 'all' ? 'all' : Number(e.target.value)
-                      )
-                    }
-                    className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
-                  >
-                    <option value="all">All Formality Tiers</option>
-                    <option value={1}>Tier 1: Casual / Street</option>
-                    <option value={2}>Tier 2: Smart Casual</option>
-                    <option value={3}>Tier 3: Elevated Social</option>
-                    <option value={4}>Tier 4: Sartorial Tailored</option>
-                    <option value={5}>Tier 5: Black-Tie Formal</option>
-                  </select>
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                    {/* Formality Filter */}
+                    <select
+                      value={closetFormalityFilter}
+                      onChange={(e) =>
+                        setClosetFormalityFilter(
+                          e.target.value === 'all' ? 'all' : Number(e.target.value)
+                        )
+                      }
+                      aria-label="Filter by formality tier"
+                      className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] cursor-pointer"
+                    >
+                      <option value="all">All Formality Tiers</option>
+                      <option value={1}>Tier 1: Casual / Street</option>
+                      <option value={2}>Tier 2: Smart Casual</option>
+                      <option value={3}>Tier 3: Elevated Social</option>
+                      <option value={4}>Tier 4: Sartorial Tailored</option>
+                      <option value={5}>Tier 5: Black-Tie Formal</option>
+                    </select>
+
+                    {/* Sorting Dropdown */}
+                    <div className="relative flex-1 sm:flex-initial">
+                      <select
+                        value={closetSortOption}
+                        onChange={(e) => setClosetSortOption(e.target.value as any)}
+                        aria-label="Sort wardrobe garments"
+                        className="w-full px-3.5 py-2 pr-8 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] cursor-pointer appearance-none font-medium"
+                      >
+                        <option value="recent">Recently Added</option>
+                        <option value="oldest">Oldest</option>
+                        <option value="formality-desc">Formality: High to Low</option>
+                        <option value="formality-asc">Formality: Low to High</option>
+                        <option value="name-asc">Name: A–Z</option>
+                      </select>
+                      <ArrowUpDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Category Filter Tabs */}
                 <div className="flex flex-wrap items-center gap-2">
                   {[
-                    { id: 'all', label: `All (${closet.length})` },
-                    { id: 'tops', label: `Tops (${closet.filter((i) => i.category === 'tops').length})` },
-                    { id: 'bottoms', label: `Bottoms (${closet.filter((i) => i.category === 'bottoms').length})` },
-                    { id: 'outerwear', label: `Outerwear (${closet.filter((i) => i.category === 'outerwear').length})` },
-                    { id: 'footwear', label: `Footwear (${closet.filter((i) => i.category === 'footwear').length})` },
-                    { id: 'accessories', label: `Accessories (${closet.filter((i) => i.category === 'accessories').length})` },
+                    { id: 'all', label: `All (${currentPool.length})` },
+                    { id: 'tops', label: `Tops (${currentPool.filter((i) => i.category === 'tops').length})` },
+                    { id: 'bottoms', label: `Bottoms (${currentPool.filter((i) => i.category === 'bottoms').length})` },
+                    { id: 'outerwear', label: `Outerwear (${currentPool.filter((i) => i.category === 'outerwear').length})` },
+                    { id: 'footwear', label: `Footwear (${currentPool.filter((i) => i.category === 'footwear').length})` },
+                    { id: 'accessories', label: `Accessories (${currentPool.filter((i) => i.category === 'accessories').length})` },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -2477,30 +2666,85 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </div>
               </div>
 
-              {/* Garment Grid */}
-              {filteredClosetItems.length === 0 ? (
-                <div className="py-16 text-center rounded-3xl border border-dashed border-[var(--border-card)] p-8 space-y-3 bg-[var(--pill-bg)]/30">
+              {/* Garment Matrix Area with Distinct Empty States */}
+              {closetViewMode === 'active' && activeClosetItems.length === 0 ? (
+                /* PART 4: FIRST-TIME EMPTY CLOSET STATE */
+                <div className="py-20 px-6 text-center rounded-3xl border border-dashed border-[var(--border-gold)]/60 bg-[var(--bg-card)]/50 backdrop-blur-xs space-y-5 max-w-2xl mx-auto my-6 animate-in fade-in">
+                  <div className="w-16 h-16 mx-auto rounded-3xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-3xl shadow-inner text-[var(--gold-primary)]">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
+                      Your Digital Closet is waiting.
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+                      Catalog your signature wardrobe pieces to unlock hyper-personalized AI styling, context-calibrated outfits, and venue-ready ensembles.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      onClick={onOpenAddPiece}
+                      className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Add Your First Garment</span>
+                    </button>
+                  </div>
+                </div>
+              ) : closetViewMode === 'archived' && archivedClosetItems.length === 0 ? (
+                /* EMPTY ARCHIVED CLOSET STATE */
+                <div className="py-16 px-6 text-center rounded-3xl border border-dashed border-[var(--border-card)] bg-[var(--pill-bg)]/30 space-y-4 max-w-lg mx-auto my-6 animate-in fade-in">
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] flex items-center justify-center text-[var(--text-muted)]">
+                    <Archive className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+                      No archived garments
+                    </h4>
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed max-w-sm mx-auto">
+                      Archiving allows you to safely store off-season or retired garments without deleting their styling history or metadata.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setClosetViewMode('active')}
+                    className="px-5 py-2 rounded-full border border-[var(--border-gold)] text-[var(--gold-primary)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                  >
+                    Return to Active Wardrobe
+                  </button>
+                </div>
+              ) : filteredAndSortedClosetItems.length === 0 ? (
+                /* SEARCH / FILTER NOT FOUND STATE */
+                <div className="py-16 text-center rounded-3xl border border-dashed border-[var(--border-card)] p-8 space-y-3 bg-[var(--pill-bg)]/30 max-w-md mx-auto my-6 animate-in fade-in">
                   <Shirt className="w-10 h-10 mx-auto text-[var(--text-muted)]" />
                   <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
-                    No garments found
+                    No garments match your search
                   </h4>
                   <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-                    No clothing items match your search or category filters. Try resetting filters or upload a new garment.
+                    No garments match "{closetSearch || 'the selected filters'}". Try adjusting your search query, formality tier, or category filter.
                   </p>
                   <button
-                    onClick={onOpenAddPiece}
-                    className="px-5 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold cursor-pointer"
+                    onClick={() => {
+                      setClosetSearch('');
+                      setClosetCategoryFilter('all');
+                      setClosetFormalityFilter('all');
+                    }}
+                    className="px-5 py-2 rounded-full border border-[var(--border-gold)] text-[var(--gold-primary)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
                   >
-                    + Upload New Piece
+                    Clear All Filters
                   </button>
                 </div>
               ) : (
+                /* RESPONSIVE GARMENT MATRIX GRID */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {filteredClosetItems.map((piece) => (
+                  {filteredAndSortedClosetItems.map((piece) => (
                     <div
                       key={piece.id}
                       onClick={() => setSelectedClosetItem(piece)}
-                      className="rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md hover:border-[var(--gold-primary)] transition-all cursor-pointer"
+                      className={`rounded-2xl border bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md transition-all cursor-pointer ${
+                        piece.isArchived
+                          ? 'border-amber-500/40 opacity-85 hover:opacity-100 hover:border-amber-500'
+                          : 'border-[var(--border-card)] hover:border-[var(--gold-primary)]'
+                      }`}
                     >
                       <div className="h-44 bg-neutral-900 relative overflow-hidden flex items-center justify-center p-2">
                         {piece.imageUrl ? (
@@ -2517,6 +2761,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-[9px] font-mono backdrop-blur-md uppercase">
                           {piece.category}
                         </span>
+                        {piece.isArchived && (
+                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-600/90 text-white text-[9px] font-mono font-semibold backdrop-blur-md uppercase flex items-center gap-1">
+                            <Archive className="w-2.5 h-2.5" />
+                            <span>Archived</span>
+                          </span>
+                        )}
                       </div>
                       <div className="p-3 space-y-1">
                         <h5 className="text-xs font-bold text-[var(--text-heading)] truncate">
@@ -2995,6 +3245,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       {selectedClosetItem && (
         <div
           role="dialog"
+          aria-modal="true"
+          aria-labelledby="garment-inspection-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
           onClick={() => setSelectedClosetItem(null)}
         >
@@ -3003,24 +3255,44 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono font-bold text-[var(--gold-primary)]">
-                Garment Inspection
-              </span>
-              <button onClick={() => setSelectedClosetItem(null)} className="p-1">
-                <X className="w-4 h-4 text-[var(--text-muted)]" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-mono font-bold text-[var(--gold-primary)]">
+                  Garment Inspection
+                </span>
+                {selectedClosetItem.isArchived && (
+                  <span className="text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <Archive className="w-2.5 h-2.5" />
+                    <span>Archived</span>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedClosetItem(null)}
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
+                aria-label="Close inspection modal"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="h-48 rounded-2xl bg-neutral-900 overflow-hidden flex items-center justify-center text-4xl">
+            <div className="h-48 rounded-2xl bg-neutral-900 overflow-hidden flex items-center justify-center text-4xl relative">
               {selectedClosetItem.imageUrl ? (
                 <img src={selectedClosetItem.imageUrl} alt={selectedClosetItem.name} className="w-full h-full object-cover" />
               ) : (
                 <span>{selectedClosetItem.icon}</span>
               )}
+              {selectedClosetItem.isArchived && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                  <span className="px-3 py-1 rounded-full bg-black/80 text-amber-300 text-xs font-semibold border border-amber-400/40 flex items-center gap-1.5 shadow-lg">
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Preserved in Archive</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
-              <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+              <h4 id="garment-inspection-title" className="font-playfair text-lg font-bold text-[var(--text-heading)]">
                 {selectedClosetItem.name}
               </h4>
               <p className="text-[11px] text-[var(--gold-primary)] font-mono font-semibold">
@@ -3052,35 +3324,68 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => setItemToEdit(selectedClosetItem)}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--border-gold)] text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Edit Piece</span>
-              </button>
+            {/* Action Buttons: Archive, Restore, Edit, Delete */}
+            <div className="pt-2 flex flex-col gap-2">
+              <div className="flex gap-2">
+                {selectedClosetItem.isArchived ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      restoreClosetItem(selectedClosetItem.id);
+                      setSelectedClosetItem(null);
+                    }}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                    <span>Restore to Closet</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setItemToEdit(selectedClosetItem)}
+                      className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--border-gold)] text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit Piece</span>
+                    </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setItemToDelete(selectedClosetItem);
-                  setSelectedClosetItem(null);
-                }}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Piece</span>
-              </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        archiveClosetItem(selectedClosetItem.id);
+                        setSelectedClosetItem(null);
+                      }}
+                      className="flex-1 py-2.5 px-3 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Archive</span>
+                    </button>
+                  </>
+                )}
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedClosetItem(null)}
-                className="py-2.5 px-4 rounded-xl bg-black text-white dark:bg-white dark:text-black font-semibold cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                Done
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setItemToDelete(selectedClosetItem);
+                    setSelectedClosetItem(null);
+                  }}
+                  className="flex-1 py-2 px-3 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors text-[11px]"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{selectedClosetItem.isArchived ? 'Delete Permanently' : 'Delete'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedClosetItem(null)}
+                  className="py-2 px-4 rounded-xl bg-black text-white dark:bg-white dark:text-black font-semibold cursor-pointer hover:opacity-90 transition-opacity text-[11px]"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3089,38 +3394,57 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       {/* Delete Item Confirmation Dialog */}
       {itemToDelete && (
         <div
-          role="dialog"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          aria-describedby="delete-dialog-desc"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in"
           onClick={() => setItemToDelete(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-rose-200 p-6 space-y-4 shadow-2xl text-xs text-center"
+            className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-rose-200 dark:border-rose-950 p-6 space-y-4 shadow-2xl text-xs text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
-                Remove from Closet?
+              <h4 id="delete-dialog-title" className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+                {itemToDelete.isArchived ? 'Permanently Delete Garment?' : 'Remove from Closet?'}
               </h4>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Are you sure you want to remove <strong>"{itemToDelete.name}"</strong>? It will no longer be considered during outfit generation.
+              <p id="delete-dialog-desc" className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                {itemToDelete.isArchived
+                  ? `Are you sure you want to permanently delete "${itemToDelete.name}"? This action cannot be reversed.`
+                  : `Are you sure you want to remove "${itemToDelete.name}"? You can also archive it instead to preserve its details without including it in AI outfits.`}
               </p>
             </div>
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setItemToDelete(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[var(--border-card)] font-semibold cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-[var(--border-card)] font-semibold cursor-pointer hover:bg-[var(--pill-bg)] transition-colors"
               >
                 Cancel
               </button>
+              {!itemToDelete.isArchived && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    archiveClosetItem(itemToDelete.id);
+                    setItemToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold cursor-pointer transition-colors"
+                >
+                  Archive Instead
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => {
                   deleteClosetItem(itemToDelete.id);
                   setItemToDelete(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 cursor-pointer shadow-md"
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 cursor-pointer shadow-md transition-colors"
               >
                 Delete
               </button>

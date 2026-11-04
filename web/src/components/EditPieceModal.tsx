@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Edit, Upload, Trash2, Check, AlertCircle } from 'lucide-react';
 import type { ClosetItem } from '../context/ClosetContext';
+import { compressImageFile } from '../utils/imageCompressor';
 
 export interface EditPieceModalProps {
   isOpen: boolean;
@@ -80,35 +81,57 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
       selectedFile !== null
   );
 
-  const handleAttemptClose = () => {
+  const handleAttemptClose = useCallback(() => {
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
       onClose();
     }
-  };
+  }, [isDirty, onClose]);
 
-  const handleFile = (file: File) => {
+  // Keyboard accessibility: ESC key to attempt close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDiscardConfirm) {
+          setShowDiscardConfirm(false);
+        } else {
+          handleAttemptClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showDiscardConfirm, handleAttemptClose]);
+
+  const handleFile = async (file: File) => {
     setFileError(null);
     if (!file.type.startsWith('image/')) {
       setFileError('Please select a valid image file (JPEG, PNG, WebP).');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setFileError('Image size exceeds 10MB limit. Please choose a smaller file.');
+    if (file.size > 15 * 1024 * 1024) {
+      setFileError('Image size exceeds 15MB limit. Please choose a smaller file.');
       return;
     }
 
     setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setPreviewUrl(dataUrl);
-    };
-    reader.onerror = () => {
-      setFileError('Unable to read selected file. Please try again.');
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Compress the image before storing to prevent localStorage QuotaExceededError
+      const compressedDataUrl = await compressImageFile(file, 800, 0.82);
+      setPreviewUrl(compressedDataUrl);
+    } catch {
+      // Fallback to raw FileReader if canvas compression fails
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setPreviewUrl(dataUrl);
+      };
+      reader.onerror = () => {
+        setFileError('Unable to read selected file. Please try again.');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
