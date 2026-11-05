@@ -89,8 +89,12 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
     }
   }, [isDirty, onClose]);
 
-  // Keyboard accessibility: ESC key to attempt close
+  // Keyboard accessibility: ESC key to attempt close & focus restoration
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (showDiscardConfirm) {
@@ -101,7 +105,10 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
   }, [showDiscardConfirm, handleAttemptClose]);
 
   const handleFile = async (file: File) => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation, Outlet, type Location } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Outlet, type Location } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { ClosetProvider } from './context/ClosetContext';
 import { Navbar } from './components/Navbar';
@@ -18,6 +18,8 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { AuthModal } from './components/AuthModal';
 import { AppStudio, type StudioTab } from './components/AppStudio';
 import { LegalModal } from './components/ui/LegalModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { NotFoundView } from './components/NotFoundView';
 
 interface StudioLayoutProps {
   isAddPieceModalOpen: boolean;
@@ -238,7 +240,7 @@ function AppContent() {
           <Route path="/ideas" element={null} />
           <Route path="/tryon" element={null} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundView />} />
       </Routes>
 
       {/* Route-driven Modals (mounted seamlessly over background screen) */}
@@ -296,11 +298,13 @@ function AppContent() {
 
 export function App() {
   return (
-    <ThemeProvider>
-      <ClosetProvider>
-        <AppContent />
-      </ClosetProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ClosetProvider>
+          <AppContent />
+        </ClosetProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

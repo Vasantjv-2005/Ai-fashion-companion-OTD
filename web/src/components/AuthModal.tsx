@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   X,
@@ -80,15 +80,22 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
     setForgotNotice(null);
   }
 
-  // Handle ESC key to close
+  // Focus restoration & Escape key dismiss
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
   }, [onClose]);
 
   // Validation logic
@@ -211,6 +218,11 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
       aria-modal="true"
       aria-labelledby="auth-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       <div
         className="relative w-full max-w-[420px] rounded-[32px] overflow-hidden shadow-2xl bg-[#FAF5ED] text-[#1C1612] border border-[#E8DEC8] px-7 py-8 sm:px-8 sm:py-9 transition-all"

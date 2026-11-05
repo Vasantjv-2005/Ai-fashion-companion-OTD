@@ -78,15 +78,23 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
     onClose();
   }, [resetState, onClose]);
 
-  // Handle ESC key to dismiss modal
+  // Handle ESC key to dismiss modal and restore focus
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         handleClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
   }, [isOpen, handleClose]);
 
   if (!isOpen) return null;
@@ -215,7 +223,7 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
               Add Garment to Closet
             </h3>
             <p className="text-xs text-[var(--text-muted)] font-medium">
-              Real photo intake & AI garment cataloging
+              Photo intake & wardrobe cataloging
             </p>
           </div>
         </div>

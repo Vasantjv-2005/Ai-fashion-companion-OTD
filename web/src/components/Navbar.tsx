@@ -248,7 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-full text-left flex items-center gap-2 text-xs tracking-[0.18em] uppercase text-[var(--gold-primary)] py-1 font-semibold"
             >
               <Plus className="w-4 h-4" />
-              <span>Upload Garment (Photo & AI)</span>
+              <span>Upload Garment (+ Piece)</span>
             </button>
           )}
           <div className="pt-3 border-t border-[var(--border-card)] space-y-2.5">

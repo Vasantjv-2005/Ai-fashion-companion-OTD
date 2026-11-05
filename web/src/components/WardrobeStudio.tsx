@@ -57,7 +57,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                 className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-semibold cursor-pointer shadow-md hover:scale-105 transition-all"
               >
                 <Plus className="w-4 h-4" />
-                <span>Upload New Garment (Photo & AI Scan)</span>
+                <span>Upload New Garment (Photo & Catalog)</span>
               </button>
             </div>
           )}
