@@ -7,17 +7,34 @@ import {
   X,
   Check,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Trash2,
   Plus,
   Layers,
-  Info,
   ChevronRight,
   ChevronLeft,
   SwitchCamera,
+  ShieldAlert,
+  RotateCcw,
+  Sparkles,
+  HelpCircle,
+  HardDrive,
+  Copy,
 } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
 import { compressImageFile } from '../utils/imageCompressor';
+import {
+  saveDraftSession,
+  loadDraftSession,
+  clearDraftSession,
+  formatDraftTime,
+  isIndexedDBAvailable,
+  setSimulateIndexedDBFailure,
+  getSimulateIndexedDBFailure,
+  type DraftSessionData,
+} from '../utils/draftStorage';
+import { detectDuplicateGarment, type DuplicateMatchResult } from '../utils/duplicateDetector';
 
 export interface ClosetUploadViewProps {
   onBack: () => void;
@@ -25,6 +42,14 @@ export interface ClosetUploadViewProps {
 }
 
 export type IntakeChoice = 'camera' | 'library' | 'manual';
+
+export type GarmentDraftStatus =
+  | 'selected'
+  | 'preparing'
+  | 'ready'
+  | 'needs_attention'
+  | 'failed'
+  | 'saved';
 
 export interface GarmentDraft {
   id: string;
@@ -43,6 +68,19 @@ export interface GarmentDraft {
   description: string;
   fileName?: string;
   fileSize?: number;
+
+  // Task 7 Lifecycle & Error Handling State
+  status: GarmentDraftStatus;
+  progress?: number; // 0-100% for local processing tasks
+  processingStep?: string;
+  errorMessage?: string;
+  errorCode?: 'PROCESSING_FAILED' | 'FILE_TOO_LARGE' | 'UNSUPPORTED_FORMAT' | 'STORAGE_QUOTA' | 'RESTORE_FAILED';
+  needsReview?: boolean;
+  duplicateOfId?: string;
+  duplicateReason?: string;
+  duplicateWarningDismissed?: boolean;
+  replaceTargetId?: string;
+  rawFile?: File; // Session memory reference for retry
 }
 
 const CATEGORY_DEFAULT_ICONS: Record<ClosetItem['category'], string> = {
@@ -139,7 +177,7 @@ let draftCounter = 0;
 const generateDraftId = () => `draft_${Date.now()}_${++draftCounter}`;
 
 export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onComplete }) => {
-  const { addClosetItem } = useCloset();
+  const { closet, addClosetItem, updateClosetItem } = useCloset();
 
   // Screen stage
   const [stage, setStage] = useState<'select' | 'camera' | 'library' | 'form'>('select');
@@ -147,6 +185,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   // Multi-item drafts
   const [drafts, setDrafts] = useState<GarmentDraft[]>([]);
   const [activeDraftIndex, setActiveDraftIndex] = useState(0);
+
+  // Recoverable Draft State
+  const [persistedDraftSession, setPersistedDraftSession] = useState<DraftSessionData | null>(null);
+  const [showDiscardConfirmModal, setShowDiscardConfirmModal] = useState(false);
+  const [isRestoringDraft, setIsRestoringDraft] = useState(false);
+
+  // Replacement Confirmation Modal State
+  const [pendingReplacementMatch, setPendingReplacementMatch] = useState<DuplicateMatchResult | null>(null);
 
   // Camera state
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -164,12 +210,74 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   const [stagedFiles, setStagedFiles] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isCompressingBatch, setIsCompressingBatch] = useState(false);
+  const [batchProgressSummary, setBatchProgressSummary] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // Form validation & submission state
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Development-only QA flag
+  const isDev = import.meta.env.DEV;
+
+  // Global Storage Quota Alert State
+  const [quotaExceededNotice, setQuotaExceededNotice] = useState<string | null>(null);
+
+  // IndexedDB availability status
+  const [isIndexedDBRestricted, setIsIndexedDBRestricted] = useState(() => !isIndexedDBAvailable());
+
+  // Developer / QA Simulation Tools Drawer
+  const [showTestingControls, setShowTestingControls] = useState(false);
+
+  // Listen for storage quota events dispatched by the application
+  useEffect(() => {
+    const handleQuotaExceeded = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message?: string }>;
+      setQuotaExceededNotice(
+        customEvent.detail?.message ||
+          'Browser storage limit reached. Please reduce image sizes or clear unused closet records.'
+      );
+    };
+
+    window.addEventListener('otd:storage-quota-exceeded', handleQuotaExceeded);
+    return () => window.removeEventListener('otd:storage-quota-exceeded', handleQuotaExceeded);
+  }, []);
+
+  // Check for existing recoverable drafts in IndexedDB or fallback on mount
+  useEffect(() => {
+    let isMounted = true;
+    loadDraftSession()
+      .then((session) => {
+        if (isMounted && session && session.drafts.length > 0) {
+          setPersistedDraftSession(session);
+        }
+      })
+      .catch((err) => {
+        console.warn('Draft session recovery check failed:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Debounced auto-save of active drafts to IndexedDB
+  useEffect(() => {
+    if (drafts.length === 0 || stage === 'select') return;
+
+    // Do not save drafts if all are marked as 'saved'
+    const hasUnsaved = drafts.some((d) => d.status !== 'saved');
+    if (!hasUnsaved) return;
+
+    const timer = setTimeout(() => {
+      saveDraftSession(drafts, stage, activeDraftIndex).catch((err) => {
+        console.warn('Auto-save to IndexedDB encountered an issue:', err);
+      });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [drafts, stage, activeDraftIndex]);
 
   // Clean up camera stream and hardware tracks
   const stopCameraStream = useCallback(() => {
@@ -200,7 +308,11 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (stage === 'camera') {
+        if (pendingReplacementMatch) {
+          setPendingReplacementMatch(null);
+        } else if (showDiscardConfirmModal) {
+          setShowDiscardConfirmModal(false);
+        } else if (stage === 'camera') {
           stopCameraStream();
           setStage('select');
         } else if (stage === 'library') {
@@ -214,10 +326,37 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stage, onBack, stopCameraStream]);
+  }, [stage, onBack, stopCameraStream, pendingReplacementMatch, showDiscardConfirmModal]);
 
   // =========================================================================
-  // OPTION A: TAKE PHOTO (Rear-facing preference, switch camera & cleanup)
+  // DRAFT RECOVERY WORKFLOW
+  // =========================================================================
+  const handleResumeDraft = () => {
+    if (!persistedDraftSession) return;
+    setIsRestoringDraft(true);
+    try {
+      setDrafts(persistedDraftSession.drafts);
+      setActiveDraftIndex(persistedDraftSession.activeDraftIndex || 0);
+      setStage(persistedDraftSession.stage === 'library' ? 'library' : 'form');
+      setPersistedDraftSession(null);
+    } catch {
+      setValidationError('Failed to restore draft session. You can start a fresh garment entry.');
+    } finally {
+      setIsRestoringDraft(false);
+    }
+  };
+
+  const handleConfirmDiscardDraft = async () => {
+    setShowDiscardConfirmModal(false);
+    await clearDraftSession();
+    setPersistedDraftSession(null);
+    setDrafts([]);
+    setActiveDraftIndex(0);
+    setStage('select');
+  };
+
+  // =========================================================================
+  // OPTION A: TAKE PHOTO (Rear camera preference & cleanup)
   // =========================================================================
   const startCameraStream = useCallback(
     async (facing: 'environment' | 'user' = 'environment', deviceId?: string) => {
@@ -240,7 +379,6 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         if (deviceId) {
           videoConstraints.deviceId = { exact: deviceId };
         } else {
-          // Explicitly prefer the rear-facing camera for garment photography
           videoConstraints.facingMode = { ideal: facing };
         }
 
@@ -258,7 +396,6 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           videoRef.current.play().catch(() => {});
         }
 
-        // Enumerate video devices to detect multiple cameras (front/back/external)
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
           const videoInputs = devices.filter((d) => d.kind === 'videoinput');
@@ -316,7 +453,6 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const snapshotUrl = canvas.toDataURL('image/jpeg', 0.88);
         setCapturedPhotoUrl(snapshotUrl);
-        // Explicitly stop camera tracks immediately upon successful capture
         stopCameraStream();
       }
     } catch {
@@ -340,7 +476,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       name: 'Captured Garment',
       category: 'tops',
       subType: 'Dress Shirt',
-      brand: 'Bespoke',
+      brand: 'Bespoke Atelier',
       color: 'Classic Neutral',
       secondaryColor: '',
       fit: 'Regular',
@@ -350,7 +486,18 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       season: ['all-season'],
       pattern: 'Solid',
       description: 'Captured via camera intake.',
+      status: 'ready',
+      progress: 100,
+      processingStep: 'Live snapshot prepared locally.',
     };
+
+    // Check for duplicate heuristic
+    const duplicateMatch = detectDuplicateGarment(newDraft, closet);
+    if (duplicateMatch) {
+      newDraft.status = 'needs_attention';
+      newDraft.duplicateOfId = duplicateMatch.existingItem.id;
+      newDraft.duplicateReason = duplicateMatch.explanation;
+    }
 
     setDrafts([newDraft]);
     setActiveDraftIndex(0);
@@ -363,7 +510,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   };
 
   // =========================================================================
-  // OPTION B: UPLOAD FROM LIBRARY (Multi-image, staging & compression)
+  // OPTION B: UPLOAD FROM LIBRARY (Multi-image, sequential compression & errors)
   // =========================================================================
   const handleOpenLibrary = () => {
     stopCameraStream();
@@ -382,11 +529,11 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       if (!validExtensions.includes(file.type)) {
-        setFileError('One or more files have an unsupported format. Please upload JPEG, PNG, or WebP images only.');
+        setFileError(`File "${file.name}" has an unsupported format. Please upload JPEG, PNG, or WebP images only.`);
         continue;
       }
       if (file.size > 15 * 1024 * 1024) {
-        setFileError(`File "${file.name}" exceeds the 15MB size limit. Please upload a smaller image.`);
+        setFileError(`File "${file.name}" exceeds the 15MB limit. Please upload a smaller image.`);
         continue;
       }
 
@@ -416,77 +563,150 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     setIsCompressingBatch(true);
     setFileError(null);
 
-    try {
-      const createdDrafts: GarmentDraft[] = [];
+    const total = stagedFiles.length;
+    const createdDrafts: GarmentDraft[] = [];
 
-      for (let i = 0; i < stagedFiles.length; i++) {
-        const { file, previewUrl } = stagedFiles[i];
-        let compressedDataUrl = previewUrl;
+    for (let i = 0; i < total; i++) {
+      const { file, previewUrl } = stagedFiles[i];
+      setBatchProgressSummary(`Preparing image ${i + 1} of ${total} (${Math.round(((i + 1) / total) * 100)}%)`);
 
-        try {
-          compressedDataUrl = await compressImageFile(file, 800, 0.82);
-        } catch {
-          // fallback to current preview if canvas compression fails
-        }
+      let compressedDataUrl = previewUrl;
+      let hasError = false;
+      let errorMsg: string | undefined;
 
-        // Clean file name to suggest a default garment name
-        const cleanName = file.name
-          .replace(/\.[^/.]+$/, '')
-          .replace(/[-_]/g, ' ')
-          .trim();
-        const formattedName = cleanName ? cleanName.charAt(0).toUpperCase() + cleanName.slice(1) : `Garment ${i + 1}`;
-
-        // Infer default category/subtype based on file name if possible
-        const lowerName = cleanName.toLowerCase();
-        let cat: ClosetItem['category'] = 'tops';
-        let sub = 'Knitwear / Sweater';
-
-        if (lowerName.includes('trouser') || lowerName.includes('pant') || lowerName.includes('jean') || lowerName.includes('chino')) {
-          cat = 'bottoms';
-          sub = 'Flannel Trousers';
-        } else if (lowerName.includes('coat') || lowerName.includes('jacket') || lowerName.includes('blazer') || lowerName.includes('trench')) {
-          cat = 'outerwear';
-          sub = 'Tailored Blazer';
-        } else if (lowerName.includes('shoe') || lowerName.includes('boot') || lowerName.includes('loafer') || lowerName.includes('sneaker')) {
-          cat = 'footwear';
-          sub = 'Penny Loafers';
-        } else if (lowerName.includes('watch') || lowerName.includes('scarf') || lowerName.includes('belt') || lowerName.includes('bag')) {
-          cat = 'accessories';
-          sub = 'Dress Timepiece';
-        }
-
-        createdDrafts.push({
-          id: generateDraftId(),
-          name: formattedName,
-          category: cat,
-          subType: sub,
-          brand: 'Bespoke',
-          color: 'Neutral',
-          secondaryColor: '',
-          fit: 'Regular',
-          formality: 3,
-          icon: CATEGORY_DEFAULT_ICONS[cat],
-          imageUrl: compressedDataUrl,
-          season: ['all-season'],
-          pattern: 'Solid',
-          description: '',
-          fileName: file.name,
-          fileSize: file.size,
-        });
+      try {
+        compressedDataUrl = await compressImageFile(file, 800, 0.82);
+      } catch (err) {
+        console.warn(`Local compression failed for ${file.name}:`, err);
+        hasError = true;
+        errorMsg = 'Local image processing encountered an issue. You can retry or switch to manual entry.';
       }
 
-      setDrafts(createdDrafts);
-      setActiveDraftIndex(0);
-      setStage('form');
+      // Format default clean name
+      const cleanName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]/g, ' ')
+        .trim();
+      const formattedName = cleanName ? cleanName.charAt(0).toUpperCase() + cleanName.slice(1) : `Garment ${i + 1}`;
+
+      // Infer default category/subtype based on file name if possible
+      const lowerName = cleanName.toLowerCase();
+      let cat: ClosetItem['category'] = 'tops';
+      let sub = 'Knitwear / Sweater';
+
+      if (lowerName.includes('trouser') || lowerName.includes('pant') || lowerName.includes('jean') || lowerName.includes('chino')) {
+        cat = 'bottoms';
+        sub = 'Flannel Trousers';
+      } else if (lowerName.includes('coat') || lowerName.includes('jacket') || lowerName.includes('blazer') || lowerName.includes('trench')) {
+        cat = 'outerwear';
+        sub = 'Tailored Blazer';
+      } else if (lowerName.includes('shoe') || lowerName.includes('boot') || lowerName.includes('loafer') || lowerName.includes('sneaker')) {
+        cat = 'footwear';
+        sub = 'Penny Loafers';
+      } else if (lowerName.includes('watch') || lowerName.includes('scarf') || lowerName.includes('belt') || lowerName.includes('bag')) {
+        cat = 'accessories';
+        sub = 'Dress Timepiece';
+      }
+
+      const draft: GarmentDraft = {
+        id: generateDraftId(),
+        name: formattedName,
+        category: cat,
+        subType: sub,
+        brand: 'Bespoke Atelier',
+        color: 'Neutral',
+        secondaryColor: '',
+        fit: 'Regular',
+        formality: 3,
+        icon: CATEGORY_DEFAULT_ICONS[cat],
+        imageUrl: compressedDataUrl,
+        season: ['all-season'],
+        pattern: 'Solid',
+        description: '',
+        fileName: file.name,
+        fileSize: file.size,
+        status: hasError ? 'failed' : 'ready',
+        progress: 100,
+        processingStep: hasError ? 'Processing failed' : 'Downsampled and optimized locally',
+        errorMessage: errorMsg,
+        errorCode: hasError ? 'PROCESSING_FAILED' : undefined,
+        rawFile: file,
+      };
+
+      // Heuristic duplicate detection
+      if (!hasError) {
+        const duplicateMatch = detectDuplicateGarment(draft, closet);
+        if (duplicateMatch) {
+          draft.status = 'needs_attention';
+          draft.duplicateOfId = duplicateMatch.existingItem.id;
+          draft.duplicateReason = duplicateMatch.explanation;
+        }
+      }
+
+      createdDrafts.push(draft);
+    }
+
+    setDrafts(createdDrafts);
+    setActiveDraftIndex(0);
+    setIsCompressingBatch(false);
+    setBatchProgressSummary(null);
+    setStage('form');
+  };
+
+  // Retry processing for a single failed draft
+  const handleRetryProcessing = async (draftId: string) => {
+    const targetDraft = drafts.find((d) => d.id === draftId);
+    if (!targetDraft) return;
+
+    // Set draft to preparing
+    setDrafts((prev) =>
+      prev.map((d) => (d.id === draftId ? { ...d, status: 'preparing', progress: 40, errorMessage: undefined } : d))
+    );
+
+    try {
+      let compressedUrl = targetDraft.imageUrl;
+      if (targetDraft.rawFile) {
+        compressedUrl = await compressImageFile(targetDraft.rawFile, 800, 0.82);
+      }
+
+      setDrafts((prev) =>
+        prev.map((d) => {
+          if (d.id !== draftId) return d;
+          const updated: GarmentDraft = {
+            ...d,
+            imageUrl: compressedUrl,
+            status: 'ready',
+            progress: 100,
+            processingStep: 'Successfully reprocessed locally',
+            errorMessage: undefined,
+            errorCode: undefined,
+          };
+          const dup = detectDuplicateGarment(updated, closet);
+          if (dup) {
+            updated.status = 'needs_attention';
+            updated.duplicateOfId = dup.existingItem.id;
+            updated.duplicateReason = dup.explanation;
+          }
+          return updated;
+        })
+      );
     } catch {
-      setFileError('An unexpected error occurred while preparing your images. Please try again.');
-    } finally {
-      setIsCompressingBatch(false);
+      setDrafts((prev) =>
+        prev.map((d) =>
+          d.id === draftId
+            ? {
+                ...d,
+                status: 'failed',
+                errorMessage: 'Retry failed. You can proceed with manual entry or select another image.',
+              }
+            : d
+        )
+      );
     }
   };
 
   // =========================================================================
-  // OPTION C: MANUAL ENTRY (No image required, direct to metadata)
+  // OPTION C: MANUAL ENTRY (No image required)
   // =========================================================================
   const handleStartManualEntry = () => {
     stopCameraStream();
@@ -505,14 +725,35 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       season: ['all-season'],
       pattern: 'Solid',
       description: '',
+      status: 'needs_attention', // highlighted until required name & color are filled
+      needsReview: true,
+      progress: 100,
+      processingStep: 'Manual specification mode active.',
     };
     setDrafts([manualDraft]);
     setActiveDraftIndex(0);
     setStage('form');
   };
 
+  // Switch a failed or image draft to manual entry (preserving metadata)
+  const handleSwitchToManual = (draftId: string) => {
+    setDrafts((prev) =>
+      prev.map((d) => {
+        if (d.id !== draftId) return d;
+        return {
+          ...d,
+          imageUrl: undefined,
+          status: d.name && d.color ? 'ready' : 'needs_attention',
+          errorMessage: undefined,
+          errorCode: undefined,
+          processingStep: 'Converted to manual specification.',
+        };
+      })
+    );
+  };
+
   // Sample preset quick-picker
-  const handleSelectPreset = (preset: typeof PRESET_EDITORIAL_PIECES[0]) => {
+  const handleSelectPreset = (preset: (typeof PRESET_EDITORIAL_PIECES)[0]) => {
     stopCameraStream();
     const presetDraft: GarmentDraft = {
       id: generateDraftId(),
@@ -529,7 +770,19 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       season: [...preset.season],
       pattern: preset.pattern,
       description: preset.description,
+      status: 'ready',
+      progress: 100,
+      processingStep: 'Calibrated specimen loaded.',
     };
+
+    // Check duplicate heuristic
+    const duplicateMatch = detectDuplicateGarment(presetDraft, closet);
+    if (duplicateMatch) {
+      presetDraft.status = 'needs_attention';
+      presetDraft.duplicateOfId = duplicateMatch.existingItem.id;
+      presetDraft.duplicateReason = duplicateMatch.explanation;
+    }
+
     setDrafts([presetDraft]);
     setActiveDraftIndex(0);
     setStage('form');
@@ -541,31 +794,123 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       prev.map((draft, idx) => {
         if (idx !== activeDraftIndex) return draft;
         const updated = { ...draft, ...updates };
+
         if (updates.category && !updates.icon) {
           updated.icon = CATEGORY_DEFAULT_ICONS[updates.category];
         }
+
+        // Recalculate duplicate heuristic if name, brand, subType, color or image changed
+        if (
+          !updated.duplicateWarningDismissed &&
+          (updates.name !== undefined ||
+            updates.brand !== undefined ||
+            updates.category !== undefined ||
+            updates.subType !== undefined ||
+            updates.color !== undefined ||
+            updates.imageUrl !== undefined)
+        ) {
+          const dup = detectDuplicateGarment(updated, closet);
+          if (dup) {
+            updated.duplicateOfId = dup.existingItem.id;
+            updated.duplicateReason = dup.explanation;
+            if (updated.status !== 'failed') {
+              updated.status = 'needs_attention';
+            }
+          } else {
+            updated.duplicateOfId = undefined;
+            updated.duplicateReason = undefined;
+            if (updated.status === 'needs_attention' && !updated.needsReview && updated.name && updated.color) {
+              updated.status = 'ready';
+            }
+          }
+        }
+
+        // Check if required fields are satisfied
+        if (updated.status === 'needs_attention' && !updated.duplicateOfId && updated.name.trim() && updated.color.trim()) {
+          updated.status = 'ready';
+        }
+
         return updated;
       })
     );
   };
 
+  // Remove a draft from multi-draft queue
+  const handleRemoveDraft = (draftIndex: number) => {
+    setDrafts((prev) => {
+      const next = prev.filter((_, idx) => idx !== draftIndex);
+      if (next.length === 0) {
+        setStage('select');
+        clearDraftSession();
+        return [];
+      }
+      setActiveDraftIndex((current) => Math.min(current, next.length - 1));
+      return next;
+    });
+  };
+
   const activeDraft = drafts[activeDraftIndex] || null;
 
+  // Active draft duplicate match
+  const activeDuplicateItem: ClosetItem | undefined = activeDraft?.duplicateOfId
+    ? closet.find((item) => item.id === activeDraft.duplicateOfId)
+    : undefined;
+
+  // Duplicate resolution actions
+  const handleKeepBothDuplicates = () => {
+    if (!activeDraft) return;
+    updateActiveDraft({
+      duplicateWarningDismissed: true,
+      duplicateOfId: undefined,
+      duplicateReason: undefined,
+      replaceTargetId: undefined,
+      status: activeDraft.name.trim() && activeDraft.color.trim() ? 'ready' : 'needs_attention',
+    });
+  };
+
+  const handleOpenReplaceConfirmation = () => {
+    if (!activeDraft || !activeDuplicateItem) return;
+    setPendingReplacementMatch({
+      existingItem: activeDuplicateItem,
+      reason: 'exact_name',
+      explanation: activeDraft.duplicateReason || 'Matches existing wardrobe entry.',
+    });
+  };
+
+  const handleConfirmReplace = () => {
+    if (!activeDraft || !pendingReplacementMatch) return;
+    updateActiveDraft({
+      duplicateWarningDismissed: true,
+      replaceTargetId: pendingReplacementMatch.existingItem.id,
+      status: activeDraft.name.trim() && activeDraft.color.trim() ? 'ready' : 'needs_attention',
+    });
+    setPendingReplacementMatch(null);
+  };
+
+  const handleCancelDuplicateUpload = () => {
+    handleRemoveDraft(activeDraftIndex);
+  };
+
   // Save all drafts to ClosetContext
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
     setValidationError(null);
 
     // Validate that every draft has at least a Name and Primary Color
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
+      if (d.status === 'failed') {
+        setActiveDraftIndex(i);
+        setValidationError(`Garment #${i + 1} has a processing error. Please retry, convert to manual entry, or remove it.`);
+        return;
+      }
       if (!d.name.trim()) {
         setActiveDraftIndex(i);
-        setValidationError(`Please provide a garment name for item #${i + 1}.`);
+        setValidationError(`Please provide a garment name for piece #${i + 1}.`);
         return;
       }
       if (!d.color.trim()) {
         setActiveDraftIndex(i);
-        setValidationError(`Please specify a primary color for "${d.name || `item #${i + 1}`}".`);
+        setValidationError(`Please specify a primary color for "${d.name || `piece #${i + 1}`}".`);
         return;
       }
     }
@@ -574,7 +919,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
     try {
       drafts.forEach((draft) => {
-        addClosetItem({
+        const pieceData = {
           name: draft.name.trim(),
           category: draft.category,
           subType: draft.subType || CATEGORY_SUBTYPES[draft.category][0],
@@ -588,15 +933,38 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           season: draft.season,
           pattern: draft.pattern || 'Solid',
           description: draft.description.trim() || undefined,
-        });
+        };
+
+        if (draft.replaceTargetId) {
+          // Explicitly confirmed replacement: update existing item
+          updateClosetItem(draft.replaceTargetId, pieceData);
+        } else {
+          // Add as fresh wardrobe item
+          addClosetItem(pieceData);
+        }
       });
 
-      const count = drafts.length;
-      setSuccessMessage(
-        count === 1
-          ? `"${drafts[0].name}" successfully cataloged into your Digital Closet.`
-          : `${count} garments successfully cataloged into your Digital Closet.`
-      );
+      // Mark all as saved
+      setDrafts((prev) => prev.map((d) => ({ ...d, status: 'saved' })));
+
+      // Clear the temporary draft session from storage so it does not reappear
+      await clearDraftSession();
+
+      const replacedDrafts = drafts.filter((d) => Boolean(d.replaceTargetId));
+      const replacedCount = replacedDrafts.length;
+      let msg = '';
+      if (replacedCount > 0 && drafts.length === 1) {
+        const targetName = closet.find((i) => i.id === drafts[0].replaceTargetId)?.name || drafts[0].name;
+        msg = `"${targetName}" successfully updated in your Digital Closet (original ID preserved).`;
+      } else if (replacedCount > 0) {
+        msg = `${drafts.length} garments processed (${replacedCount} replaced, ${drafts.length - replacedCount} added).`;
+      } else {
+        msg =
+          drafts.length === 1
+            ? `"${drafts[0].name}" successfully cataloged into your Digital Closet.`
+            : `${drafts.length} garments successfully cataloged into your Digital Closet.`;
+      }
+      setSuccessMessage(msg);
 
       setTimeout(() => {
         setIsSaving(false);
@@ -604,8 +972,17 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       }, 700);
     } catch {
       setIsSaving(false);
-      setValidationError('Failed to save to closet. Please check storage capacity or try again.');
+      setValidationError('Failed to save to closet. Please check browser storage capacity or try again.');
     }
+  };
+
+  // Calculate overall draft status counters
+  const draftCounters = {
+    total: drafts.length,
+    ready: drafts.filter((d) => d.status === 'ready').length,
+    needsAttention: drafts.filter((d) => d.status === 'needs_attention').length,
+    failed: drafts.filter((d) => d.status === 'failed').length,
+    preparing: drafts.filter((d) => d.status === 'preparing').length,
   };
 
   return (
@@ -634,8 +1011,13 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           </button>
 
           <div>
-            <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold">
-              Wardrobe Acquisition • Task 6
+            <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold flex items-center gap-1.5">
+              <span>Wardrobe Acquisition • Task 7</span>
+              {drafts.length > 0 && stage === 'form' && (
+                <span className="text-[9px] bg-[var(--pill-bg)] px-2 py-0.5 rounded-full border border-[var(--border-gold)]">
+                  {draftCounters.ready}/{draftCounters.total} Ready
+                </span>
+              )}
             </span>
             <h1 className="font-playfair text-xl sm:text-2xl lg:text-3xl font-bold text-[var(--text-heading)]">
               {stage === 'select' && 'Garment Intake Atelier'}
@@ -647,19 +1029,26 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         </div>
 
         {stage === 'form' && drafts.length > 0 && (
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <span className="text-xs text-[var(--text-muted)] font-mono">
-              {drafts.length === 1 ? '1 Piece' : `${drafts.length} Pieces Staged`}
-            </span>
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+            {/* Discard Draft Button */}
+            <button
+              onClick={() => setShowDiscardConfirmModal(true)}
+              className="p-2.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--text-muted)] hover:text-rose-500 hover:border-rose-500/40 transition-all cursor-pointer"
+              title="Discard draft and reset"
+              aria-label="Discard draft"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
             <button
               onClick={handleSaveAll}
-              disabled={isSaving}
+              disabled={isSaving || draftCounters.failed > 0}
               className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50 disabled:pointer-events-none"
             >
               {isSaving ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Saving to Closet...</span>
+                  <span>Cataloging into Closet...</span>
                 </>
               ) : (
                 <>
@@ -672,9 +1061,125 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         )}
       </div>
 
+      {/* IndexedDB Restricted Advisory */}
+      {isIndexedDBRestricted && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2.5 animate-in fade-in">
+          <HardDrive className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span>
+            <strong>Storage Advisory:</strong> Persistent browser database (IndexedDB) is restricted. Garment metadata will be preserved across refreshes, but photo attachments cannot be persistently cached until cataloged.
+          </span>
+        </div>
+      )}
+
+      {/* Recoverable Draft Found Alert Banner */}
+      {persistedDraftSession && stage === 'select' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-5 rounded-3xl bg-[var(--bg-card)] border-2 border-[var(--border-gold)] shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in"
+        >
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] shrink-0">
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[var(--text-heading)]">
+                  {persistedDraftSession.imagesPreserved !== false
+                    ? 'Recoverable Garment Draft Found'
+                    : 'Metadata-Only Garment Draft Found'}
+                </span>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                    persistedDraftSession.imagesPreserved !== false
+                      ? 'text-[var(--gold-primary)] bg-[var(--pill-bg)]'
+                      : 'text-amber-800 dark:text-amber-300 bg-amber-500/20'
+                  }`}
+                >
+                  {persistedDraftSession.imagesPreserved !== false
+                    ? `IndexedDB • ${formatDraftTime(persistedDraftSession.updatedAt)}`
+                    : 'Storage Fallback • Photos Omitted'}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                {persistedDraftSession.imagesPreserved !== false
+                  ? `You have ${persistedDraftSession.drafts.length} un-cataloged garment${
+                      persistedDraftSession.drafts.length > 1 ? 's' : ''
+                    } saved locally. You can resume editing or discard the draft.`
+                  : `Restored ${persistedDraftSession.drafts.length} garment specification(s). Photos could not be preserved due to browser storage restrictions, but all metadata, silhouettes, and colors are intact.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => setShowDiscardConfirmModal(true)}
+              className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-rose-500 hover:border-rose-500/30 transition-all cursor-pointer"
+            >
+              Discard Draft
+            </button>
+            <button
+              onClick={handleResumeDraft}
+              disabled={isRestoringDraft}
+              className="px-5 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Resume Editing</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Global Storage Quota Exceeded Notification */}
+      {quotaExceededNotice && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/40 text-amber-950 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in"
+        >
+          <div className="flex items-center gap-3">
+            <HardDrive className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <p className="font-bold">Storage Capacity Advisory</p>
+              <p className="text-[11px] opacity-90">{quotaExceededNotice}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            {stage === 'form' && drafts.some((d) => d.imageUrl) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDrafts((prev) =>
+                    prev.map((d) => ({
+                      ...d,
+                      imageUrl: undefined,
+                      processingStep: 'Converted to manual specification to conserve storage quota.',
+                    }))
+                  );
+                  setQuotaExceededNotice(null);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition-all cursor-pointer"
+              >
+                Save as Manual (Omit Photos)
+              </button>
+            )}
+            <button
+              onClick={() => setQuotaExceededNotice(null)}
+              className="p-1 text-amber-800 dark:text-amber-300 hover:opacity-75 cursor-pointer"
+              aria-label="Dismiss storage notice"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Success Notification Banner */}
       {successMessage && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-3 animate-in fade-in">
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-3 animate-in fade-in"
+        >
           <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span className="font-semibold">{successMessage}</span>
         </div>
@@ -682,7 +1187,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
       {/* Validation Error Banner */}
       {validationError && (
-        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-center justify-between gap-3 animate-in fade-in"
+        >
           <div className="flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{validationError}</span>
@@ -1052,7 +1560,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           </div>
 
           {fileError && (
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-center gap-2.5">
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-center gap-2.5"
+            >
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
               <span>{fileError}</span>
             </div>
@@ -1114,6 +1625,22 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 ))}
               </div>
 
+              {/* Real Measurable Local Processing Progress */}
+              {isCompressingBatch && (
+                <div className="p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] space-y-2 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[var(--text-heading)] flex items-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--gold-primary)]" />
+                      {batchProgressSummary || 'Preparing images locally...'}
+                    </span>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">Client-side compression</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                    <div className="h-full bg-[var(--gold-primary)] transition-all duration-300 w-full animate-pulse" />
+                  </div>
+                </div>
+              )}
+
               {/* Proceed Action */}
               <div className="pt-4 flex justify-end gap-3">
                 <button
@@ -1152,24 +1679,49 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       {/* ========================================================================= */}
       {stage === 'form' && activeDraft && (
         <div className="space-y-6">
-          {/* Batch Selector if multiple garments */}
-          {drafts.length > 1 && (
-            <div className="p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-[var(--gold-primary)]" />
-                  <span className="font-bold text-[var(--text-heading)]">
-                    Batch Intake: Garment {activeDraftIndex + 1} of {drafts.length}
-                  </span>
-                </div>
-                <span className="text-[11px] text-[var(--text-muted)]">
-                  Each photo is saved as an independent closet entry.
+          {/* Multi-garment Stepper Tabs with Independent Status Badges */}
+          <div className="p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--gold-primary)]" />
+                <span className="font-bold text-[var(--text-heading)]">
+                  Garment Queue: {activeDraftIndex + 1} of {drafts.length}
+                </span>
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  ({draftCounters.ready} ready • {draftCounters.needsAttention} needs attention
+                  {draftCounters.failed > 0 ? ` • ${draftCounters.failed} failed` : ''})
                 </span>
               </div>
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Local draft auto-saved to IndexedDB
+              </span>
+            </div>
 
-              {/* Stepper Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {drafts.map((draft, idx) => (
+            {/* Stepper Tabs */}
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+              {drafts.map((draft, idx) => {
+                const isSelected = idx === activeDraftIndex;
+
+                let statusBadgeBg = 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
+                let statusLabel = 'Selected';
+                if (draft.status === 'preparing') {
+                  statusBadgeBg = 'bg-amber-500/20 text-amber-700 dark:text-amber-300';
+                  statusLabel = 'Preparing';
+                } else if (draft.status === 'ready') {
+                  statusBadgeBg = 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300';
+                  statusLabel = 'Ready';
+                } else if (draft.status === 'needs_attention') {
+                  statusBadgeBg = 'bg-amber-500/25 text-amber-800 dark:text-amber-200';
+                  statusLabel = 'Needs Review';
+                } else if (draft.status === 'failed') {
+                  statusBadgeBg = 'bg-rose-500/20 text-rose-700 dark:text-rose-300';
+                  statusLabel = 'Failed';
+                } else if (draft.status === 'saved') {
+                  statusBadgeBg = 'bg-blue-500/20 text-blue-700 dark:text-blue-300';
+                  statusLabel = 'Saved';
+                }
+
+                return (
                   <button
                     key={draft.id}
                     type="button"
@@ -1177,8 +1729,8 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                       setValidationError(null);
                       setActiveDraftIndex(idx);
                     }}
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 cursor-pointer border ${
-                      idx === activeDraftIndex
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2.5 shrink-0 cursor-pointer border ${
+                      isSelected
                         ? 'bg-black text-white dark:bg-white dark:text-black border-transparent shadow-xs'
                         : 'bg-[var(--bg-card)] border-[var(--border-card)] text-[var(--text-muted)] hover:text-[var(--text-heading)]'
                     }`}
@@ -1190,22 +1742,211 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                         <span>{draft.icon}</span>
                       )}
                     </div>
-                    <span className="truncate max-w-[120px]">{draft.name || `Piece #${idx + 1}`}</span>
+                    <div className="text-left">
+                      <span className="truncate max-w-[110px] block leading-tight font-medium">
+                        {draft.name || `Piece #${idx + 1}`}
+                      </span>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono uppercase inline-block mt-0.5 ${
+                          isSelected ? 'bg-white/20 text-white dark:bg-black/20 dark:text-black' : statusBadgeBg
+                        }`}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
                   </button>
-                ))}
+                );
+              })}
+            </div>
+          </div>
+
+          {/* DUPLICATE GARMENT HEURISTIC WARNING BANNER */}
+          {activeDraft.duplicateOfId && !activeDraft.duplicateWarningDismissed && activeDuplicateItem && (
+            <div
+              role="alert"
+              className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-950 dark:text-amber-100 space-y-4 animate-in fade-in"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-playfair text-sm sm:text-base font-bold">
+                      Possible Duplicate Garment Detected
+                    </h4>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                      Frontend Heuristic
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-900/90 dark:text-amber-200/90 leading-relaxed">
+                    This staged garment closely matches an existing active item in your Digital Closet ({activeDraft.duplicateReason || 'shared attributes'}).
+                    Pending AI recognition verification, please choose how you would like to proceed:
+                  </p>
+                </div>
+              </div>
+
+              {/* Side-by-side comparison */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {/* Existing Closet Item */}
+                <div className="p-3 rounded-2xl bg-white/60 dark:bg-black/40 border border-amber-500/30 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-neutral-900 border border-black/10 shrink-0 flex items-center justify-center text-lg">
+                    {activeDuplicateItem.imageUrl ? (
+                      <img
+                        src={activeDuplicateItem.imageUrl}
+                        alt={activeDuplicateItem.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{activeDuplicateItem.icon}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-semibold block">
+                      Existing in Wardrobe
+                    </span>
+                    <p className="font-bold truncate text-[var(--text-heading)]">{activeDuplicateItem.name}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">
+                      {activeDuplicateItem.brand} • {activeDuplicateItem.color} • {activeDuplicateItem.subType}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Newly Staged Garment */}
+                <div className="p-3 rounded-2xl bg-white/60 dark:bg-black/40 border border-amber-500/30 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-neutral-900 border border-black/10 shrink-0 flex items-center justify-center text-lg">
+                    {activeDraft.imageUrl ? (
+                      <img
+                        src={activeDraft.imageUrl}
+                        alt={activeDraft.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{activeDraft.icon}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <span className="text-[10px] uppercase font-mono text-amber-600 dark:text-amber-400 font-semibold block">
+                      Newly Staged Upload
+                    </span>
+                    <p className="font-bold truncate text-[var(--text-heading)]">
+                      {activeDraft.name || 'Unnamed Piece'}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">
+                      {activeDraft.brand || 'Bespoke Atelier'} • {activeDraft.color || 'No color'} • {activeDraft.subType}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Three Required Action Controls */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleKeepBothDuplicates}
+                  className="px-4 py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all cursor-pointer shadow-sm"
+                >
+                  Keep Both Pieces
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenReplaceConfirmation}
+                  className="px-4 py-2 rounded-xl border border-amber-600/40 bg-amber-500/20 text-amber-950 dark:text-amber-100 text-xs font-bold hover:bg-amber-500/30 transition-all cursor-pointer"
+                >
+                  Replace Existing Item...
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelDuplicateUpload}
+                  className="px-4 py-2 rounded-xl border border-black/15 dark:border-white/15 text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel This Upload
+                </button>
               </div>
             </div>
           )}
 
-          {/* Transparent Simulation Disclaimer */}
-          {activeDraft.imageUrl && (
-            <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)]/60 text-[var(--text-muted)] text-xs flex items-start sm:items-center gap-3">
-              <Info className="w-4 h-4 text-[var(--gold-primary)] shrink-0 mt-0.5 sm:mt-0" />
-              <div className="text-[11px] leading-relaxed">
-                <strong className="text-[var(--text-heading)] font-semibold">Frontend Preview Spec:</strong> Pre-filled values are simulated suggestions for rapid cataloging. You can modify every detail below to match your garment precisely.
+          {/* REPLACEMENT ACTIVE NOTIFICATION (When user confirmed Replace Existing) */}
+          {activeDraft.replaceTargetId && (
+            <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-900 dark:text-blue-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <Copy className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span>
+                  <strong>Replacement Queued:</strong> Saving will update and replace{' '}
+                  <strong>
+                    "{closet.find((i) => i.id === activeDraft.replaceTargetId)?.name || 'existing piece'}"
+                  </strong>{' '}
+                  while preserving its original wardrobe ID.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateActiveDraft({ replaceTargetId: undefined })}
+                className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline cursor-pointer shrink-0"
+              >
+                Revert to Keep Both
+              </button>
+            </div>
+          )}
+
+          {/* FAILED LOCAL PROCESSING RECOVERY CARD */}
+          {activeDraft.status === 'failed' && (
+            <div
+              role="alert"
+              className="p-5 rounded-3xl bg-rose-500/10 border-2 border-rose-500/40 text-rose-950 dark:text-rose-100 space-y-3 animate-in fade-in"
+            >
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-playfair text-sm sm:text-base font-bold">
+                    Local Image Processing Failed
+                  </h4>
+                  <p className="text-xs text-rose-900/90 dark:text-rose-200/90 mt-0.5 leading-relaxed">
+                    {activeDraft.errorMessage ||
+                      'The browser could not downscale or encode this image file. Your metadata is fully preserved.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleRetryProcessing(activeDraft.id)}
+                  className="px-4 py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Local Processing</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchToManual(activeDraft.id)}
+                  className="px-4 py-2 rounded-xl border border-rose-500/30 bg-[var(--pill-bg)] text-xs font-semibold text-[var(--text-heading)] hover:border-[var(--gold-primary)] transition-all cursor-pointer"
+                >
+                  Proceed with Manual Entry (Discard Photo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveDraft(activeDraftIndex)}
+                  className="px-4 py-2 rounded-xl border border-rose-500/30 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-500/10 transition-all cursor-pointer"
+                >
+                  Remove Item
+                </button>
               </div>
             </div>
           )}
+
+          {/* LOW-CONFIDENCE RECOGNITION REVIEW NOTICE */}
+          {(activeDraft.needsReview || activeDraft.status === 'needs_attention') &&
+            !activeDraft.duplicateOfId &&
+            activeDraft.status !== 'failed' && (
+              <div className="p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] text-xs space-y-2 animate-in fade-in">
+                <div className="flex items-center gap-2 text-[var(--gold-primary)] font-bold">
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span>Review Details Required</span>
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                  Please verify or complete all highlighted fields below. Garment name and primary color are required before cataloging into your Digital Closet.
+                </p>
+              </div>
+            )}
 
           {/* Form Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1227,7 +1968,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                         type="button"
                         onClick={() => updateActiveDraft({ imageUrl: undefined })}
                         className="p-1.5 rounded-full bg-black/70 text-white hover:bg-rose-600 transition-colors text-[10px] cursor-pointer"
-                        title="Remove photo (keep manual spec)"
+                        title="Remove photo (switch to manual spec)"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1280,8 +2021,17 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                     placeholder="e.g., Silk-Cashmere Knit Sweater"
                     value={activeDraft.name}
                     onChange={(e) => updateActiveDraft({ name: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none font-medium transition-colors ${
+                      !activeDraft.name.trim()
+                        ? 'border-amber-500/70 focus:border-amber-500'
+                        : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                    }`}
                   />
+                  {!activeDraft.name.trim() && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 block">
+                      Name is required for cataloging.
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -1354,8 +2104,17 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                     placeholder="e.g., Vicuna Camel, Charcoal"
                     value={activeDraft.color}
                     onChange={(e) => updateActiveDraft({ color: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none font-medium transition-colors ${
+                      !activeDraft.color.trim()
+                        ? 'border-amber-500/70 focus:border-amber-500'
+                        : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                    }`}
                   />
+                  {!activeDraft.color.trim() && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 block">
+                      Primary color is required for outfit harmony.
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -1508,6 +2267,222 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: EXPLICIT REPLACEMENT CONFIRMATION                                */}
+      {/* ========================================================================= */}
+      {pendingReplacementMatch && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="bg-[var(--bg-card)] border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+                  Confirm Wardrobe Replacement
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                  You are about to replace <strong>"{pendingReplacementMatch.existingItem.name}"</strong> with this new upload.
+                  The existing item will be updated upon saving.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs space-y-1">
+              <p className="font-semibold text-[var(--text-heading)]">
+                Target: {pendingReplacementMatch.existingItem.name}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Brand: {pendingReplacementMatch.existingItem.brand} • Category: {pendingReplacementMatch.existingItem.category}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingReplacementMatch(null)}
+                className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReplace}
+                className="px-5 py-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
+              >
+                Confirm & Queue Replacement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: DISCARD DRAFT CONFIRMATION                                      */}
+      {/* ========================================================================= */}
+      {showDiscardConfirmModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="bg-[var(--bg-card)] border border-rose-500/40 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+                  Discard Upload Draft?
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                  Are you sure you want to discard this draft session? All unsaved garment specifications and staged photos will be permanently deleted from local storage.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirmModal(false)}
+                className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
+              >
+                Keep Editing Draft
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDiscardDraft}
+                className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
+              >
+                Yes, Discard Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* AUDITING & SIMULATION TOOLS (Development-only)                            */}
+      {/* ========================================================================= */}
+      {isDev && (
+        <div className="pt-6 border-t border-[var(--border-card)]">
+          <button
+            type="button"
+            onClick={() => setShowTestingControls((prev) => !prev)}
+            className="text-[11px] font-mono text-[var(--gold-primary)] hover:underline flex items-center gap-1.5 cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>{showTestingControls ? 'Hide QA Simulation Controls' : 'Show Task 7 QA Simulation Controls (Dev Only)'}</span>
+          </button>
+
+          {showTestingControls && (
+            <div className="mt-3 p-4 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-3 animate-in fade-in">
+              <div>
+                <p className="text-xs font-bold text-[var(--text-heading)]">Development QA Simulation Triggers</p>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Use these controls to test edge cases, error states, and storage recovery without real corrupted files.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeDraft) {
+                      // Match the first item in closet
+                      const target = closet[0];
+                      if (target) {
+                        updateActiveDraft({
+                          name: target.name,
+                          brand: target.brand,
+                          category: target.category,
+                          subType: target.subType,
+                          color: target.color,
+                          duplicateWarningDismissed: false,
+                        });
+                      }
+                    }
+                  }}
+                  disabled={!activeDraft || stage !== 'form'}
+                  className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-[10px] font-semibold text-[var(--text-heading)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  Trigger Duplicate Garment Heuristic
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeDraft) {
+                      updateActiveDraft({
+                        name: '',
+                        color: '',
+                        status: 'needs_attention',
+                        needsReview: true,
+                      });
+                    }
+                  }}
+                  disabled={!activeDraft || stage !== 'form'}
+                  className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-[10px] font-semibold text-[var(--text-heading)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  Simulate Low-Confidence AI Draft
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeDraft) {
+                      updateActiveDraft({
+                        status: 'failed',
+                        errorMessage: 'Simulated image compression failure for QA testing.',
+                        errorCode: 'PROCESSING_FAILED',
+                      });
+                    }
+                  }}
+                  disabled={!activeDraft || stage !== 'form'}
+                  className="px-3 py-1.5 rounded-xl border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[10px] font-semibold hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  Simulate Processing Error
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentSim = getSimulateIndexedDBFailure();
+                    setSimulateIndexedDBFailure(!currentSim);
+                    setIsIndexedDBRestricted(!currentSim);
+                    if (!currentSim && drafts.length > 0) {
+                      saveDraftSession(drafts, stage, activeDraftIndex);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-[10px] font-semibold text-[var(--text-heading)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
+                >
+                  Toggle Simulated IndexedDB Failure ({getSimulateIndexedDBFailure() ? 'Active' : 'Off'})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('otd:storage-quota-exceeded', {
+                        detail: {
+                          message: 'Simulated storage quota exceeded event for testing browser error states.',
+                        },
+                      })
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold hover:bg-amber-500/10 transition-colors cursor-pointer"
+                >
+                  Simulate Storage Quota Event
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
