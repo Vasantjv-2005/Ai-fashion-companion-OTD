@@ -72,15 +72,23 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   );
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Handle ESC key to dismiss modal
+  // Handle ESC key to dismiss modal and restore focus
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -216,6 +224,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       aria-modal="true"
       aria-labelledby="onboarding-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       <div className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col lg:flex-row my-auto max-h-[94vh]">
         
@@ -404,7 +417,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       setFullName(e.target.value);
                       if (nameError) setNameError(null);
                     }}
-                    placeholder="e.g. Eleanor or Mustafa"
+                    placeholder="e.g. Eleanor or Julian"
                     className={`w-full pl-10 pr-4 py-3 rounded-2xl bg-[var(--bg-card-inner)] border text-xs sm:text-sm text-[var(--text-heading)] outline-none font-medium transition-all ${
                       nameError
                         ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, Send, Bookmark, RefreshCw, Play, Sun } from 'lucide-react';
+import { Sparkles, ArrowRight, Send, Bookmark, RefreshCw, Sun } from 'lucide-react';
 import { useCloset } from '../context/ClosetContext';
 
 interface HeroProps {
@@ -117,8 +117,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                   onClick={onExploreDemo}
                   className="px-6 py-4 rounded-full border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-black text-[var(--text-heading)] text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current text-[var(--gold-primary)]" />
-                  <span>Watch Video</span>
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                  <span>Explore AI Stylist</span>
                 </button>
               </div>
 

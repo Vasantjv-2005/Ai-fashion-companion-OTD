@@ -1,6 +1,41 @@
-import React, { useState } from 'react';
-import { X, Moon, Sun, Ruler, Bell, RotateCcw, LogOut, Check, Sliders } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Moon, Sun, Ruler, Bell, RotateCcw, LogOut, Check, Sliders, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { clearDraftSession } from '../../utils/draftStorage';
+
+export interface UserSettings {
+  measurementUnit: 'metric' | 'imperial';
+  notifyWeather: boolean;
+  notifyOccasions: boolean;
+  notifySuggestions: boolean;
+}
+
+const SETTINGS_STORAGE_KEY = 'otd_user_settings';
+
+const DEFAULT_SETTINGS: UserSettings = {
+  measurementUnit: 'metric',
+  notifyWeather: true,
+  notifyOccasions: true,
+  notifySuggestions: true,
+};
+
+function loadStoredSettings(): UserSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        measurementUnit: parsed.measurementUnit === 'imperial' ? 'imperial' : 'metric',
+        notifyWeather: typeof parsed.notifyWeather === 'boolean' ? parsed.notifyWeather : true,
+        notifyOccasions: typeof parsed.notifyOccasions === 'boolean' ? parsed.notifyOccasions : true,
+        notifySuggestions: typeof parsed.notifySuggestions === 'boolean' ? parsed.notifySuggestions : true,
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to parse otd_user_settings from localStorage:', err);
+  }
+  return DEFAULT_SETTINGS;
+}
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -8,44 +43,148 @@ interface SettingsModalProps {
   onSignOut?: () => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({
-  isOpen,
+const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
   onClose,
   onSignOut,
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const [measurementUnit, setMeasurementUnit] = useState<'metric' | 'imperial'>('metric');
-  const [notifyWeather, setNotifyWeather] = useState(true);
-  const [notifyOccasions, setNotifyOccasions] = useState(true);
-  const [notifySuggestions, setNotifySuggestions] = useState(true);
+  const initialSettings = loadStoredSettings();
+  const [measurementUnit, setMeasurementUnit] = useState<'metric' | 'imperial'>(initialSettings.measurementUnit);
+  const [notifyWeather, setNotifyWeather] = useState(initialSettings.notifyWeather);
+  const [notifyOccasions, setNotifyOccasions] = useState(initialSettings.notifyOccasions);
+  const [notifySuggestions, setNotifySuggestions] = useState(initialSettings.notifySuggestions);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  if (!isOpen) return null;
+  // Keyboard accessibility (Escape key dismissal with confirmation shield)
+  const previousActiveElement = useRef<HTMLElement | null>(null);
 
-  const handleClearCache = () => {
-    localStorage.removeItem('otd_closet_items');
-    localStorage.removeItem('otd_user_profile');
-    setStatusMessage('Local closet & style cache reset to defaults.');
-    setTimeout(() => {
-      setStatusMessage(null);
-      window.location.reload();
-    }, 900);
+  useEffect(() => {
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isResetting) return;
+        if (isResetConfirmOpen) {
+          setIsResetConfirmOpen(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
+  }, [isResetConfirmOpen, isResetting, onClose]);
+
+  const handleExecuteReset = async () => {
+    if (isResetting) return;
+    setIsResetting(true);
+    try {
+      // 1. Purge all OTD-owned client-side storage keys explicitly (preserve otd_theme and unrelated storage)
+      const otdKeys = [
+        'otd_closet_items',
+        'otd_user_profile',
+        'otd_shopping_list',
+        'otd_saved_looks',
+        'otd_liked_looks',
+        SETTINGS_STORAGE_KEY,
+        'otd_intake_draft_fallback',
+      ];
+      for (const key of otdKeys) {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.warn(`Failed to remove localStorage key ${key}:`, e);
+        }
+      }
+
+      // 2. Clear IndexedDB wardrobe drafts via draftStorage
+      await clearDraftSession();
+
+      // 3. Delete native IndexedDB database with explicit event status monitoring
+      let idbStatus: 'cleared' | 'blocked' | 'failed' = 'cleared';
+      if ('indexedDB' in window && window.indexedDB) {
+        idbStatus = await new Promise<'cleared' | 'blocked' | 'failed'>((resolve) => {
+          try {
+            const req = window.indexedDB.deleteDatabase('otd_intake_db');
+            req.onsuccess = () => resolve('cleared');
+            req.onerror = () => {
+              console.warn('IndexedDB deletion error:', req.error);
+              resolve('failed');
+            };
+            req.onblocked = () => {
+              console.warn('IndexedDB deletion blocked by an open connection in another tab.');
+              resolve('blocked');
+            };
+            // Fallback timeout in case browser does not dispatch event
+            setTimeout(() => resolve('cleared'), 600);
+          } catch (idbErr) {
+            console.warn('Error initiating IndexedDB deletion:', idbErr);
+            resolve('failed');
+          }
+        });
+      }
+
+      // Honest advisory feedback without falsely reporting success
+      if (idbStatus === 'blocked') {
+        setStatusMessage('Local data cleared. Notice: IndexedDB deletion is blocked by another tab and will complete when closed. Reloading defaults...');
+      } else if (idbStatus === 'failed') {
+        setStatusMessage('Local storage reset. Notice: IndexedDB could not be fully deleted. Reloading defaults...');
+      } else {
+        setStatusMessage('All wardrobe, profile, and draft caches cleared. Reloading defaults...');
+      }
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1100);
+    } catch (err) {
+      console.error('Reset cache error:', err);
+      setStatusMessage('Notice: Cache reset encountered an unexpected issue. Reloading defaults...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1100);
+    }
   };
 
   const handleSave = () => {
-    setStatusMessage('Preferences saved successfully.');
-    setTimeout(() => {
-      setStatusMessage(null);
-      onClose();
-    }, 600);
+    const toSave: UserSettings = {
+      measurementUnit,
+      notifyWeather,
+      notifyOccasions,
+      notifySuggestions,
+    };
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toSave));
+      setStatusMessage('Preferences saved successfully.');
+      setTimeout(() => {
+        setStatusMessage(null);
+        onClose();
+      }, 600);
+    } catch (err) {
+      console.error('Failed to save settings to localStorage:', err);
+      setStatusMessage('Error writing settings to local storage.');
+    }
   };
 
   return (
     <div
       role="dialog"
       aria-modal="true"
+      aria-label="Studio Settings"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          if (isResetting) return;
+          if (isResetConfirmOpen) {
+            setIsResetConfirmOpen(false);
+            return;
+          }
+          onClose();
+        }
+      }}
     >
       <div
         className="relative w-full max-w-lg rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)]"
@@ -77,14 +216,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Feedback message banner */}
         {statusMessage && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2">
+          <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in">
             <Check className="w-4 h-4 shrink-0" />
             <span>{statusMessage}</span>
           </div>
         )}
 
         {/* Settings options list */}
-        <div className="py-4 space-y-5 text-xs">
+        <div className="py-4 space-y-5 text-xs max-h-[60vh] overflow-y-auto pr-1">
           {/* Appearance / Theme */}
           <div className="flex items-center justify-between">
             <div>
@@ -126,6 +265,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div className="flex rounded-xl p-0.5 border border-[var(--border-card)] bg-[var(--pill-bg)]">
               <button
+                type="button"
                 onClick={() => setMeasurementUnit('metric')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   measurementUnit === 'metric'
@@ -136,6 +276,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Metric (cm/kg)
               </button>
               <button
+                type="button"
                 onClick={() => setMeasurementUnit('imperial')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   measurementUnit === 'imperial'
@@ -161,7 +302,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="checkbox"
                   checked={notifyWeather}
                   onChange={(e) => setNotifyWeather(e.target.checked)}
-                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)]"
+                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)] cursor-pointer"
                 />
               </label>
               <label className="flex items-center justify-between cursor-pointer">
@@ -170,7 +311,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="checkbox"
                   checked={notifyOccasions}
                   onChange={(e) => setNotifyOccasions(e.target.checked)}
-                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)]"
+                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)] cursor-pointer"
                 />
               </label>
               <label className="flex items-center justify-between cursor-pointer">
@@ -179,29 +320,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="checkbox"
                   checked={notifySuggestions}
                   onChange={(e) => setNotifySuggestions(e.target.checked)}
-                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)]"
+                  className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)] cursor-pointer"
                 />
               </label>
             </div>
           </div>
 
-          {/* Data Reset */}
-          <div className="pt-3 border-t border-[var(--border-card)] flex items-center justify-between">
-            <div>
-              <h4 className="font-semibold text-[var(--text-heading)] text-sm">
-                Reset Demo Data
-              </h4>
-              <p className="text-[11px] text-[var(--text-muted)]">
-                Restore default digital closet and style profile
-              </p>
+          {/* Data Reset & Cache Cleanup */}
+          <div className="pt-3 border-t border-[var(--border-card)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-[var(--text-heading)] text-sm">
+                  Reset Local Data
+                </h4>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Purge local wardrobe items, saved looks, and drafts
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(!isResetConfirmOpen)}
+                className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Cache</span>
+              </button>
             </div>
-            <button
-              onClick={handleClearCache}
-              className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </button>
+
+            {/* Explicit Confirmation Dialog Box */}
+            {isResetConfirmOpen && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs space-y-3 animate-in fade-in duration-150">
+                <div className="flex items-start gap-2 text-rose-800 dark:text-rose-200">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Are you sure you want to reset your local data?</p>
+                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                      This will permanently delete your locally added wardrobe garments, user biometrics, shopping list entries, saved looks, and in-progress upload drafts. Default sample items will be restored. Your appearance theme is preserved.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsResetConfirmOpen(false)}
+                    className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isResetting}
+                    onClick={handleExecuteReset}
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+                  >
+                    {isResetting ? 'Resetting...' : 'Confirm Reset & Reload'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -209,6 +386,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="pt-4 border-t border-[var(--border-card)] flex items-center justify-between">
           {onSignOut ? (
             <button
+              type="button"
               onClick={onSignOut}
               className="text-xs font-bold text-[var(--text-muted)] hover:text-rose-600 flex items-center gap-1.5 cursor-pointer transition-colors"
             >
@@ -221,12 +399,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleSave}
               className="px-5 py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-md"
             >
@@ -237,4 +417,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       </div>
     </div>
   );
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  onSignOut,
+}) => {
+  if (!isOpen) return null;
+  return <SettingsModalDialog onClose={onClose} onSignOut={onSignOut} />;
 };

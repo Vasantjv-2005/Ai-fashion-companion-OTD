@@ -17,6 +17,7 @@ import { AddPieceModal } from './components/AddPieceModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AuthModal } from './components/AuthModal';
 import { AppStudio, type StudioTab } from './components/AppStudio';
+import { LegalModal } from './components/ui/LegalModal';
 
 interface StudioLayoutProps {
   isAddPieceModalOpen: boolean;
@@ -33,13 +34,26 @@ function StudioLayout({
   // Derive active Studio tab from current route path
   const isUploadRoute = location.pathname === '/closet/add';
   const path = location.pathname.replace(/^\//, '');
+  const validStudioTabs: StudioTab[] = [
+    'home',
+    'closet',
+    'stylist',
+    'saved',
+    'shopping',
+    'destinations',
+    'calendar',
+    'ideas',
+    'tryon',
+  ];
   const activeTab: StudioTab =
     isUploadRoute || path === 'closet'
       ? 'closet'
-      : (path === 'stylist' || path === 'saved' || path === 'shopping' ? (path as StudioTab) : 'home');
+      : (validStudioTabs.includes(path as StudioTab) ? (path as StudioTab) : 'home');
 
   const handleTabChange = (tab: StudioTab) => {
-    if (tab === 'home' || tab === 'closet' || tab === 'stylist' || tab === 'saved' || tab === 'shopping') {
+    if (tab === 'closet') {
+      navigate('/closet');
+    } else {
       navigate(`/${tab}`);
     }
   };
@@ -74,6 +88,7 @@ function AppContent() {
 
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isAddPieceModalOpen, setIsAddPieceModalOpen] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
 
   // Modal route identification
   const isLogin = location.pathname === '/login';
@@ -181,7 +196,10 @@ function AppContent() {
       </main>
 
       {/* Luxury Footer */}
-      <Footer />
+      <Footer
+        onPrivacyClick={() => setLegalModalType('privacy')}
+        onTermsClick={() => setLegalModalType('terms')}
+      />
 
       {/* Direct APK Download Modal */}
       <ApkModal
@@ -215,6 +233,10 @@ function AppContent() {
           <Route path="/stylist" element={null} />
           <Route path="/saved" element={null} />
           <Route path="/shopping" element={null} />
+          <Route path="/destinations" element={null} />
+          <Route path="/calendar" element={null} />
+          <Route path="/ideas" element={null} />
+          <Route path="/tryon" element={null} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -261,6 +283,13 @@ function AppContent() {
           }
         />
       )}
+
+      {/* Legal Information Modal */}
+      <LegalModal
+        isOpen={legalModalType !== null}
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
+      />
     </>
   );
 }

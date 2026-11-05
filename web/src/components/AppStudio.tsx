@@ -180,6 +180,85 @@ function getDynamicDateOptions(): string[] {
   ];
 }
 
+export interface SavedLookItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  occasion: string;
+  venue: string;
+  weather: string;
+  img: string;
+  piecesSummary: string;
+  date: string;
+  isCustom?: boolean;
+}
+
+const DEFAULT_SAVED_LOOKS: SavedLookItem[] = [
+  {
+    id: 'smart-casual-1',
+    title: 'Smart Casual',
+    subtitle: "For Today's Weather",
+    occasion: 'Casual Evening',
+    venue: 'Olive Bistro',
+    weather: '28°C Breezy',
+    img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=500&q=80',
+    piecesSummary: 'Linen Camp Shirt, Gurkha Chinos, Belgian Loafers',
+    date: 'Curated Ensemble',
+  },
+  {
+    id: 'date-night-1',
+    title: 'Date Night',
+    subtitle: 'Classy & Effortless',
+    occasion: 'Date Night',
+    venue: "L'amore, Banjara Hills",
+    weather: '27°C Partly Cloudy',
+    img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
+    piecesSummary: 'Silk-Cashmere Knit, Flannel Pleated Trousers, Suede Loafers',
+    date: 'Curated Ensemble',
+  },
+  {
+    id: 'office-ready-1',
+    title: 'Office Ready',
+    subtitle: 'Clean & Polished',
+    occasion: 'Executive Presentation',
+    venue: 'Executive Boardroom',
+    weather: '24°C Climate Controlled',
+    img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=500&q=80',
+    piecesSummary: 'Sea Island Cotton Shirt, Navy Hopsack Blazer, Oxford Shoes',
+    date: 'Curated Ensemble',
+  },
+];
+
+const loadStoredSavedLooks = (): SavedLookItem[] => {
+  try {
+    const raw = localStorage.getItem('otd_saved_looks');
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse otd_saved_looks from localStorage:', err);
+  }
+  return DEFAULT_SAVED_LOOKS;
+};
+
+const loadStoredLikedLooks = (): string[] => {
+  try {
+    const raw = localStorage.getItem('otd_liked_looks');
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse otd_liked_looks from localStorage:', err);
+  }
+  return ['smart-casual-1', 'date-night-1'];
+};
+
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
@@ -202,10 +281,54 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     checkItemOwnership
   } = useCloset();
 
+  // Neutral name fallbacks eliminating hardcoded developer overrides
+  const userDisplayName =
+    profile.name && profile.name.trim() && profile.name !== 'Curator'
+      ? profile.name
+      : 'Guest Curator';
+  const userGreetingName =
+    profile.name && profile.name.trim() && profile.name !== 'Curator'
+      ? profile.name.split(' ')[0]
+      : 'Curator';
+
   // Live count of missing / unacquired shopping list items for badge indication
   const unacquiredShoppingCount = useMemo(() => {
     return shoppingList.filter((item) => !checkItemOwnership(item).isOwned).length;
   }, [shoppingList, checkItemOwnership]);
+
+  // Dynamic week calendar calculation (Task 9B)
+  const weekScheduleDays = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const distToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + distToMon);
+
+    const templateOccasions = [
+      { name: 'Mon', occasion: "Dinner at Bistro", planned: true, img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=300&q=80' },
+      { name: 'Tue', occasion: 'Office Presentation', planned: true, img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=300&q=80' },
+      { name: 'Wed', occasion: 'Client Lunch', planned: false },
+      { name: 'Thu', occasion: 'Art Gallery Opening', planned: true, img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=300&q=80' },
+      { name: 'Fri', occasion: 'Casual Friday & Drinks', planned: false },
+      { name: 'Sat', occasion: 'Rooftop Lounge Gathering', planned: true, img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=300&q=80' },
+      { name: 'Sun', occasion: 'Weekend Brunch', planned: false },
+    ];
+
+    return templateOccasions.map((template, idx) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + idx);
+      const isToday = d.toDateString() === now.toDateString();
+      const dayNum = d.getDate();
+      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+      return {
+        ...template,
+        key: `week-day-${idx}-${dayNum}-${monthShort}`,
+        day: dayNum.toString(),
+        month: monthShort,
+        isToday,
+      };
+    });
+  }, []);
 
   // Navigation tab state
   const [internalTab, setInternalTab] = useState<StudioTab>(controlledActiveTab || 'home');
@@ -237,43 +360,26 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Home search bar
   const [homeSearchQuery, setHomeSearchQuery] = useState('');
 
-  // Favorites / Saved Looks state
-  const [likedLooks, setLikedLooks] = useState<string[]>(['smart-casual-1', 'date-night-1']);
-  const [savedLooksList, setSavedLooksList] = useState([
-    {
-      id: 'smart-casual-1',
-      title: 'Smart Casual',
-      subtitle: "For Today's Weather",
-      occasion: 'Casual Evening',
-      venue: 'Olive Bistro',
-      weather: '28°C Breezy',
-      img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=500&q=80',
-      piecesSummary: 'Linen Camp Shirt, Gurkha Chinos, Belgian Loafers',
-      date: 'Saved Oct 16',
-    },
-    {
-      id: 'date-night-1',
-      title: 'Date Night',
-      subtitle: 'Classy & Effortless',
-      occasion: 'Date Night',
-      venue: "L'amore, Banjara Hills",
-      weather: '27°C Partly Cloudy',
-      img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
-      piecesSummary: 'Silk-Cashmere Knit, Flannel Pleated Trousers, Suede Loafers',
-      date: 'Saved Oct 17',
-    },
-    {
-      id: 'office-ready-1',
-      title: 'Office Ready',
-      subtitle: 'Clean & Polished',
-      occasion: 'Executive Presentation',
-      venue: 'Executive Boardroom',
-      weather: '24°C Climate Controlled',
-      img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=500&q=80',
-      piecesSummary: 'Sea Island Cotton Shirt, Navy Hopsack Blazer, Oxford Shoes',
-      date: 'Saved Oct 18',
-    },
-  ]);
+  // Favorites / Saved Looks state (Task 9A Persistence)
+  const [likedLooks, setLikedLooks] = useState<string[]>(loadStoredLikedLooks);
+  const [savedLooksList, setSavedLooksList] = useState<SavedLookItem[]>(loadStoredSavedLooks);
+
+  // Synchronize saved looks and likes to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('otd_saved_looks', JSON.stringify(savedLooksList));
+    } catch (err) {
+      console.warn('Failed to persist otd_saved_looks:', err);
+    }
+  }, [savedLooksList]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('otd_liked_looks', JSON.stringify(likedLooks));
+    } catch (err) {
+      console.warn('Failed to persist otd_liked_looks:', err);
+    }
+  }, [likedLooks]);
 
   // Plan Your Look Wizard State (Screenshots 1 & 2)
   const [plannerStep, setPlannerStep] = useState<1 | 2 | 3>(1);
@@ -513,6 +619,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     const lookId = `curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`;
     toggleLike(lookId);
     if (!savedLooksList.some((look) => look.id === lookId)) {
+      const todayFormatted = new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
       setSavedLooksList((prev) => [
         {
           id: lookId,
@@ -523,23 +633,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           weather: isWeatherSkipped ? 'Climate-Agnostic' : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
           img: effectiveSlots[0]?.imageUrl || 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
           piecesSummary: effectiveSlots.map((s) => s.name).slice(0, 3).join(', '),
-          date: 'Just now',
+          date: `Saved ${todayFormatted}`,
+          isCustom: true,
         },
         ...prev,
       ]);
     }
   };
 
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>([
-    {
-      sender: 'user',
-      text: "I'm going to L'amore tonight for a date. Suggest an outfit from my wardrobe.",
-      time: '8:02 PM',
-    },
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(() => [
     {
       sender: 'ai',
-      text: "Here are some outfit options for L'amore based on the fine dining ambience, 24°C mild evening conditions and your minimalist style. How does this look feel to you?",
-      time: '8:03 PM',
+      text: "Welcome to your AI Stylist Concierge. Ask me to refine silhouettes, adapt garments to weather shifts, or optimize formality for your venue.",
+      time: 'Just now',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -562,7 +668,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     return () => window.removeEventListener('otd:storage-quota-exceeded', handleStorageExceeded);
   }, []);
 
-  // Keyboard accessibility for closet modals (Inspection & Delete dialog)
+  // Keyboard accessibility for closet & studio modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -570,12 +676,20 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           setItemToDelete(null);
         } else if (selectedClosetItem) {
           setSelectedClosetItem(null);
+        } else if (isHelpOpen) {
+          setIsHelpOpen(false);
+        } else if (isNotificationsOpen) {
+          setIsNotificationsOpen(false);
+        } else if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+        } else if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedClosetItem, itemToDelete]);
+  }, [itemToDelete, selectedClosetItem, isHelpOpen, isNotificationsOpen, isSettingsOpen, mobileMenuOpen]);
 
   // Toggle favorite
   const toggleLike = (id: string) => {
@@ -934,11 +1048,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               >
                 <img
                   src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80"
-                  alt={profile.name || 'Mustafa Ali'}
+                  alt={userDisplayName}
                   className="w-8 h-8 rounded-full object-cover border border-[var(--border-gold)] group-hover:scale-105 transition-transform"
                 />
                 <span className="text-xs font-semibold hidden sm:inline text-[var(--text-heading)]">
-                  {profile.name === 'Curator' ? 'Mustafa Ali' : profile.name}
+                  {userDisplayName}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-heading)] transition-colors" />
               </div>
@@ -971,7 +1085,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <div className="relative z-10 flex items-start justify-between gap-4">
                       <div>
                         <h2 className="font-playfair text-2xl sm:text-3xl lg:text-[32px] font-bold text-white tracking-tight">
-                          Hey {profile.name === 'Curator' ? 'Mustafa' : profile.name},
+                          Hey {userGreetingName},
                         </h2>
                         <p className="text-sm sm:text-base text-neutral-300 font-light mt-0.5">
                           What should we style today?
@@ -2936,22 +3050,27 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
               {/* Weekly Schedule Row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                {[
-                  { day: '14', name: 'Mon', occasion: "Dinner at L'amore", planned: true, img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=300&q=80' },
-                  { day: '15', name: 'Tue', occasion: 'Office Presentation', planned: true, img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=300&q=80' },
-                  { day: '16', name: 'Wed', occasion: 'Client Lunch', planned: false },
-                  { day: '17', name: 'Thu', occasion: 'Art Gallery Opening', planned: true, img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=300&q=80' },
-                  { day: '18', name: 'Fri', occasion: 'Casual Friday & Drinks', planned: false },
-                  { day: '19', name: 'Sat', occasion: 'Rooftop Lounge Party', planned: true, img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=300&q=80' },
-                  { day: '20', name: 'Sun', occasion: 'Weekend Brunch', planned: false },
-                ].map((item) => (
+                {weekScheduleDays.map((item) => (
                   <div
-                    key={item.day}
-                    className="p-3 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] flex flex-col justify-between space-y-2 hover:border-[var(--gold-primary)] transition-all"
+                    key={item.key}
+                    className={`p-3 rounded-2xl border bg-[var(--bg-card)] flex flex-col justify-between space-y-2 hover:border-[var(--gold-primary)] transition-all ${
+                      item.isToday
+                        ? 'border-[var(--gold-primary)] ring-1 ring-[var(--gold-primary)]/40 shadow-xs'
+                        : 'border-[var(--border-card)]'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase font-bold text-[var(--gold-primary)]">{item.name}</span>
-                      <span className="font-playfair text-sm font-bold text-[var(--text-heading)]">{item.day} Oct</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs uppercase font-bold text-[var(--gold-primary)]">{item.name}</span>
+                        {item.isToday && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--gold-primary)]/20 text-[var(--gold-primary)]">
+                            Today
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-playfair text-sm font-bold text-[var(--text-heading)]">
+                        {item.day} {item.month}
+                      </span>
                     </div>
 
                     {item.planned ? (
@@ -3102,7 +3221,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <img src={look.img} alt={look.title} className="w-full h-full object-cover" />
                           <button
                             onClick={() => {
-                              setSavedLooksList(savedLooksList.filter((l) => l.id !== look.id));
+                              setSavedLooksList((prev) => prev.filter((l) => l.id !== look.id));
+                              setLikedLooks((prev) => prev.filter((id) => id !== look.id));
                             }}
                             className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-rose-400 hover:text-rose-600 transition-colors cursor-pointer"
                             title="Remove from saved"
@@ -3170,7 +3290,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent flex flex-col justify-end p-4 text-white text-left">
                     <p className="font-playfair text-base sm:text-lg font-bold">
-                      {profile.name === 'Curator' ? 'Mustafa Ali' : profile.name} ({profile.height || '178 cm'} • {profile.bodyShape || 'Athletic'})
+                      {userDisplayName} ({profile.height || '178 cm'} • {profile.bodyShape || 'Athletic'})
                     </p>
                     <p className="text-xs text-amber-300 font-mono">Draped: {synthesizedOutfit.title} (Size M)</p>
                   </div>
