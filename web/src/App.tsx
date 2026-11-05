@@ -34,10 +34,12 @@ function StudioLayout({
   const isUploadRoute = location.pathname === '/closet/add';
   const path = location.pathname.replace(/^\//, '');
   const activeTab: StudioTab =
-    isUploadRoute || path === 'closet' ? 'closet' : (path === 'stylist' || path === 'saved' ? path : 'home');
+    isUploadRoute || path === 'closet'
+      ? 'closet'
+      : (path === 'stylist' || path === 'saved' || path === 'shopping' ? (path as StudioTab) : 'home');
 
   const handleTabChange = (tab: StudioTab) => {
-    if (tab === 'home' || tab === 'closet' || tab === 'stylist' || tab === 'saved') {
+    if (tab === 'home' || tab === 'closet' || tab === 'stylist' || tab === 'saved' || tab === 'shopping') {
       navigate(`/${tab}`);
     }
   };
@@ -212,6 +214,7 @@ function AppContent() {
           <Route path="/closet/add" element={null} />
           <Route path="/stylist" element={null} />
           <Route path="/saved" element={null} />
+          <Route path="/shopping" element={null} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

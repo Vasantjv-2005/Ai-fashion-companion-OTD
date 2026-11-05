@@ -1,6 +1,16 @@
-import React from 'react';
-import { CheckCircle2, AlertCircle, ShieldCheck, Tag, HelpCircle, ArrowLeftRight } from 'lucide-react';
-import type { ClosetItem } from '../../context/ClosetContext';
+import React, { useState } from 'react';
+import {
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Tag,
+  HelpCircle,
+  ArrowLeftRight,
+  ShoppingBag,
+  Check,
+  X
+} from 'lucide-react';
+import { useCloset, type ClosetItem } from '../../context/ClosetContext';
 import type { OutfitSlotItem } from './AvatarOutfitCanvas';
 
 interface OutfitSlotsListProps {
@@ -9,6 +19,12 @@ interface OutfitSlotsListProps {
   onSlotClick?: (slot: OutfitSlotItem) => void;
   onSlotChangeClick?: (slot: OutfitSlotItem) => void;
   selectedSlotKey?: string;
+  outfitContext?: {
+    occasion?: string;
+    venue?: string;
+    outfitTitle?: string;
+  };
+  onNavigateToShopping?: () => void;
 }
 
 const SLOT_ORDER = ['outerwear', 'top', 'bottom', 'footwear', 'accessory'] as const;
@@ -35,18 +51,69 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
   onSlotClick,
   onSlotChangeClick,
   selectedSlotKey,
+  outfitContext,
+  onNavigateToShopping,
 }) => {
+  const { shoppingList, addToShoppingList, removeFromShoppingList, isItemInShoppingList } = useCloset();
+  const [feedback, setFeedback] = useState<{ slot: string; message: string; type: 'success' | 'info' } | null>(null);
+
   // Strict frontend verification function:
   // An item can only receive an 'owned' status if its closetItemId strictly matches an ID in the user's active closet.
   const verifyOwnership = (slot: OutfitSlotItem): { isVerifiedOwned: boolean; verifiedItem?: ClosetItem } => {
     if (!slot.closetItemId) {
       return { isVerifiedOwned: false };
     }
-    const matched = closet.find((c) => c.id === slot.closetItemId);
+    const matched = closet.find((c) => c.id === slot.closetItemId && !c.isArchived);
     return {
       isVerifiedOwned: Boolean(matched),
       verifiedItem: matched,
     };
+  };
+
+  const handleAddToShopping = (slot: OutfitSlotItem) => {
+    const result = addToShoppingList({
+      name: slot.name,
+      category: slot.category || slot.slot,
+      subType: slot.category || slot.slotLabel,
+      color: slot.color,
+      fit: slot.fit,
+      formality: slot.formality,
+      icon: slot.icon,
+      imageUrl: slot.imageUrl,
+      stylingNote: slot.stylingNote,
+      outfitContext: outfitContext ? {
+        occasion: outfitContext.occasion,
+        venue: outfitContext.venue,
+        outfitTitle: outfitContext.outfitTitle,
+      } : undefined,
+    });
+
+    setFeedback({
+      slot: slot.slot,
+      message: result.message,
+      type: result.success ? 'success' : 'info',
+    });
+
+    setTimeout(() => {
+      setFeedback((current) => (current?.slot === slot.slot ? null : current));
+    }, 3200);
+  };
+
+  const handleRemoveFromShopping = (slot: OutfitSlotItem) => {
+    const item = shoppingList.find(
+      (i) => i.name.trim().toLowerCase() === slot.name.trim().toLowerCase()
+    );
+    if (item) {
+      removeFromShoppingList(item.id);
+      setFeedback({
+        slot: slot.slot,
+        message: `Removed from shopping list`,
+        type: 'info',
+      });
+      setTimeout(() => {
+        setFeedback((current) => (current?.slot === slot.slot ? null : current));
+      }, 3000);
+    }
   };
 
   // Sort slots in logical anatomical order: Outerwear -> Top -> Bottom -> Footwear -> Accessory
@@ -67,9 +134,22 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
             Ensemble Anatomy
           </h3>
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] bg-[var(--pill-bg)] px-2.5 py-1 rounded-full border border-[var(--border-card)]">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Strict Closet Verification</span>
+        <div className="flex items-center gap-2">
+          {onNavigateToShopping && (
+            <button
+              type="button"
+              onClick={onNavigateToShopping}
+              className="flex items-center gap-1.5 text-[10px] font-mono font-medium text-[var(--gold-primary)] hover:opacity-80 bg-[var(--pill-bg)] px-2.5 py-1 rounded-full border border-[var(--border-card)] cursor-pointer"
+              title="Open your saved Shopping List"
+            >
+              <ShoppingBag className="w-3 h-3" />
+              <span>Shopping List ({shoppingList.length})</span>
+            </button>
+          )}
+          <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] bg-[var(--pill-bg)] px-2.5 py-1 rounded-full border border-[var(--border-card)]">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Strict Closet Verification</span>
+          </div>
         </div>
       </div>
 
@@ -198,24 +278,93 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
                   )}
 
                   {/* Slot Replacement Action Row */}
-                  <div className="flex items-center justify-between pt-2 mt-1 border-t border-[var(--border-hairline)]">
-                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                      {isVerifiedOwned ? 'Verified Closet Item' : 'Wardrobe Gap'}
-                    </span>
-                    <button
-                      type="button"
-                      id={`change-piece-btn-${slot.slot}`}
-                      data-slot={slot.slot}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onSlotChangeClick) onSlotChangeClick(slot);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)] hover:text-[var(--gold-primary)] transition-all cursor-pointer shadow-2xs group"
-                      title={`Swap ${slot.slotLabel} with another piece from your closet`}
-                    >
-                      <ArrowLeftRight className="w-3 h-3 text-[var(--gold-primary)] group-hover:rotate-180 transition-transform duration-300" />
-                      <span>Change Piece</span>
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 mt-1 border-t border-[var(--border-hairline)]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                        {isVerifiedOwned ? 'Verified Closet Item' : 'Wardrobe Gap'}
+                      </span>
+                      {feedback?.slot === slot.slot && (
+                        <span
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
+                            feedback.type === 'success'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-[var(--gold-primary)]/15 text-[var(--gold-primary)]'
+                          }`}
+                        >
+                          {feedback.message}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Feature A: Add to Shopping List action exclusively for missing garments (never for owned pieces) */}
+                      {isGap && (
+                        <>
+                          {isItemInShoppingList({ name: slot.name, color: slot.color, subType: slot.category }) ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                id={`in-shopping-list-btn-${slot.slot}`}
+                                data-slot={slot.slot}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onNavigateToShopping) onNavigateToShopping();
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)] text-[var(--gold-primary)] hover:bg-[var(--gold-primary)]/25 transition-all cursor-pointer shadow-2xs"
+                                title="Already in Shopping List. Click to open shopping ledger."
+                              >
+                                <Check className="w-3 h-3 text-[var(--gold-primary)] stroke-[3]" />
+                                <span>In Shopping List</span>
+                              </button>
+                              <button
+                                type="button"
+                                id={`remove-shopping-btn-${slot.slot}`}
+                                data-slot={slot.slot}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveFromShopping(slot);
+                                }}
+                                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                title="Remove from Shopping List"
+                                aria-label="Remove from Shopping List"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              id={`add-shopping-btn-${slot.slot}`}
+                              data-slot={slot.slot}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddToShopping(slot);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-[var(--gold-primary)] text-black dark:text-neutral-900 hover:opacity-90 transition-all cursor-pointer shadow-2xs group"
+                              title="Save this missing piece to your wardrobe shopping list"
+                            >
+                              <ShoppingBag className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                              <span>Add to Shopping List</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        id={`change-piece-btn-${slot.slot}`}
+                        data-slot={slot.slot}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSlotChangeClick) onSlotChangeClick(slot);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)] hover:text-[var(--gold-primary)] transition-all cursor-pointer shadow-2xs group"
+                        title={`Swap ${slot.slotLabel} with another piece from your closet`}
+                      >
+                        <ArrowLeftRight className="w-3 h-3 text-[var(--gold-primary)] group-hover:rotate-180 transition-transform duration-300" />
+                        <span>Change Piece</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

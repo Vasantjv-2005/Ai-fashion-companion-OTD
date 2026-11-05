@@ -39,7 +39,8 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpDown,
-  AlertCircle
+  AlertCircle,
+  ShoppingBag
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
@@ -60,6 +61,7 @@ import { OutfitGenerationLoader } from './ui/OutfitGenerationLoader';
 import { GarmentSwapModal } from './ui/GarmentSwapModal';
 import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
 import { ClosetUploadView } from './ClosetUploadView';
+import { ShoppingListView } from './ShoppingListView';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
@@ -76,6 +78,7 @@ export type StudioTab =
   | 'home'
   | 'closet'
   | 'stylist'
+  | 'shopping'
   | 'ideas'
   | 'tryon'
   | 'destinations'
@@ -188,7 +191,21 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackFromUpload,
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const { closet, profile, deleteClosetItem, updateClosetItem, archiveClosetItem, restoreClosetItem } = useCloset();
+  const {
+    closet,
+    profile,
+    deleteClosetItem,
+    updateClosetItem,
+    archiveClosetItem,
+    restoreClosetItem,
+    shoppingList,
+    checkItemOwnership
+  } = useCloset();
+
+  // Live count of missing / unacquired shopping list items for badge indication
+  const unacquiredShoppingCount = useMemo(() => {
+    return shoppingList.filter((item) => !checkItemOwnership(item).isOwned).length;
+  }, [shoppingList, checkItemOwnership]);
 
   // Navigation tab state
   const [internalTab, setInternalTab] = useState<StudioTab>(controlledActiveTab || 'home');
@@ -752,6 +769,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 { id: 'home', label: 'Home', icon: Home },
                 { id: 'closet', label: 'My Closet', icon: Shirt, badge: closet.length },
                 { id: 'stylist', label: 'AI Stylist', icon: Sparkles },
+                {
+                  id: 'shopping',
+                  label: 'Shopping List',
+                  icon: ShoppingBag,
+                  badge: unacquiredShoppingCount > 0 ? unacquiredShoppingCount : undefined,
+                },
                 { id: 'ideas', label: 'Create Look', icon: Shirt },
                 { id: 'destinations', label: 'Destination Mode', icon: Compass },
                 { id: 'tryon', label: 'Virtual Try-On', icon: Camera },
@@ -2358,6 +2381,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             closet={closet}
                             onSlotClick={handleOpenSwapModal}
                             onSlotChangeClick={handleOpenSwapModal}
+                            outfitContext={{
+                              occasion: selectedOccasion,
+                              venue: selectedVenue.name || destinationSearch,
+                              outfitTitle: synthesizedOutfit.title,
+                            }}
+                            onNavigateToShopping={() => setActiveTab('shopping')}
                           />
 
                           {/* Preserved Stylist Concierge Chat Box with 7 Refinement Preferences */}
@@ -3162,6 +3191,23 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             </div>
           )}
 
+          {/* ========================================================================= */}
+          {/* TAB: WARDROBE-AWARE SHOPPING LIST (TASK 8) */}
+          {/* ========================================================================= */}
+          {activeTab === 'shopping' && (
+            <ShoppingListView
+              onNavigateToStylist={() => {
+                setActiveTab('stylist');
+                setPlannerStep(1);
+              }}
+              onNavigateToCloset={(searchTerm) => {
+                if (searchTerm) setClosetSearch(searchTerm);
+                setActiveTab('closet');
+              }}
+              onOpenAddPiece={onOpenAddPiece}
+            />
+          )}
+
         </div>
 
       </div>
@@ -3194,6 +3240,23 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                onClick={() => {
+                  setActiveTab('shopping');
+                  setMobileMenuOpen(false);
+                }}
+                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center justify-between font-semibold col-span-2 bg-[var(--pill-bg)]/50"
+              >
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-[var(--gold-primary)]" />
+                  <span>Wardrobe Shopping List</span>
+                </div>
+                {unacquiredShoppingCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold bg-[var(--gold-primary)]/15 text-[var(--gold-primary)]">
+                    {unacquiredShoppingCount} missing
+                  </span>
+                )}
+              </button>
               <button
                 onClick={() => {
                   setActiveTab('destinations');

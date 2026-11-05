@@ -51,6 +51,88 @@ export interface OutfitRecommendation {
   harmonyScore: number;
 }
 
+export interface ShoppingListItem {
+  id: string;
+  name: string;
+  category: ClosetItem['category'] | string;
+  subType?: string;
+  brand?: string;
+  color?: string;
+  fit?: string;
+  formality?: number;
+  icon?: string;
+  imageUrl?: string;
+  stylingNote?: string;
+  outfitContext?: {
+    occasion?: string;
+    venue?: string;
+    outfitTitle?: string;
+  };
+  addedAt: string; // ISO 8601
+}
+
+export interface OwnershipMatchResult {
+  isOwned: boolean;
+  matchedItem?: ClosetItem;
+}
+
+export interface AddShoppingListResult {
+  success: boolean;
+  isAlreadyOwned: boolean;
+  isDuplicate: boolean;
+  message: string;
+  item?: ShoppingListItem;
+}
+
+/**
+ * Carefully verifies whether a garment is already owned in the user's active closet.
+ * Uses exact name matching, or careful (subType AND color) matching.
+ * Never matches on broad category alone.
+ */
+export function checkGarmentInCloset(
+  closet: ClosetItem[],
+  garment: { name: string; category?: string; subType?: string; color?: string }
+): OwnershipMatchResult {
+  const activeCloset = closet.filter((item) => !item.isArchived);
+  const targetName = garment.name.trim().toLowerCase();
+  const targetColor = garment.color ? garment.color.trim().toLowerCase() : '';
+  const targetSubType = garment.subType ? garment.subType.trim().toLowerCase() : '';
+
+  // 1. Exact or tight name match against active closet items
+  const nameMatch = activeCloset.find((item) => {
+    const itemName = item.name.trim().toLowerCase();
+    if (itemName === targetName) return true;
+    if (targetName.length > 6 && itemName.includes(targetName)) return true;
+    if (itemName.length > 6 && targetName.includes(itemName)) return true;
+    return false;
+  });
+  if (nameMatch) {
+    return { isOwned: true, matchedItem: nameMatch };
+  }
+
+  // 2. Specific SubType + Color match (both must match, avoiding broad category false positives)
+  if (targetSubType && targetColor) {
+    const attributeMatch = activeCloset.find((item) => {
+      const itemSubType = (item.subType || '').trim().toLowerCase();
+      const itemColor = (item.color || '').trim().toLowerCase();
+      const subTypeMatches =
+        itemSubType === targetSubType ||
+        itemSubType.includes(targetSubType) ||
+        targetSubType.includes(itemSubType);
+      const colorMatches =
+        itemColor === targetColor ||
+        itemColor.includes(targetColor) ||
+        targetColor.includes(itemColor);
+      return subTypeMatches && colorMatches;
+    });
+    if (attributeMatch) {
+      return { isOwned: true, matchedItem: attributeMatch };
+    }
+  }
+
+  return { isOwned: false };
+}
+
 interface ClosetContextType {
   profile: UserProfile;
   updateProfile: (newProfile: Partial<UserProfile>) => void;
@@ -65,6 +147,13 @@ interface ClosetContextType {
   modifyOutfit: (instruction: string) => void;
   isGenerating: boolean;
   history: string[];
+  // Task 8: Wardrobe-Aware Shopping List
+  shoppingList: ShoppingListItem[];
+  addToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'addedAt'>) => AddShoppingListResult;
+  removeFromShoppingList: (id: string) => void;
+  clearShoppingList: () => void;
+  isItemInShoppingList: (query: { name: string; color?: string; subType?: string } | string) => boolean;
+  checkItemOwnership: (garment: { name: string; category?: string; subType?: string; color?: string }) => OwnershipMatchResult;
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -144,6 +233,32 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentOutfit, setCurrentOutfit] = useState<OutfitRecommendation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+
+  // Task 8: Wardrobe-Aware Shopping List state
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('otd_shopping_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse otd_shopping_list from localStorage:', e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('otd_shopping_list', JSON.stringify(shoppingList));
+    } catch (err) {
+      if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22)) {
+        console.error('LocalStorage quota exceeded when saving shopping list:', err);
+      }
+    }
+  }, [shoppingList]);
 
   useEffect(() => {
     try {
@@ -315,6 +430,98 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, 450);
   };
 
+  const checkItemOwnership = (garment: { name: string; category?: string; subType?: string; color?: string }): OwnershipMatchResult => {
+    return checkGarmentInCloset(closet, garment);
+  };
+
+  const isItemInShoppingList = (query: { name: string; color?: string; subType?: string } | string): boolean => {
+    const nameToMatch = (typeof query === 'string' ? query : query.name).trim().toLowerCase();
+    const colorToMatch = typeof query === 'object' && query.color ? query.color.trim().toLowerCase() : '';
+    const subTypeToMatch = typeof query === 'object' && query.subType ? query.subType.trim().toLowerCase() : '';
+
+    return shoppingList.some((item) => {
+      const itemName = item.name.trim().toLowerCase();
+      if (itemName === nameToMatch) return true;
+      if (nameToMatch.length > 6 && (itemName.includes(nameToMatch) || nameToMatch.includes(itemName))) return true;
+
+      if (subTypeToMatch && colorToMatch && item.subType && item.color) {
+        const itemSubType = item.subType.trim().toLowerCase();
+        const itemColor = item.color.trim().toLowerCase();
+        const subTypeMatches =
+          itemSubType === subTypeToMatch ||
+          itemSubType.includes(subTypeToMatch) ||
+          subTypeToMatch.includes(itemSubType);
+        const colorMatches =
+          itemColor === colorToMatch ||
+          itemColor.includes(colorToMatch) ||
+          colorToMatch.includes(itemColor);
+        if (subTypeMatches && colorMatches) return true;
+      }
+      return false;
+    });
+  };
+
+  const addToShoppingList = (itemData: Omit<ShoppingListItem, 'id' | 'addedAt'>): AddShoppingListResult => {
+    // 1. Guard against adding garments already owned in active closet
+    const ownership = checkItemOwnership({
+      name: itemData.name,
+      category: itemData.category,
+      subType: itemData.subType,
+      color: itemData.color,
+    });
+    if (ownership.isOwned) {
+      return {
+        success: false,
+        isAlreadyOwned: true,
+        isDuplicate: false,
+        message: `"${itemData.name}" is already verified in your Digital Closet (${ownership.matchedItem?.name || 'Owned piece'}).`,
+        item: undefined,
+      };
+    }
+
+    // 2. Guard against duplicate shopping list entries
+    const isDuplicate = isItemInShoppingList({
+      name: itemData.name,
+      color: itemData.color,
+      subType: itemData.subType,
+    });
+    if (isDuplicate) {
+      const existing = shoppingList.find((i) => i.name.trim().toLowerCase() === itemData.name.trim().toLowerCase());
+      return {
+        success: false,
+        isAlreadyOwned: false,
+        isDuplicate: true,
+        message: `"${itemData.name}" is already on your shopping list.`,
+        item: existing,
+      };
+    }
+
+    // 3. Create fresh entry
+    const newItem: ShoppingListItem = {
+      ...itemData,
+      id: `shop_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      addedAt: new Date().toISOString(),
+    };
+
+    setShoppingList((prev) => [newItem, ...prev]);
+
+    return {
+      success: true,
+      isAlreadyOwned: false,
+      isDuplicate: false,
+      message: `Added "${itemData.name}" to your shopping list.`,
+      item: newItem,
+    };
+  };
+
+  const removeFromShoppingList = (id: string) => {
+    setShoppingList((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const clearShoppingList = () => {
+    setShoppingList([]);
+  };
+
   return (
     <ClosetContext.Provider
       value={{
@@ -330,7 +537,13 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         generateOutfit,
         modifyOutfit,
         isGenerating,
-        history
+        history,
+        shoppingList,
+        addToShoppingList,
+        removeFromShoppingList,
+        clearShoppingList,
+        isItemInShoppingList,
+        checkItemOwnership
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BrainCircuit, TrendingUp, Plus, Check, ArrowRight } from 'lucide-react';
-
+import { BrainCircuit, TrendingUp, Plus, Check, ArrowRight, ShoppingBag } from 'lucide-react';
+import { useCloset } from '../context/ClosetContext';
 
 interface GapItem {
   id: string;
@@ -15,6 +15,7 @@ interface GapItem {
 }
 
 export const GapIntelligence: React.FC = () => {
+  const { addToShoppingList, isItemInShoppingList } = useCloset();
   const [gaps, setGaps] = useState<GapItem[]>([
     {
       id: 'gap-1',
@@ -142,13 +143,49 @@ export const GapIntelligence: React.FC = () => {
                     <p className="text-xs text-[var(--text-body)] max-w-xl leading-relaxed">
                       {gap.rationale}
                     </p>
-                    <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--text-muted)]">
                       <span>Curated by:</span>
                       {gap.recommendedBrands.map((b, bIdx) => (
                         <span key={bIdx} className="bg-[var(--bg-card-inner)] px-2 py-0.5 rounded text-[var(--text-heading)] border border-[var(--border-card)] font-medium">
                           {b}
                         </span>
                       ))}
+
+                      {/* Shopping list synergy action */}
+                      {isItemInShoppingList(gap.title) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] bg-[var(--gold-primary)]/15 px-2 py-0.5 rounded-full border border-[var(--gold-primary)]/40 ml-auto">
+                          <Check className="w-3 h-3 text-[var(--gold-primary)] stroke-[3]" />
+                          <span>In Shopping List</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToShoppingList({
+                              name: gap.title,
+                              category: gap.category.toLowerCase().includes('outerwear')
+                                ? 'outerwear'
+                                : gap.category.toLowerCase().includes('footwear')
+                                ? 'footwear'
+                                : 'tops',
+                              subType: gap.category,
+                              stylingNote: gap.rationale,
+                              icon: gap.icon,
+                              brand: gap.recommendedBrands[0],
+                              outfitContext: {
+                                occasion: 'Capsule Wardrobe Expansion',
+                                outfitTitle: 'OTD Strategic Wardrobe Gap',
+                              },
+                            });
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] hover:text-black hover:bg-[var(--gold-primary)] dark:hover:text-black border border-[var(--border-gold)] px-2 py-0.5 rounded-full transition-all cursor-pointer shadow-2xs ml-auto"
+                          title="Add this gap recommendation to your shopping ledger"
+                        >
+                          <ShoppingBag className="w-2.5 h-2.5" />
+                          <span>Add to Shopping List</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
