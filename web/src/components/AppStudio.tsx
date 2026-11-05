@@ -381,6 +381,27 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     }
   }, [likedLooks]);
 
+  // Keyboard Escape dismissal for local Studio modals & drawers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (itemToDelete) {
+          setItemToDelete(null);
+        } else if (itemToEdit) {
+          setItemToEdit(null);
+        } else if (selectedClosetItem) {
+          setSelectedClosetItem(null);
+        } else if (isHelpOpen) {
+          setIsHelpOpen(false);
+        } else if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [itemToDelete, itemToEdit, selectedClosetItem, isHelpOpen, mobileMenuOpen]);
+
   // Plan Your Look Wizard State (Screenshots 1 & 2)
   const [plannerStep, setPlannerStep] = useState<1 | 2 | 3>(1);
   const [selectedOccasion, setSelectedOccasion] = useState('Date');

@@ -126,16 +126,22 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on open & handle Escape
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  // Focus input on open, handle Escape & restore focus
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => searchInputRef.current?.focus(), 100);
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
+    if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+    setTimeout(() => searchInputRef.current?.focus(), 100);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
   }, [isOpen, onClose]);
 
   const filteredCategories = useMemo(() => {
@@ -157,7 +163,9 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
       aria-modal="true"
       aria-labelledby="venue-category-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

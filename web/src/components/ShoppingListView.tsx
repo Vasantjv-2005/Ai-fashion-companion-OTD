@@ -86,6 +86,18 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   // Task 10: Wear-instead confirmation feedback
   const [wearInsteadNote, setWearInsteadNote] = useState<{ itemId: string; altName: string } | null>(null);
 
+  // Keyboard Escape listener for clear confirmation modal
+  useEffect(() => {
+    if (!confirmClearOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConfirmClearOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmClearOpen]);
+
   // Compute live ownership status and owned alternatives for every wishlist item
   const evaluatedItems = useMemo(() => {
     return shoppingList.map((item) => {
