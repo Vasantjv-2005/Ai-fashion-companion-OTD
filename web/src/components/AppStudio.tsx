@@ -885,7 +885,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 { id: 'stylist', label: 'AI Stylist', icon: Sparkles },
                 {
                   id: 'shopping',
-                  label: 'Shopping List',
+                  label: 'Wishlist',
                   icon: ShoppingBag,
                   badge: unacquiredShoppingCount > 0 ? unacquiredShoppingCount : undefined,
                 },

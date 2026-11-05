@@ -107,7 +107,7 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
       removeFromShoppingList(item.id);
       setFeedback({
         slot: slot.slot,
-        message: `Removed from shopping list`,
+        message: `Removed from wishlist`,
         type: 'info',
       });
       setTimeout(() => {
@@ -140,10 +140,10 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
               type="button"
               onClick={onNavigateToShopping}
               className="flex items-center gap-1.5 text-[10px] font-mono font-medium text-[var(--gold-primary)] hover:opacity-80 bg-[var(--pill-bg)] px-2.5 py-1 rounded-full border border-[var(--border-card)] cursor-pointer"
-              title="Open your saved Shopping List"
+              title="Open your saved Wishlist"
             >
               <ShoppingBag className="w-3 h-3" />
-              <span>Shopping List ({shoppingList.length})</span>
+              <span>Wishlist ({shoppingList.length})</span>
             </button>
           )}
           <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] bg-[var(--pill-bg)] px-2.5 py-1 rounded-full border border-[var(--border-card)]">
@@ -311,10 +311,10 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
                                   if (onNavigateToShopping) onNavigateToShopping();
                                 }}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)] text-[var(--gold-primary)] hover:bg-[var(--gold-primary)]/25 transition-all cursor-pointer shadow-2xs"
-                                title="Already in Shopping List. Click to open shopping ledger."
+                                title="Already in Wishlist. Click to open wardrobe wishlist."
                               >
                                 <Check className="w-3 h-3 text-[var(--gold-primary)] stroke-[3]" />
-                                <span>In Shopping List</span>
+                                <span>In Wishlist</span>
                               </button>
                               <button
                                 type="button"
@@ -325,8 +325,8 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
                                   handleRemoveFromShopping(slot);
                                 }}
                                 className="p-1 rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                                title="Remove from Shopping List"
-                                aria-label="Remove from Shopping List"
+                                title="Remove from Wishlist"
+                                aria-label="Remove from Wishlist"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -341,10 +341,10 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
                                 handleAddToShopping(slot);
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-[var(--gold-primary)] text-black dark:text-neutral-900 hover:opacity-90 transition-all cursor-pointer shadow-2xs group"
-                              title="Save this missing piece to your wardrobe shopping list"
+                              title="Save this missing piece to your wardrobe wishlist"
                             >
                               <ShoppingBag className="w-3 h-3 group-hover:scale-110 transition-transform" />
-                              <span>Add to Shopping List</span>
+                              <span>Add to Wishlist</span>
                             </button>
                           )}
                         </>

@@ -63,6 +63,7 @@ export interface ShoppingListItem {
   icon?: string;
   imageUrl?: string;
   stylingNote?: string;
+  estimatedBudget?: number; // Task 10: Optional estimated budget in INR
   outfitContext?: {
     occasion?: string;
     venue?: string;
@@ -82,6 +83,114 @@ export interface AddShoppingListResult {
   isDuplicate: boolean;
   message: string;
   item?: ShoppingListItem;
+}
+
+export interface OwnedAlternative {
+  item: ClosetItem;
+  matchReason: string;
+  compatibilityScore: number; // 0 - 100
+}
+
+/**
+ * Task 10: Owned-Only Alternatives
+ * Finds compatible alternatives already present in user's active Digital Closet.
+ * Uses deterministic category, silhouette, formality, and color compatibility rules.
+ * Never calls external APIs or claims AI generation.
+ */
+export function findOwnedAlternatives(
+  closet: ClosetItem[],
+  wishlistItem: { category?: string; subType?: string; color?: string; formality?: number; name: string }
+): OwnedAlternative[] {
+  const activeCloset = closet.filter((item) => !item.isArchived);
+  if (activeCloset.length === 0) return [];
+
+  const targetCategory = (wishlistItem.category || '').toLowerCase().trim();
+  const targetSubType = (wishlistItem.subType || '').toLowerCase().trim();
+  const targetColor = (wishlistItem.color || '').toLowerCase().trim();
+  const targetFormality = typeof wishlistItem.formality === 'number' ? wishlistItem.formality : 3;
+  const targetName = wishlistItem.name.toLowerCase().trim();
+
+  // Helper to normalize categories
+  const normalizeCat = (cat: string) => {
+    const c = cat.toLowerCase();
+    if (c.includes('top') || c.includes('shirt') || c.includes('sweater') || c.includes('hoodie')) return 'tops';
+    if (c.includes('bottom') || c.includes('pant') || c.includes('trouser') || c.includes('jean') || c.includes('short')) return 'bottoms';
+    if (c.includes('outer') || c.includes('jacket') || c.includes('coat') || c.includes('blazer')) return 'outerwear';
+    if (c.includes('foot') || c.includes('shoe') || c.includes('boot') || c.includes('sneaker') || c.includes('loafer')) return 'footwear';
+    if (c.includes('access') || c.includes('bag') || c.includes('watch') || c.includes('belt') || c.includes('scarf')) return 'accessories';
+    return c;
+  };
+
+  const normTargetCat = normalizeCat(targetCategory || targetName);
+  const scoredAlternatives: OwnedAlternative[] = [];
+
+  for (const item of activeCloset) {
+    // Avoid suggesting the exact same item if it's already an exact match
+    if (item.name.trim().toLowerCase() === targetName) continue;
+
+    const normItemCat = normalizeCat(item.category || item.name);
+    // Must match the same broad category
+    if (normTargetCat && normItemCat !== normTargetCat) {
+      continue;
+    }
+
+    let score = 25; // Base category match score
+    const reasons: string[] = [];
+
+    // 1. Silhouette / SubType match
+    const itemSubType = (item.subType || '').toLowerCase().trim();
+    if (targetSubType && itemSubType) {
+      if (itemSubType === targetSubType || targetSubType.includes(itemSubType) || itemSubType.includes(targetSubType)) {
+        score += 35;
+        reasons.push(`Direct silhouette match (${item.subType})`);
+      } else if (item.name.toLowerCase().includes(targetSubType) || targetName.includes(itemSubType)) {
+        score += 25;
+        reasons.push(`Similar silhouette style`);
+      }
+    }
+
+    // 2. Formality alignment (within ±1 on 1-5 scale)
+    const itemFormality = typeof item.formality === 'number' ? item.formality : 3;
+    const formalityDiff = Math.abs(itemFormality - targetFormality);
+    if (formalityDiff === 0) {
+      score += 25;
+      reasons.push(`Identical formality tier (${itemFormality}/5)`);
+    } else if (formalityDiff === 1) {
+      score += 15;
+      reasons.push(`Close formality tier (${itemFormality}/5)`);
+    }
+
+    // 3. Color synergy
+    const itemColor = (item.color || '').toLowerCase().trim();
+    const neutrals = ['black', 'white', 'ivory', 'cream', 'navy', 'grey', 'gray', 'charcoal', 'beige', 'camel', 'khaki'];
+    if (targetColor && itemColor) {
+      if (itemColor === targetColor || itemColor.includes(targetColor) || targetColor.includes(itemColor)) {
+        score += 20;
+        reasons.push(`Harmonious color match (${item.color})`);
+      } else if (neutrals.some((n) => itemColor.includes(n))) {
+        score += 12;
+        reasons.push(`Versatile neutral palette (${item.color})`);
+      }
+    } else if (neutrals.some((n) => itemColor.includes(n))) {
+      score += 10;
+      reasons.push(`Versatile neutral tone`);
+    }
+
+    // Determine headline reason
+    let primaryReason = reasons.length > 0 ? reasons.join(' • ') : `Compatible piece in your ${item.category} collection`;
+    if (score >= 70) {
+      primaryReason = `High wardrobe synergy: ${primaryReason}`;
+    }
+
+    scoredAlternatives.push({
+      item,
+      matchReason: primaryReason,
+      compatibilityScore: Math.min(100, score),
+    });
+  }
+
+  // Sort by highest compatibility score descending
+  return scoredAlternatives.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 }
 
 /**
@@ -147,9 +256,10 @@ interface ClosetContextType {
   modifyOutfit: (instruction: string) => void;
   isGenerating: boolean;
   history: string[];
-  // Task 8: Wardrobe-Aware Shopping List
+  // Task 8 & 10: Wardrobe-Aware Personal Wishlist
   shoppingList: ShoppingListItem[];
   addToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'addedAt'>) => AddShoppingListResult;
+  updateShoppingListItem: (id: string, updates: Partial<Omit<ShoppingListItem, 'id' | 'addedAt'>>) => void;
   removeFromShoppingList: (id: string) => void;
   clearShoppingList: () => void;
   isItemInShoppingList: (query: { name: string; color?: string; subType?: string } | string) => boolean;
@@ -234,14 +344,20 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isGenerating, setIsGenerating] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
 
-  // Task 8: Wardrobe-Aware Shopping List state
+  // Task 8 & 10: Wardrobe-Aware Personal Wishlist state
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => {
     try {
       const saved = localStorage.getItem('otd_shopping_list');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.map((item) => ({
+            ...item,
+            estimatedBudget:
+              typeof item.estimatedBudget === 'number' && !isNaN(item.estimatedBudget) && item.estimatedBudget >= 0
+                ? item.estimatedBudget
+                : undefined,
+          }));
         }
       }
     } catch (e) {
@@ -514,6 +630,22 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   };
 
+  const updateShoppingListItem = (id: string, updates: Partial<Omit<ShoppingListItem, 'id' | 'addedAt'>>) => {
+    setShoppingList((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const updated = { ...item, ...updates };
+        if (updates.estimatedBudget !== undefined) {
+          updated.estimatedBudget =
+            typeof updates.estimatedBudget === 'number' && !isNaN(updates.estimatedBudget) && updates.estimatedBudget >= 0
+              ? updates.estimatedBudget
+              : undefined;
+        }
+        return updated;
+      })
+    );
+  };
+
   const removeFromShoppingList = (id: string) => {
     setShoppingList((prev) => prev.filter((item) => item.id !== id));
   };
@@ -540,6 +672,7 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         history,
         shoppingList,
         addToShoppingList,
+        updateShoppingListItem,
         removeFromShoppingList,
         clearShoppingList,
         isItemInShoppingList,
