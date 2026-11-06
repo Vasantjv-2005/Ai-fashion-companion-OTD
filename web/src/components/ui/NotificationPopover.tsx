@@ -49,6 +49,24 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
 }) => {
   const [notifications, setNotifications] = React.useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
+  const previousActiveElement = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const markAllAsRead = () => {
@@ -74,8 +92,15 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Notifications"
       className="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       <div
         className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-5 text-[var(--text-body)] mt-16 animate-in slide-in-from-top-3 duration-200"

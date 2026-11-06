@@ -1,340 +1,603 @@
-import React, { useState } from 'react';
-import { X, Check, ArrowRight, ArrowLeft, Sparkles, MapPin, Calendar, User, Scale, Ruler } from 'lucide-react';
-import { useCloset } from '../context/ClosetContext';
+import React, { useState, useRef } from 'react';
+import {
+  X,
+  Check,
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  User,
+  Ruler,
+  Scale,
+  Camera,
+  Upload,
+  Trash2,
+  ShieldCheck,
+  Info,
+} from 'lucide-react';
+import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useFocusTrap } from '../utils/focusTrap';
 
-interface OnboardingModalProps {
+export interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete?: () => void;
+  onComplete?: (destination?: 'closet' | 'home') => void;
 }
 
-export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, onComplete }) => {
+export const OnboardingModal: React.FC<OnboardingModalProps> = ({
+  isOpen,
+  onClose,
+  onComplete,
+}) => {
   const { profile, updateProfile } = useCloset();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stepper state: 1 (Style Focus), 2 (Measurements - Optional), 3 (Avatar Setup - Optional)
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Step 1: Personal Details State
-  const [fullName, setFullName] = useState<string>(profile.name === 'Curator' ? 'Mustafa Ali' : profile.name);
+  // Step 1: Basic Style Profile
+  const [fullName, setFullName] = useState<string>(
+    profile.name && profile.name !== 'Curator' ? profile.name : ''
+  );
   const [nameError, setNameError] = useState<string | null>(null);
-  const [age, setAge] = useState<number>(22);
-  const [gender, setGender] = useState<string>('Male');
-  const [heightValue, setHeightValue] = useState<number>(178);
+  const [wardrobeFocus, setWardrobeFocus] = useState<WardrobeFocus>(
+    profile.wardrobeFocus || 'personalize'
+  );
+  const [selectedStyles, setSelectedStyles] = useState<string[]>(
+    profile.stylePersonas?.length
+      ? profile.stylePersonas
+      : ['Clean Minimalist', 'Smart Sartorial']
+  );
+
+  // Step 2: Optional Measurements & Silhouette
+  const [heightValue, setHeightValue] = useState<string>('');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
-  const [weightValue, setWeightValue] = useState<number>(70);
+  const [weightValue, setWeightValue] = useState<string>('');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [location, setLocation] = useState<string>('Hyderabad, India');
-  const [bodyShape, setBodyShape] = useState<string>('Athletic');
-  const [skinTone, setSkinTone] = useState<string>('Medium');
+  const [bodyShape, setBodyShape] = useState<string>(profile.bodyShape || '');
+  const [fitPreference, setFitPreference] = useState<string>(profile.preferredFit || 'Regular Fit');
+  const [selectedColours, setSelectedColours] = useState<string[]>(
+    profile.palettePreferences?.length
+      ? profile.palettePreferences
+      : ['Black', 'Ivory', 'Camel']
+  );
 
-  // Step 2: Style Preferences State
-  const [selectedStyles, setSelectedStyles] = useState<string[]>(['Minimal', 'Streetwear']);
-  const [fitPreference, setFitPreference] = useState<'Slim Fit' | 'Regular Fit' | 'Loose Fit'>('Slim Fit');
-  const [selectedColours, setSelectedColours] = useState<string[]>(['Black', 'Beige', 'White']);
-  const [preferredOutfitPieces, setPreferredOutfitPieces] = useState<string[]>(['Tops', 'Bottoms', 'Outerwear']);
-  const [formalityLevel, setFormalityLevel] = useState<string>('Smart Casual');
+  // Step 3: Optional Avatar Setup
+  const [avatarChoice, setAvatarChoice] = useState<'archetype' | 'custom_photo' | 'skipped'>(
+    profile.avatarOption || 'archetype'
+  );
+  const [avatarArchetype, setAvatarArchetype] = useState<string>(
+    profile.avatarArchetype || 'classic_tailored'
+  );
+  const [referencePhotoUrl, setReferencePhotoUrl] = useState<string | null>(
+    profile.referencePhotoUrl || null
+  );
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Step 3: Goals & Interests State
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([
-    'Look good in everyday life',
-    'Dress better for special occasions',
-    'Improve my personal style'
-  ]);
-  const [otherInterests, setOtherInterests] = useState<string[]>(['Fashion Trends', 'Streetwear']);
-  const [occasionsDressedFor, setOccasionsDressedFor] = useState<string[]>(['College', 'Dates', 'Casual Outings']);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 
+  // Toggle helper for style chips
   const toggleStyle = (style: string) => {
     if (selectedStyles.includes(style)) {
-      setSelectedStyles(selectedStyles.filter(s => s !== style));
+      if (selectedStyles.length > 1) {
+        setSelectedStyles(selectedStyles.filter((s) => s !== style));
+      }
     } else {
-      setSelectedStyles([...selectedStyles, style]);
+      if (selectedStyles.length < 3) {
+        setSelectedStyles([...selectedStyles, style]);
+      } else {
+        setSelectedStyles([...selectedStyles.slice(1), style]);
+      }
     }
   };
 
+  // Toggle helper for color palette
   const toggleColour = (col: string) => {
     if (selectedColours.includes(col)) {
-      setSelectedColours(selectedColours.filter(c => c !== col));
+      if (selectedColours.length > 1) {
+        setSelectedColours(selectedColours.filter((c) => c !== col));
+      }
     } else {
-      setSelectedColours([...selectedColours, col]);
+      if (selectedColours.length < 4) {
+        setSelectedColours([...selectedColours, col]);
+      }
     }
   };
 
-  const toggleGoal = (goal: string) => {
-    if (selectedGoals.includes(goal)) {
-      setSelectedGoals(selectedGoals.filter(g => g !== goal));
-    } else {
-      setSelectedGoals([...selectedGoals, goal]);
+  // Handle optional reference photo upload
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Please select a valid image file (JPEG, PNG, WebP).');
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Photo size exceeds 5MB limit. Please choose a smaller file.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setReferencePhotoUrl(ev.target?.result as string);
+      setAvatarChoice('custom_photo');
+    };
+    reader.onerror = () => {
+      setPhotoError('Failed to read image. Please try another file.');
+    };
+    reader.readAsDataURL(file);
   };
 
-  const toggleInterest = (interest: string) => {
-    if (otherInterests.includes(interest)) {
-      setOtherInterests(otherInterests.filter(i => i !== interest));
-    } else {
-      setOtherInterests([...otherInterests, interest]);
+  const handleRemovePhoto = () => {
+    setReferencePhotoUrl(null);
+    setPhotoError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+    setAvatarChoice('archetype');
   };
 
-  const toggleOccasion = (occ: string) => {
-    if (occasionsDressedFor.includes(occ)) {
-      setOccasionsDressedFor(occasionsDressedFor.filter(o => o !== occ));
-    } else {
-      setOccasionsDressedFor([...occasionsDressedFor, occ]);
+  // Profile save helper
+  const saveProfileData = (overrides?: {
+    avatarChoice?: 'archetype' | 'custom_photo' | 'skipped';
+  }) => {
+    const finalName = fullName.trim() || 'Curator';
+    const finalHeight = heightValue ? `${heightValue} ${heightUnit}` : profile.height || '';
+    const finalWeight = weightValue ? `${weightValue} ${weightUnit}` : profile.weight || '';
+
+    updateProfile({
+      name: finalName,
+      wardrobeFocus,
+      stylePersonas: selectedStyles,
+      height: finalHeight,
+      weight: finalWeight,
+      bodyShape: bodyShape || profile.bodyShape || 'Athletic / V-Taper',
+      preferredFit: fitPreference,
+      palettePreferences: selectedColours,
+      avatarOption: overrides?.avatarChoice || avatarChoice,
+      avatarArchetype,
+      referencePhotoUrl: referencePhotoUrl || undefined,
+    });
+  };
+
+  // Navigation handlers
+  const handleNextFromStep1 = () => {
+    if (!fullName.trim()) {
+      setNameError('Please enter your preferred name so OTD can personalize your looks.');
+      return;
     }
+    setNameError(null);
+    saveProfileData();
+    setCurrentStep(2);
+  };
+
+  const handleSkipMeasurements = () => {
+    saveProfileData();
+    setCurrentStep(3);
+  };
+
+  const handleNextFromStep2 = () => {
+    saveProfileData();
+    setCurrentStep(3);
+  };
+
+  const handleSkipAvatar = () => {
+    saveProfileData({ avatarChoice: 'skipped' });
+    if (onComplete) onComplete('closet');
+    onClose();
   };
 
   const handleFinish = () => {
-    updateProfile({
-      name: fullName,
-      height: `${heightValue} ${heightUnit}`,
-      bodyShape: `${bodyShape} (${skinTone})`,
-      stylePersonas: selectedStyles,
-      preferredFit: fitPreference,
-      palettePreferences: selectedColours,
-    });
-    if (onComplete) onComplete();
+    saveProfileData();
+    if (onComplete) onComplete('closet');
+    onClose();
+  };
+
+  const handleSkipDirectlyToCloset = () => {
+    saveProfileData({ avatarChoice: 'skipped' });
+    if (onComplete) onComplete('closet');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-      <div className="relative w-full max-w-7xl min-h-[92vh] max-h-[96vh] rounded-3xl overflow-hidden shadow-2xl bg-[#F7EFE0] text-[#1C1612] border border-[#E5D5BC] flex flex-col lg:flex-row">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div ref={modalRef} className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col lg:flex-row my-auto max-h-[94vh]">
         
-        {/* Close Button */}
+        {/* Top-Right Modal Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 z-20 w-9 h-9 rounded-full bg-black/10 hover:bg-black/20 text-[#1C1612] flex items-center justify-center transition-colors cursor-pointer"
-          aria-label="Close onboarding"
+          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+          aria-label="Close onboarding modal"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
-        {/* LEFT COLUMN: Haute Editorial Brand Sidebar (Identical to Screenshots 3, 4, 5) */}
-        <div className="w-full lg:w-72 xl:w-80 bg-[#EFE5D2] border-r border-[#E5D5BC] p-6 lg:p-8 flex flex-col justify-between relative shrink-0">
-          
-          <div>
-            {/* OTD Logo Artwork */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-14 rounded-lg overflow-hidden border border-[#D4AF37]/50 bg-[#F7EFE0] p-1 flex items-center justify-center shadow-sm">
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: Editorial Brand Presence (Desktop ≥ 1024px) */}
+        {/* ========================================================================= */}
+        <div className="hidden lg:flex w-72 xl:w-80 bg-[var(--bg-canvas-subtle)] border-r border-[var(--border-card)] p-7 flex-col justify-between shrink-0 select-none">
+          <div className="space-y-6">
+            
+            {/* OTD Official Wordmark & Monogram */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-12 rounded-lg border border-[var(--border-gold)] bg-[#FAF5ED] p-1 flex items-center justify-center shadow-xs">
                 <img
                   src="/otd_logo.png"
-                  alt="OTD Logo"
+                  alt="OTD"
                   className="w-full h-full object-contain"
                 />
               </div>
               <div>
-                <span className="font-cinzel text-xl font-bold tracking-[0.25em] text-[#1C1612] block">
+                <span className="font-cinzel text-lg font-bold tracking-[0.22em] text-[var(--text-heading)] block leading-none">
                   OTD
                 </span>
-                <span className="text-[9px] uppercase tracking-[0.2em] text-[#A67C1E] font-semibold block">
-                  Outfit Of The Day
+                <span className="text-[9px] uppercase tracking-[0.2em] text-[var(--gold-primary)] font-mono font-semibold block mt-1">
+                  OUTFIT OF THE DAY
                 </span>
               </div>
             </div>
 
-            {/* Editorial Model Image */}
-            <div className="rounded-2xl overflow-hidden mb-5 border border-[#E2D3BD] shadow-md relative aspect-[4/5] max-h-72 lg:max-h-80 bg-neutral-900">
+            {/* Editorial Visual Composition */}
+            <div className="rounded-2xl overflow-hidden border border-[var(--border-card)] shadow-sm relative aspect-[4/5] bg-neutral-900 group">
               <img
-                src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80"
-                alt="Mustafa Style Model"
-                className="w-full h-full object-cover object-top"
+                src={
+                  wardrobeFocus === 'women'
+                    ? 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80'
+                    : wardrobeFocus === 'men'
+                    ? 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80'
+                    : 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=600&q=80'
+                }
+                alt="OTD Style Concierge"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4">
-                <span className="font-script text-white text-2xl drop-shadow-md">
-                  Your style. Every place.
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-4 text-white">
+                <span className="text-[10px] font-mono tracking-widest uppercase text-[#E5D5BC]">
+                  AI FASHION COMPANION
                 </span>
+                <p className="font-serif-luxury text-xl font-light leading-tight mt-0.5">
+                  Your style. Every place.
+                </p>
               </div>
             </div>
 
-            {/* Slogan */}
-            <div className="space-y-1 mb-5">
-              <h2 className="font-playfair text-2xl lg:text-3xl font-bold tracking-tight text-[#1C1612] leading-tight">
-                Style<br />
-                Smarter.<br />
-                Live Better.
-              </h2>
-              <p className="text-xs text-[#544A40] pt-1 font-medium">
-                Your personal AI fashion companion.
-              </p>
-            </div>
-
-            {/* 4 Feature Bullet Points */}
-            <div className="space-y-2.5 text-xs text-[#544A40] pt-1">
+            {/* Four Editorial Pillars */}
+            <div className="space-y-3 text-xs text-[var(--text-muted)]">
               <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-md bg-[#F7EFE0] border border-[#D5C2A5] flex items-center justify-center text-xs">🚪</span>
-                <span className="font-semibold text-[#1C1612]">Your Closet Smarter</span>
+                <span className="w-5 h-5 rounded-md bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center justify-center text-xs text-[var(--gold-primary)]">
+                  🚪
+                </span>
+                <span className="text-[var(--text-heading)] font-medium">Digital Closet First</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-md bg-[#F7EFE0] border border-[#D5C2A5] flex items-center justify-center text-xs text-[#A67C1E]">✦</span>
-                <span className="font-semibold text-[#1C1612]">AI Personalized</span>
+                <span className="w-5 h-5 rounded-md bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center justify-center text-xs text-[var(--gold-primary)]">
+                  ✦
+                </span>
+                <span className="text-[var(--text-heading)] font-medium">Proportional Silhouette Balancing</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-md bg-[#F7EFE0] border border-[#D5C2A5] flex items-center justify-center text-xs">📍</span>
-                <span className="font-semibold text-[#1C1612]">Destination Aware</span>
+                <span className="w-5 h-5 rounded-md bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center justify-center text-xs text-[var(--gold-primary)]">
+                  📍
+                </span>
+                <span className="text-[var(--text-heading)] font-medium">Destination & Dress-Code Aware</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-md bg-[#F7EFE0] border border-[#D5C2A5] flex items-center justify-center text-xs">👗</span>
-                <span className="font-semibold text-[#1C1612]">Looks For Every Occasion</span>
+                <span className="w-5 h-5 rounded-md bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center justify-center text-xs text-[var(--gold-primary)]">
+                  🔒
+                </span>
+                <span className="text-[var(--text-heading)] font-medium">100% Private & Locally Controlled</span>
               </div>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-[#E5D5BC] text-[10px] text-[#84796C]">
-            <span>OTD Engine v2.4 · Tailored to you</span>
+          <div className="pt-4 border-t border-[var(--border-card)] text-[10px] text-[var(--text-muted)] flex items-center justify-between">
+            <span>OTD Sartorial Engine v2.4</span>
+            <span className="text-[var(--gold-primary)] font-mono">Bespoke</span>
           </div>
-
         </div>
 
-        {/* RIGHT COLUMN: Stepper + Interactive Wizard Body */}
-        <div className="flex-1 flex flex-col justify-between overflow-y-auto p-6 sm:p-8 lg:p-10 bg-[#F7EFE0]">
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: Interactive Multi-Step Journey Body */}
+        {/* ========================================================================= */}
+        <div className="flex-1 flex flex-col justify-between overflow-y-auto p-5 sm:p-7 md:p-8 bg-[var(--bg-card)]">
           
-          {/* Top Bar: Breadcrumb + Stepper */}
-          <div className="pb-6 border-b border-[#E5D5BC]">
-            
-            <div className="flex items-center justify-between text-xs text-[#84796C] mb-4">
-              <div className="flex items-center gap-1.5 font-medium">
-                <span>Create Your Account</span>
-                <span>&gt;</span>
-                <span className="font-semibold text-[#1C1612]">
-                  {currentStep === 1 && 'Personal Details'}
-                  {currentStep === 2 && 'Style Preferences'}
-                  {currentStep === 3 && 'Goals & Interests'}
-                </span>
-              </div>
-              <span className="font-semibold text-[#1C1612]">Step {currentStep} of 4</span>
+          {/* Top Bar: Stepper Progress & Fast Skip Link */}
+          <div className="pb-5 border-b border-[var(--border-card)]">
+            <div className="flex items-center justify-between text-xs mb-3 pr-8">
+              <span className="text-[10px] uppercase font-mono tracking-widest text-[var(--gold-primary)] font-semibold">
+                Step {currentStep} of 3 ·{' '}
+                {currentStep === 1 && 'Basic Style Focus'}
+                {currentStep === 2 && 'Measurements (Optional)'}
+                {currentStep === 3 && 'Style Avatar (Optional)'}
+              </span>
+
+              {/* Fast Skip Link directly to Digital Closet */}
+              <button
+                type="button"
+                onClick={handleSkipDirectlyToCloset}
+                className="text-[11px] font-semibold text-[var(--gold-primary)] hover:underline flex items-center gap-1 cursor-pointer"
+                title="Bypass all remaining setup and open your wardrobe immediately"
+              >
+                <span>Skip to Closet</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
 
-            {/* Visual Stepper */}
-            <div className="grid grid-cols-4 gap-2 items-center text-center">
+            {/* Stepper Indicator Bars */}
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { step: 1, label: 'Personal Details' },
-                { step: 2, label: 'Style Preferences' },
-                { step: 3, label: 'Goals & Interests' },
-                { step: 4, label: 'Finish' },
-              ].map(s => {
-                const isActive = currentStep === s.step;
-                const isPassed = currentStep > s.step;
-                return (
-                  <div key={s.step} className="flex flex-col items-center">
-                    <div className="flex items-center w-full mb-1">
-                      <div className={`h-[2px] flex-1 ${s.step === 1 ? 'invisible' : isPassed || isActive ? 'bg-black' : 'bg-[#DCD0BE]'}`} />
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        isActive
-                          ? 'bg-black text-white shadow-md'
-                          : isPassed
-                          ? 'bg-[#1C1612] text-white'
-                          : 'bg-[#EFE5D2] text-[#84796C] border border-[#DCD0BE]'
-                      }`}>
-                        {isPassed ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : s.step}
-                      </div>
-                      <div className={`h-[2px] flex-1 ${s.step === 4 ? 'invisible' : isPassed ? 'bg-black' : 'bg-[#DCD0BE]'}`} />
-                    </div>
-                    <span className={`text-[10px] uppercase tracking-wider font-semibold ${
-                      isActive ? 'text-[#1C1612]' : 'text-[#84796C]'
-                    }`}>
-                      {s.label}
-                    </span>
-                  </div>
-                );
-              })}
+                { step: 1, label: 'Style Focus' },
+                { step: 2, label: 'Measurements (Opt)' },
+                { step: 3, label: 'Avatar (Opt)' },
+              ].map((s) => (
+                <div key={s.step} className="space-y-1">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      currentStep === s.step
+                        ? 'bg-[var(--gold-primary)]'
+                        : currentStep > s.step
+                        ? 'bg-black dark:bg-white'
+                        : 'bg-[var(--pill-bg)]'
+                    }`}
+                  />
+                  <span
+                    className={`text-[9px] uppercase tracking-wider block font-mono ${
+                      currentStep === s.step
+                        ? 'text-[var(--text-heading)] font-bold'
+                        : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+              ))}
             </div>
-
           </div>
 
-          {/* STEP 1: PERSONAL DETAILS (Matches Image 3) */}
+          {/* ======================================================================= */}
+          {/* STEP 1: BASIC STYLE PROFILE (Women / Men / Personalize) */}
+          {/* ======================================================================= */}
           {currentStep === 1 && (
-            <div className="py-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Form Area (7 Cols) */}
-              <div className="xl:col-span-7 space-y-5">
-                <div>
-                  <h3 className="font-playfair text-3xl sm:text-4xl font-bold text-[#1C1612]">
-                    Let's get to know you.
-                  </h3>
-                  <p className="text-xs text-[#544A40] mt-1">
-                    This helps OTD create more personalized looks that match your style, body profile and lifestyle.
-                  </p>
-                </div>
+            <div className="py-5 space-y-6 animate-in fade-in duration-200">
+              <div>
+                <h2
+                  id="onboarding-modal-title"
+                  className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight"
+                >
+                  Welcome to OTD.
+                </h2>
+                <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1 font-light">
+                  Let's calibrate your personal wardrobe focus. Everything here can be refined or adjusted later.
+                </p>
+              </div>
 
-                {/* Full Name */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Full Name
+              {/* Preferred Name Field */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="onboarding-name"
+                  className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold"
+                >
+                  What should OTD call you? <span className="text-[var(--gold-primary)]">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    id="onboarding-name"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    placeholder="e.g. Eleanor or Julian"
+                    className={`w-full pl-10 pr-4 py-3 rounded-2xl bg-[var(--bg-card-inner)] border text-xs sm:text-sm text-[var(--text-heading)] outline-none font-medium transition-all ${
+                      nameError
+                        ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
+                        : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                    }`}
+                  />
+                </div>
+                {nameError && (
+                  <p className="text-[11px] text-rose-500 font-medium">{nameError}</p>
+                )}
+              </div>
+
+              {/* Wardrobe Styling Focus (Women / Men / Personalize) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                    Select Your Wardrobe Styling Focus <span className="text-[var(--gold-primary)]">*</span>
                   </label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#84796C]" />
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={e => {
-                        setFullName(e.target.value);
-                        if (nameError) setNameError(null);
-                      }}
-                      placeholder="e.g. Mustafa Ali"
-                      className={`w-full bg-[#FCF8F2] border rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-[#1C1612] outline-none ${
-                        nameError ? 'border-rose-500 ring-1 ring-rose-200' : 'border-[#DCD0BE] focus:border-black'
-                      }`}
-                    />
-                  </div>
-                  {nameError && (
-                    <p className="text-xs text-rose-600 mt-1 font-medium">{nameError}</p>
-                  )}
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                    Wardrobe Personalization
+                  </span>
                 </div>
 
-                {/* Age & Gender */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                      Age
-                    </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#84796C]" />
-                      <input
-                        type="number"
-                        value={age}
-                        onChange={e => setAge(Number(e.target.value))}
-                        className="w-full bg-[#FCF8F2] border border-[#DCD0BE] rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-[#1C1612] outline-none focus:border-black"
-                      />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: 'women' as const,
+                      title: "Women's Wardrobe",
+                      badge: 'Capsule & Fluid',
+                      icon: '👗',
+                      desc: 'Dresses, skirts, fluid tailoring, blouses, and feminine silhouettes.',
+                    },
+                    {
+                      id: 'men' as const,
+                      title: "Men's Wardrobe",
+                      badge: 'Sartorial & Structured',
+                      icon: '👔',
+                      desc: 'Tailored suits, shirts, trousers, casual staples, and modern menswear.',
+                    },
+                    {
+                      id: 'personalize' as const,
+                      title: 'Personalize / Fluid',
+                      badge: 'Bespoke & Mixed',
+                      icon: '✦',
+                      desc: 'Cross-category garments, gender-fluid aesthetics, and custom piece curation.',
+                    },
+                  ].map((card) => {
+                    const isSelected = wardrobeFocus === card.id;
+                    return (
+                      <div
+                        key={card.id}
+                        onClick={() => setWardrobeFocus(card.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setWardrobeFocus(card.id);
+                          }
+                        }}
+                        className={`p-4 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 ${
+                          isSelected
+                            ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] shadow-sm ring-1 ring-[var(--gold-primary)]'
+                            : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">{card.icon}</span>
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs transition-all ${
+                              isSelected
+                                ? 'bg-[var(--gold-primary)] text-black font-bold'
+                                : 'border border-[var(--border-card)]'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                      Gender
-                    </label>
-                    <select
-                      value={gender}
-                      onChange={e => setGender(e.target.value)}
-                      className="w-full bg-[#FCF8F2] border border-[#DCD0BE] rounded-xl px-3.5 py-3 text-sm font-semibold text-[#1C1612] outline-none focus:border-black"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Non-Binary">Non-Binary</option>
-                    </select>
-                  </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <h3 className="font-semibold text-xs text-[var(--text-heading)]">
+                              {card.title}
+                            </h3>
+                          </div>
+                          <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--gold-primary)] block font-semibold mb-1">
+                            {card.badge}
+                          </span>
+                          <p className="text-[11px] text-[var(--text-muted)] leading-snug">
+                            {card.desc}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Height & Unit Toggle */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Height
+                <p className="text-[10px] text-[var(--text-muted)] font-light leading-relaxed pt-1">
+                  💡 This personalizes default categories and sizing. It is not an exclusive declaration—you can mix categories or change this anytime in Profile Settings.
+                </p>
+              </div>
+
+              {/* Personal Style Personas */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                    Primary Style Personas (Select 1 to 3)
                   </label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Ruler className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#84796C]" />
-                      <input
-                        type="number"
-                        value={heightValue}
-                        onChange={e => setHeightValue(Number(e.target.value))}
-                        className="w-full bg-[#FCF8F2] border border-[#DCD0BE] rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-[#1C1612] outline-none focus:border-black"
-                      />
-                    </div>
-                    <div className="flex bg-[#EFE5D2] p-1 rounded-xl border border-[#DCD0BE]">
+                  <span className="text-[10px] text-[var(--gold-primary)] font-mono">
+                    {selectedStyles.length}/3 selected
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'Clean Minimalist',
+                    'Old Money Heritage',
+                    'Smart Sartorial',
+                    'Relaxed Contemporary',
+                    'Quiet Luxury',
+                    'Streetwear Chic',
+                    'Evening Haute',
+                    'Capsule Modular',
+                  ].map((style) => {
+                    const isSelected = selectedStyles.includes(style);
+                    return (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => toggleStyle(style)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-[var(--gold-primary)] text-black shadow-xs font-bold'
+                            : 'bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-[var(--text-muted)] hover:border-[var(--gold-primary)] hover:text-[var(--text-heading)]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        <span>{style}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================================= */}
+          {/* STEP 2: OPTIONAL MEASUREMENTS & PROPORTIONS (100% Skippable) */}
+          {/* ======================================================================= */}
+          {currentStep === 2 && (
+            <div className="py-5 space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--border-card)]">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono tracking-wider uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                      100% Optional
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)] font-mono">
+                      Can be added or edited later
+                    </span>
+                  </div>
+                  <h2 className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight">
+                    Silhouette & Fit Proportions
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSkipMeasurements}
+                  className="text-xs font-semibold text-[var(--gold-primary)] hover:underline self-start sm:self-auto cursor-pointer"
+                >
+                  Skip Measurements →
+                </button>
+              </div>
+
+              <p className="text-xs text-[var(--text-muted)] font-light leading-relaxed">
+                OTD uses golden-ratio proportions (such as balancing 1/3 torso against 2/3 trouser drop) to advise on silhouette draping. If you prefer not to enter measurements now, simply skip.
+              </p>
+
+              {/* Height and Weight (Both optional) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Height */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                      <Ruler className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                      <span>Height (Optional)</span>
+                    </label>
+                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)]">
                       <button
                         type="button"
                         onClick={() => setHeightUnit('cm')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          heightUnit === 'cm' ? 'bg-black text-white' : 'text-[#84796C]'
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          heightUnit === 'cm'
+                            ? 'bg-black text-white dark:bg-white dark:text-black'
+                            : 'text-[var(--text-muted)]'
                         }`}
                       >
                         cm
@@ -342,37 +605,40 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
                       <button
                         type="button"
                         onClick={() => setHeightUnit('ft')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          heightUnit === 'ft' ? 'bg-black text-white' : 'text-[#84796C]'
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          heightUnit === 'ft'
+                            ? 'bg-black text-white dark:bg-white dark:text-black'
+                            : 'text-[var(--text-muted)]'
                         }`}
                       >
                         ft
                       </button>
                     </div>
                   </div>
+                  <input
+                    type="text"
+                    value={heightValue}
+                    onChange={(e) => setHeightValue(e.target.value)}
+                    placeholder={heightUnit === 'cm' ? 'e.g. 178' : `e.g. 5'10"`}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                  />
                 </div>
 
-                {/* Weight (Optional) & Unit Toggle */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Weight (Optional)
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#84796C]" />
-                      <input
-                        type="number"
-                        value={weightValue}
-                        onChange={e => setWeightValue(Number(e.target.value))}
-                        className="w-full bg-[#FCF8F2] border border-[#DCD0BE] rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-[#1C1612] outline-none focus:border-black"
-                      />
-                    </div>
-                    <div className="flex bg-[#EFE5D2] p-1 rounded-xl border border-[#DCD0BE]">
+                {/* Weight */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                      <span>Weight (Optional)</span>
+                    </label>
+                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)]">
                       <button
                         type="button"
                         onClick={() => setWeightUnit('kg')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          weightUnit === 'kg' ? 'bg-black text-white' : 'text-[#84796C]'
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          weightUnit === 'kg'
+                            ? 'bg-black text-white dark:bg-white dark:text-black'
+                            : 'text-[var(--text-muted)]'
                         }`}
                       >
                         kg
@@ -380,446 +646,245 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
                       <button
                         type="button"
                         onClick={() => setWeightUnit('lbs')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          weightUnit === 'lbs' ? 'bg-black text-white' : 'text-[#84796C]'
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          weightUnit === 'lbs'
+                            ? 'bg-black text-white dark:bg-white dark:text-black'
+                            : 'text-[var(--text-muted)]'
                         }`}
                       >
                         lbs
                       </button>
                     </div>
                   </div>
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Location
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#84796C]" />
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={e => setLocation(e.target.value)}
-                      className="w-full bg-[#FCF8F2] border border-[#DCD0BE] rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-[#1C1612] outline-none focus:border-black"
-                    />
-                  </div>
-                </div>
-
-                {/* Body Shape (Matching Image 3) */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Body Shape
-                  </label>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    {['Slim', 'Athletic', 'Average', 'Curvy'].map(shape => (
-                      <button
-                        key={shape}
-                        type="button"
-                        onClick={() => setBodyShape(shape)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          bodyShape === shape
-                            ? 'bg-black text-white border-black shadow-sm'
-                            : 'bg-[#FCF8F2] text-[#544A40] border-[#DCD0BE] hover:border-black'
-                        }`}
-                      >
-                        {shape}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Skin Tone (Matching Image 3) */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-1.5">
-                    Skin Tone
-                  </label>
-                  <div className="flex gap-3">
-                    {[
-                      { name: 'Fair', hex: '#F3D2B8' },
-                      { name: 'Medium', hex: '#C69C6D' },
-                      { name: 'Olive', hex: '#9C7A54' },
-                      { name: 'Tan', hex: '#7C5638' },
-                      { name: 'Deep', hex: '#4F3524' },
-                    ].map(tone => (
-                      <button
-                        key={tone.name}
-                        type="button"
-                        onClick={() => setSkinTone(tone.name)}
-                        title={tone.name}
-                        className={`w-8 h-8 rounded-full border-2 transition-transform cursor-pointer ${
-                          skinTone === tone.name ? 'scale-110 border-black ring-2 ring-black/20' : 'border-black/10'
-                        }`}
-                        style={{ backgroundColor: tone.hex }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Right Side: Your Style Avatar Card (5 Cols) (Matches Image 3) */}
-              <div className="xl:col-span-5 bg-[#FCF8F2] rounded-3xl p-6 border border-[#E2D3BD] shadow-lg">
-                <div className="flex items-center justify-between pb-3 border-b border-[#E5D5BC]">
-                  <h4 className="font-playfair text-xl font-bold text-[#1C1612]">
-                    Your Style Avatar
-                  </h4>
-                  <span className="text-[10px] font-mono uppercase bg-[#EFE5D2] px-2.5 py-0.5 rounded-full border border-[#DCD0BE] text-[#84796C] font-semibold">
-                    Preview
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#544A40] mt-2 mb-4">
-                  This is a basic representation. We'll refine it based on your style preferences in the next step.
-                </p>
-
-                <div className="grid grid-cols-2 gap-4 items-center mb-4">
-                  <div className="rounded-2xl overflow-hidden aspect-[3/4] bg-neutral-900 border border-[#DCD0BE]">
-                    <img
-                      src="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=800&q=80"
-                      alt="Style Avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div className="bg-[#EFE5D2] p-2.5 rounded-xl border border-[#DCD0BE]">
-                      <span className="text-[10px] uppercase font-bold text-[#84796C] block">Height</span>
-                      <strong className="text-sm text-[#1C1612]">{heightValue} {heightUnit}</strong>
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2.5 rounded-xl border border-[#DCD0BE]">
-                      <span className="text-[10px] uppercase font-bold text-[#84796C] block">Body Shape</span>
-                      <strong className="text-sm text-[#1C1612]">{bodyShape}</strong>
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2.5 rounded-xl border border-[#DCD0BE] flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-[#84796C] block">Skin Tone</span>
-                        <strong className="text-sm text-[#1C1612]">{skinTone}</strong>
-                      </div>
-                      <span className="w-5 h-5 rounded-full bg-[#C69C6D] border border-black/20" />
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2.5 rounded-xl border border-[#DCD0BE]">
-                      <span className="text-[10px] uppercase font-bold text-[#84796C] block">Style Tone</span>
-                      <strong className="text-xs text-[#A67C1E]">Minimal (to be set)</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-[#EFE5D2] rounded-xl text-[11px] text-[#544A40] border border-[#DCD0BE] flex items-start gap-2">
-                  <span className="text-[#A67C1E] text-base leading-none">ⓘ</span>
-                  <span>This will be customized further once you select your style preferences.</span>
+                  <input
+                    type="text"
+                    value={weightValue}
+                    onChange={(e) => setWeightValue(e.target.value)}
+                    placeholder={weightUnit === 'kg' ? 'e.g. 68' : 'e.g. 150'}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                  />
                 </div>
               </div>
 
-            </div>
-          )}
-
-          {/* STEP 2: STYLE PREFERENCES (Matches Image 4) */}
-          {currentStep === 2 && (
-            <div className="py-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column (7 Cols) */}
-              <div className="xl:col-span-7 space-y-6">
-                <div>
-                  <h3 className="font-playfair text-3xl sm:text-4xl font-bold text-[#1C1612]">
-                    What's your style?
-                  </h3>
-                  <p className="text-xs text-[#544A40] mt-1">
-                    Select the styles you like. You can choose multiple.
-                  </p>
-                </div>
-
-                {/* 8 Style Cards Grid */}
+              {/* Body Silhouette Proportions */}
+              <div className="space-y-2">
+                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  Silhouette Archetype (Optional)
+                </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
-                    { id: 'Minimal', label: 'Minimal', img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Casual', label: 'Casual', img: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Streetwear', label: 'Streetwear', img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Classic', label: 'Classic', img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Trendy', label: 'Trendy', img: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Luxury', label: 'Luxury', img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Sporty', label: 'Sporty', img: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=400&q=80' },
-                    { id: 'Traditional', label: 'Traditional', img: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80' },
-                  ].map(style => {
-                    const isSelected = selectedStyles.includes(style.id);
+                    { id: 'Athletic / V-Taper', label: 'Athletic / V-Taper', sub: 'Broader shoulders' },
+                    { id: 'Lean / Slim', label: 'Lean / Slim', sub: 'Linear silhouette' },
+                    { id: 'Broad / Structured', label: 'Broad / Structured', sub: 'Substantial frame' },
+                    { id: 'Balanced / Regular', label: 'Balanced / Regular', sub: 'Proportional drape' },
+                  ].map((shape) => {
+                    const isSelected = bodyShape === shape.id;
                     return (
-                      <div
-                        key={style.id}
-                        onClick={() => toggleStyle(style.id)}
-                        className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
+                      <button
+                        key={shape.id}
+                        type="button"
+                        onClick={() => setBodyShape(shape.id)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                           isSelected
-                            ? 'border-black bg-black text-white shadow-md'
-                            : 'border-[#DCD0BE] bg-[#FCF8F2] text-[#1C1612] hover:border-black'
+                            ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] font-semibold'
+                            : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
                         }`}
                       >
-                        <div className="aspect-square rounded-xl overflow-hidden relative mb-2 bg-neutral-900">
-                          <img
-                            src={style.img}
-                            alt={style.label}
-                            className="w-full h-full object-cover"
-                          />
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center border border-white">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-xs font-bold block text-center truncate">
-                          {style.label}
+                        <span className="text-xs font-semibold block text-[var(--text-heading)]">
+                          {shape.label}
                         </span>
-                      </div>
+                        <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                          {shape.sub}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
-
-                {/* Fit Preference */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-2">
-                    Fit Preference · How do you like your clothes to fit?
-                  </label>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {[
-                      { id: 'Slim Fit', label: 'Slim Fit', img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=300&q=80' },
-                      { id: 'Regular Fit', label: 'Regular Fit', img: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=300&q=80' },
-                      { id: 'Loose Fit', label: 'Loose Fit', img: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=300&q=80' },
-                    ].map(fit => (
-                      <div
-                        key={fit.id}
-                        onClick={() => setFitPreference(fit.id as any)}
-                        className={`rounded-xl border p-2 text-center cursor-pointer transition-all ${
-                          fitPreference === fit.id
-                            ? 'border-black bg-black text-white shadow-sm'
-                            : 'border-[#DCD0BE] bg-[#FCF8F2] text-[#1C1612]'
-                        }`}
-                      >
-                        <div className="aspect-[4/5] rounded-lg overflow-hidden mb-1.5 bg-neutral-900">
-                          <img src={fit.img} alt={fit.label} className="w-full h-full object-cover" />
-                        </div>
-                        <span className="text-[11px] font-bold block">{fit.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Preferred Colours Swatches */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-2">
-                    Preferred Colours · Select the colours you like the most
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {[
-                      { name: 'Black', hex: '#1C1612' },
-                      { name: 'White', hex: '#FFFFFF' },
-                      { name: 'Beige', hex: '#D7C4A5' },
-                      { name: 'Grey', hex: '#808080' },
-                      { name: 'Navy', hex: '#1E293B' },
-                      { name: 'Brown', hex: '#6E482F' },
-                      { name: 'Olive', hex: '#556B2F' },
-                      { name: 'Blue', hex: '#3B82F6' },
-                      { name: 'Green', hex: '#15803D' },
-                      { name: 'Red', hex: '#B91C1C' },
-                      { name: 'Pink', hex: '#F472B6' },
-                    ].map(col => {
-                      const isSelected = selectedColours.includes(col.name);
-                      return (
-                        <button
-                          key={col.name}
-                          type="button"
-                          onClick={() => toggleColour(col.name)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-black bg-black text-white shadow-sm'
-                              : 'border-[#DCD0BE] bg-[#FCF8F2] text-[#1C1612]'
-                          }`}
-                        >
-                          <span
-                            className="w-3.5 h-3.5 rounded-full border border-black/20"
-                            style={{ backgroundColor: col.hex }}
-                          />
-                          <span>{col.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Preferred Outfits (Matching Image 4) */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-2">
-                    Preferred Outfits · What do you usually wear the most?
-                  </label>
-                  <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                    {[
-                      { id: 'Tops', label: 'Tops', icon: '👕' },
-                      { id: 'Bottoms', label: 'Bottoms', icon: '👖' },
-                      { id: 'Outerwear', label: 'Outerwear', icon: '🧥' },
-                      { id: 'Shoes', label: 'Shoes', icon: '👟' },
-                      { id: 'Accessories', label: 'Accessories', icon: '⌚' },
-                    ].map(piece => {
-                      const isSelected = preferredOutfitPieces.includes(piece.id);
-                      return (
-                        <button
-                          key={piece.id}
-                          type="button"
-                          onClick={() => {
-                            if (preferredOutfitPieces.includes(piece.id)) {
-                              setPreferredOutfitPieces(preferredOutfitPieces.filter(p => p !== piece.id));
-                            } else {
-                              setPreferredOutfitPieces([...preferredOutfitPieces, piece.id]);
-                            }
-                          }}
-                          className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-black text-white border-black shadow-sm'
-                              : 'bg-[#FCF8F2] text-[#544A40] border-[#DCD0BE] hover:border-black'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{piece.icon}</span>
-                          <span className="text-[10px]">{piece.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Level of Formality Slider */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#544A40] mb-2">
-                    Level of Formality · What's your usual style?
-                  </label>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    {['Very Casual', 'Casual', 'Smart Casual', 'Formal'].map(lvl => (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() => setFormalityLevel(lvl)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          formalityLevel === lvl
-                            ? 'bg-black text-white border-black shadow-sm'
-                            : 'bg-[#FCF8F2] text-[#544A40] border-[#DCD0BE]'
-                        }`}
-                      >
-                        {lvl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
               </div>
 
-              {/* Right Column: Your Style Moodboard (5 Cols) (Matches Image 4) */}
-              <div className="xl:col-span-5 bg-[#FCF8F2] rounded-3xl p-6 border border-[#E2D3BD] shadow-lg sticky top-6">
-                <div className="flex items-center justify-between pb-3 border-b border-[#E5D5BC]">
-                  <h4 className="font-playfair text-xl font-bold text-[#1C1612]">
-                    Your Style Moodboard
-                  </h4>
-                  <span className="text-[10px] font-mono uppercase bg-[#EFE5D2] px-2.5 py-0.5 rounded-full border border-[#DCD0BE] text-[#84796C] font-semibold">
-                    Live Preview
+              {/* Preferred Fit */}
+              <div className="space-y-2">
+                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  Preferred Garment Cut & Fit
+                </label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[
+                    { id: 'Slim Fit', label: 'Tailored / Slim', sub: 'Clean contour' },
+                    { id: 'Regular Fit', label: 'Classic Regular', sub: 'Balanced comfort' },
+                    { id: 'Loose Fit', label: 'Relaxed / Drape', sub: 'Contemporary ease' },
+                  ].map((fit) => {
+                    const isSelected = fitPreference === fit.id;
+                    return (
+                      <button
+                        key={fit.id}
+                        type="button"
+                        onClick={() => setFitPreference(fit.id)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] font-semibold'
+                            : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                        }`}
+                      >
+                        <span className="text-xs font-semibold block text-[var(--text-heading)]">
+                          {fit.label}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                          {fit.sub}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Palette Preferences */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                    Palette Preferences (Optional, Choose up to 4)
+                  </label>
+                  <span className="text-[10px] text-[var(--gold-primary)] font-mono">
+                    {selectedColours.length}/4 selected
                   </span>
                 </div>
-                <p className="text-[11px] text-[#544A40] mt-2 mb-4">
-                  A quick preview based on your selections.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-2xl overflow-hidden aspect-[3/4] bg-neutral-900 border border-[#DCD0BE]">
-                    <img
-                      src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80"
-                      alt="Moodboard Look"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Flat Lay Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-[#EFE5D2] p-2 rounded-xl border border-[#DCD0BE] flex flex-col items-center justify-center">
-                      <span className="text-2xl mb-1">👔</span>
-                      <span className="text-[9px] font-bold text-[#1C1612]">Black Shirt</span>
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2 rounded-xl border border-[#DCD0BE] flex flex-col items-center justify-center">
-                      <span className="text-2xl mb-1">👖</span>
-                      <span className="text-[9px] font-bold text-[#1C1612]">Beige Pants</span>
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2 rounded-xl border border-[#DCD0BE] flex flex-col items-center justify-center">
-                      <span className="text-2xl mb-1">👟</span>
-                      <span className="text-[9px] font-bold text-[#1C1612]">Sneakers</span>
-                    </div>
-                    <div className="bg-[#EFE5D2] p-2 rounded-xl border border-[#DCD0BE] flex flex-col items-center justify-center">
-                      <span className="text-2xl mb-1">⌚</span>
-                      <span className="text-[9px] font-bold text-[#1C1612]">Leather Watch</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#EFE5D2] p-3 rounded-xl border border-[#DCD0BE] text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-[#84796C]">Selected Styles:</span>
-                    <strong className="text-[#1C1612]">{selectedStyles.join(', ')}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#84796C]">Fit Profile:</span>
-                    <strong className="text-[#1C1612]">{fitPreference}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#84796C]">Formality:</span>
-                    <strong className="text-[#A67C1E]">{formalityLevel}</strong>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { name: 'Black', hex: '#111113' },
+                    { name: 'Ivory', hex: '#FAF5ED' },
+                    { name: 'Camel', hex: '#C19A6B' },
+                    { name: 'Navy', hex: '#1B263B' },
+                    { name: 'Olive', hex: '#556B2F' },
+                    { name: 'Charcoal', hex: '#36454F' },
+                    { name: 'Burgundy', hex: '#800020' },
+                    { name: 'White', hex: '#FFFFFF' },
+                  ].map((color) => {
+                    const isSelected = selectedColours.includes(color.name);
+                    return (
+                      <button
+                        key={color.name}
+                        type="button"
+                        onClick={() => toggleColour(color.name)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                          isSelected
+                            ? 'bg-[var(--gold-primary)] text-black shadow-xs font-bold'
+                            : 'bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-[var(--text-muted)] hover:border-[var(--gold-primary)] hover:text-[var(--text-heading)]'
+                        }`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full border border-black/20 dark:border-white/20 shrink-0"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        <span>{color.name}</span>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* Privacy Notice Box */}
+              <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs text-[var(--text-muted)] flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-[var(--gold-primary)] shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong className="text-[var(--text-heading)] block mb-0.5">
+                    Privacy Guarantee
+                  </strong>
+                  All measurements are kept strictly local to your browser session. They are used purely for proportional math, never transmitted without consent, and can be deleted anytime.
+                </div>
+              </div>
             </div>
           )}
 
-          {/* STEP 3: GOALS & INTERESTS (Matches Image 5) */}
+          {/* ======================================================================= */}
+          {/* STEP 3: OPTIONAL AVATAR SETUP (Honest, Transparent & Skippable) */}
+          {/* ======================================================================= */}
           {currentStep === 3 && (
-            <div className="py-6 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column (7 Cols) */}
-              <div className="xl:col-span-7 space-y-6">
+            <div className="py-5 space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--border-card)]">
                 <div>
-                  <h3 className="font-playfair text-3xl sm:text-4xl font-bold text-[#1C1612]">
-                    What do you want from OTD?
-                  </h3>
-                  <p className="text-xs text-[#544A40] mt-1">
-                    Select your goals so we can personalize your experience better.
-                  </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono tracking-wider uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                      Optional Visual Preview
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)] font-mono">
+                      Phase 1 Preview Mode
+                    </span>
+                  </div>
+                  <h2 className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight">
+                    Style Avatar Preview
+                  </h2>
                 </div>
 
-                {/* 8 Goals Grid with Checkboxes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleSkipAvatar}
+                  className="text-xs font-semibold text-[var(--gold-primary)] hover:underline self-start sm:self-auto cursor-pointer"
+                >
+                  Skip Avatar →
+                </button>
+              </div>
+
+              <p className="text-xs text-[var(--text-muted)] font-light leading-relaxed">
+                An avatar helps you preview how garments interact in three dimensions. Real-time 3D neural mesh draping is in development for Phase 2. Choose a clean mannequin archetype today, or skip straight to your digital closet.
+              </p>
+
+              {/* Avatar Archetype Choices */}
+              <div className="space-y-3">
+                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  Select a Mannequin Archetype (Optional)
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { title: 'Look good in everyday life', desc: 'Get outfit ideas for daily use (college, work, casual, etc.)', icon: '👔' },
-                    { title: 'Dress better for special occasions', desc: 'Dates, parties, weddings, events, etc.', icon: '🥂' },
-                    { title: 'Travel in style', desc: 'Get destination-based outfit recommendations', icon: '✈️' },
-                    { title: 'Build a more versatile wardrobe', desc: 'Make better use of your existing clothes', icon: '✨' },
-                    { title: 'Organize my closet', desc: 'Keep track of my clothes and outfits', icon: '🚪' },
-                    { title: 'Improve my personal style', desc: 'Get personalized style guidance', icon: '📊' },
-                    { title: 'Shop smarter', desc: 'Get suggestions before buying new clothes', icon: '🛍️' },
-                    { title: 'Get seasonal recommendations', desc: 'Outfits based on weather and season', icon: '❄️' },
-                  ].map(goal => {
-                    const isSelected = selectedGoals.includes(goal.title);
+                    {
+                      id: 'classic_tailored',
+                      title: 'Tailored Classic',
+                      subtitle: 'Structured shoulders & classic waist drop',
+                      icon: '📐',
+                    },
+                    {
+                      id: 'modern_minimal',
+                      title: 'Contemporary Minimal',
+                      subtitle: 'Softer lines with relaxed silhouette drape',
+                      icon: '✦',
+                    },
+                    {
+                      id: 'fluid_editorial',
+                      title: 'Fluid Editorial',
+                      subtitle: 'Unstructured flow for draped garments',
+                      icon: '✨',
+                    },
+                  ].map((arch) => {
+                    const isSelected =
+                      avatarChoice === 'archetype' && avatarArchetype === arch.id;
                     return (
                       <div
-                        key={goal.title}
-                        onClick={() => toggleGoal(goal.title)}
-                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
+                        key={arch.id}
+                        onClick={() => {
+                          setAvatarChoice('archetype');
+                          setAvatarArchetype(arch.id);
+                        }}
+                        className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-2 ${
                           isSelected
-                            ? 'border-black bg-black text-white shadow-md'
-                            : 'border-[#DCD0BE] bg-[#FCF8F2] text-[#1C1612] hover:border-black'
+                            ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]'
+                            : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-[#EFE5D2] border border-[#DCD0BE] flex items-center justify-center text-lg shrink-0">
-                          {goal.icon}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xl">{arch.icon}</span>
+                          {isSelected && (
+                            <span className="text-xs text-[var(--gold-primary)] font-bold">
+                              ✓ Selected
+                            </span>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <h4 className="text-xs font-bold mb-1 leading-snug">{goal.title}</h4>
-                          <p className={`text-[11px] leading-tight ${isSelected ? 'text-neutral-300' : 'text-[#84796C]'}`}>
-                            {goal.desc}
+                        <div>
+                          <h4 className="font-semibold text-xs text-[var(--text-heading)]">
+                            {arch.title}
+                          </h4>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-snug">
+                            {arch.subtitle}
                           </p>
-                        </div>
-                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
-                          isSelected ? 'bg-white border-white text-black' : 'border-[#84796C]'
-                        }`}>
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       </div>
                     );
@@ -827,127 +892,183 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
                 </div>
               </div>
 
-              {/* Right Column: Other Interests & Occasions (5 Cols) (Matches Image 5) */}
-              <div className="xl:col-span-5 bg-[#FCF8F2] rounded-3xl p-6 border border-[#E2D3BD] shadow-lg space-y-6">
-                
-                {/* Other Interests */}
-                <div>
-                  <h4 className="font-playfair text-lg font-bold text-[#1C1612]">
-                    Other Interests (Optional)
-                  </h4>
-                  <p className="text-[11px] text-[#544A40] mb-3">
-                    Helps us give more relevant suggestions.
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'Fashion Trends', label: 'Fashion Trends', icon: '📊' },
-                      { id: 'Sustainable Fashion', label: 'Sustainable Fashion', icon: '🌱' },
-                      { id: 'Minimalism', label: 'Minimalism', icon: '〰️' },
-                      { id: 'Streetwear', label: 'Streetwear', icon: '🧢' },
-                      { id: 'Luxury', label: 'Luxury', icon: '💎' },
-                      { id: 'Ethnic Wear', label: 'Ethnic Wear', icon: '👘' },
-                      { id: 'Accessories', label: 'Accessories', icon: '⌚' },
-                      { id: 'Footwear', label: 'Footwear', icon: '👞' },
-                      { id: 'Grooming', label: 'Grooming', icon: '🧴' },
-                    ].map(interest => {
-                      const isSelected = otherInterests.includes(interest.id);
-                      return (
-                        <button
-                          key={interest.id}
-                          type="button"
-                          onClick={() => toggleInterest(interest.id)}
-                          className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-black text-white border-black'
-                              : 'bg-[#EFE5D2] text-[#1C1612] border-[#DCD0BE] hover:border-black'
-                          }`}
-                        >
-                          <span className="text-lg mb-1">{interest.icon}</span>
-                          <span className="text-[10px] font-bold leading-tight line-clamp-1">{interest.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Reference Photo Upload (Optional) */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                    <span>Reference Fit or Profile Photo (Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">Max 5MB</span>
                 </div>
 
-                {/* Occasions I Usually Dress For */}
-                <div>
-                  <h4 className="font-playfair text-lg font-bold text-[#1C1612]">
-                    Occasions I Usually Dress For
-                  </h4>
-                  <p className="text-[11px] text-[#544A40] mb-3">
-                    Select multiple options.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      'College', 'Office', 'Casual Outings', 'Dates',
-                      'Parties', 'Weddings', 'Travel', 'Gym'
-                    ].map(occ => {
-                      const isSelected = occasionsDressedFor.includes(occ);
-                      return (
-                        <button
-                          key={occ}
-                          type="button"
-                          onClick={() => toggleOccasion(occ)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                            isSelected
-                              ? 'bg-black text-white border-black'
-                              : 'bg-[#EFE5D2] text-[#1C1612] border-[#DCD0BE] hover:border-black'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                          <span>{occ}</span>
-                        </button>
-                      );
-                    })}
+                {referencePhotoUrl ? (
+                  <div className="p-3 rounded-2xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-[var(--border-gold)] bg-neutral-900">
+                        <img
+                          src={referencePhotoUrl}
+                          alt="Reference preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-semibold text-[var(--text-heading)] block">
+                          Reference Photo Attached
+                        </span>
+                        <span className="text-[10px] text-emerald-500 font-mono">
+                          Stored locally in browser cache
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      title="Remove photo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
-
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-4 rounded-2xl border border-dashed border-[var(--border-card)] hover:border-[var(--gold-primary)] bg-[var(--bg-card-inner)]/50 text-center cursor-pointer transition-colors space-y-1.5"
+                  >
+                    <Upload className="w-5 h-5 mx-auto text-[var(--gold-primary)]" />
+                    <p className="text-xs font-semibold text-[var(--text-heading)]">
+                      Click to upload an optional reference photo
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      PNG, JPEG, or WebP. This is strictly optional and can be skipped.
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoSelect}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+                {photoError && (
+                  <p className="text-[11px] text-rose-500 font-medium">{photoError}</p>
+                )}
               </div>
 
+              {/* Direct Skip Option Card */}
+              <div
+                onClick={() => setAvatarChoice('skipped')}
+                className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+                  avatarChoice === 'skipped'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🧥</span>
+                    <span className="text-xs font-semibold text-[var(--text-heading)]">
+                      I prefer styling with direct garment flat-lays (No avatar)
+                    </span>
+                  </div>
+                  {avatarChoice === 'skipped' && (
+                    <span className="text-xs text-[var(--gold-primary)] font-bold">✓ Selected</span>
+                  )}
+                </div>
+              </div>
+
+              {/* AI Transparency Box */}
+              <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs text-[var(--text-muted)] flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-[var(--gold-primary)] shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong className="text-[var(--text-heading)] block mb-0.5">
+                    Transparent Architecture
+                  </strong>
+                  OTD will never generate fake avatars or transmit biometric data to third-party endpoints. You can style outfits using clean flat-lays at any time.
+                </div>
+              </div>
             </div>
           )}
 
-          {/* BOTTOM ACTIONS (Back / Next / Finish) */}
-          <div className="pt-6 border-t border-[#E5D5BC] flex items-center justify-between">
+          {/* ======================================================================= */}
+          {/* BOTTOM ACTIONS BAR (Back / Skip / Next / Finish) */}
+          {/* ======================================================================= */}
+          <div className="pt-5 border-t border-[var(--border-card)] flex items-center justify-between gap-3">
+            {/* Left Button: Back or Skip to Closet */}
             {currentStep > 1 ? (
               <button
                 type="button"
-                onClick={() => setCurrentStep(prev => prev - 1)}
-                className="px-6 py-3 rounded-full border border-black/40 text-xs font-bold text-[#1C1612] hover:bg-black/5 flex items-center gap-2 cursor-pointer transition-all"
+                onClick={() => setCurrentStep((prev) => prev - 1)}
+                className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
-              </button>
-            ) : <div />}
-
-            {currentStep < 3 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentStep === 1 && !fullName.trim()) {
-                    setNameError('Please enter your full name before continuing.');
-                    return;
-                  }
-                  setNameError(null);
-                  setCurrentStep(prev => prev + 1);
-                }}
-                className="px-8 py-3.5 rounded-full bg-black text-white text-xs font-bold hover:bg-neutral-800 flex items-center gap-2 cursor-pointer shadow-lg hover:scale-105 transition-all"
-              >
-                <span>Next</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </button>
             ) : (
               <button
                 type="button"
-                onClick={handleFinish}
-                className="px-9 py-3.5 rounded-full bg-black text-white text-xs font-bold hover:bg-neutral-800 flex items-center gap-2 cursor-pointer shadow-xl hover:scale-105 transition-all"
+                onClick={handleSkipDirectlyToCloset}
+                className="text-xs font-semibold text-[var(--gold-primary)] hover:underline cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-[#F2D98D]" />
-                <span>Finish & Launch OTD</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                Skip Setup & Open Closet →
               </button>
             )}
+
+            {/* Right Buttons: Skip Step / Next / Finish */}
+            <div className="flex items-center gap-2.5">
+              {currentStep === 1 && (
+                <button
+                  type="button"
+                  onClick={handleNextFromStep1}
+                  className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-md"
+                >
+                  <span>Continue to Measurements</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              )}
+
+              {currentStep === 2 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSkipMeasurements}
+                    className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                  >
+                    Skip Measurements
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextFromStep2}
+                    className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <span>Continue to Avatar</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </>
+              )}
+
+              {currentStep === 3 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSkipAvatar}
+                    className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                  >
+                    Skip Avatar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFinish}
+                    className="px-7 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-xl"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                    <span>Finish & Open My Closet</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
         </div>

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { X, Download, Copy, Check, ShieldCheck } from 'lucide-react';
-
+import { useFocusTrap } from '../utils/focusTrap';
 
 interface ApkModalProps {
   isOpen: boolean;
@@ -9,6 +9,9 @@ interface ApkModalProps {
 
 export const ApkModal: React.FC<ApkModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
+
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -21,8 +24,22 @@ export const ApkModal: React.FC<ApkModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)]">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="apk-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)]"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Close Button */}
         <button
@@ -39,7 +56,7 @@ export const ApkModal: React.FC<ApkModalProps> = ({ isOpen, onClose }) => {
             <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
           </div>
           <div>
-            <h3 className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
+            <h3 id="apk-modal-title" className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
               Download OTD
             </h3>
             <p className="text-xs text-[var(--gold-primary)] font-semibold font-mono">Outfit Of The Day (Android APK v1.0.0)</p>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Check, Sparkles } from 'lucide-react';
-import { useCloset } from '../context/ClosetContext';
+import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useFocusTrap } from '../utils/focusTrap';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -10,11 +11,15 @@ interface UserProfileModalProps {
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
   const { profile, updateProfile } = useCloset();
   const [name, setName] = useState(profile.name);
+  const [wardrobeFocus, setWardrobeFocus] = useState<WardrobeFocus>(profile.wardrobeFocus || 'personalize');
   const [height, setHeight] = useState(profile.height);
   const [bodyShape, setBodyShape] = useState(profile.bodyShape);
   const [selectedStyles, setSelectedStyles] = useState<string[]>(profile.stylePersonas);
   const [fit, setFit] = useState(profile.preferredFit);
   const [saved, setSaved] = useState(false);
+
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -29,6 +34,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const handleSave = () => {
     updateProfile({
       name,
+      wardrobeFocus,
       height,
       bodyShape,
       stylePersonas: selectedStyles,
@@ -42,8 +48,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="user-profile-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Close Button */}
         <button
@@ -60,7 +80,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             <User className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
+            <h3 id="user-profile-title" className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
               Your Style DNA & Profile
             </h3>
             <p className="text-xs text-[var(--text-muted)] font-medium">Calibrate your personal styling rules for OTD</p>
@@ -70,6 +90,46 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         {/* Form Fields */}
         <div className="space-y-5 text-xs">
           
+          {/* Wardrobe Styling Focus (Women / Men / Personalize) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+                Wardrobe Styling Focus
+              </label>
+              <span className="text-[10px] text-[var(--gold-primary)] font-mono">Editable Anytime</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'women' as const, label: 'Women', badge: 'Capsule & Fluid', icon: '👗' },
+                { id: 'men' as const, label: 'Men', badge: 'Sartorial & Tailored', icon: '👔' },
+                { id: 'personalize' as const, label: 'Personalize', badge: 'Mixed / Fluid', icon: '✦' },
+              ].map(opt => {
+                const isSelected = wardrobeFocus === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setWardrobeFocus(opt.id)}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
+                      isSelected
+                        ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] shadow-sm'
+                        : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                    }`}
+                  >
+                    <span className="text-xl">{opt.icon}</span>
+                    <span className="font-semibold text-xs text-[var(--text-heading)]">{opt.label}</span>
+                    <span className="text-[9px] font-mono text-[var(--gold-primary)] tracking-tight">
+                      {opt.badge}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-snug">
+              Calibrates your default closet categories, sizing formulas, and silhouette proportion guides.
+            </p>
+          </div>
+
           {/* Biometrics */}
           <div className="grid grid-cols-2 gap-3">
             <div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Routes, Route, useNavigate, useLocation, Outlet, type Location } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { ClosetProvider } from './context/ClosetContext';
 import { Navbar } from './components/Navbar';
@@ -12,18 +13,105 @@ import { AppDownload } from './components/AppDownload';
 import { Footer } from './components/Footer';
 import { ApkModal } from './components/ApkModal';
 import { UserProfileModal } from './components/UserProfileModal';
-import { AddPieceModal } from './components/AddPieceModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AuthModal } from './components/AuthModal';
-import { AppStudio } from './components/AppStudio';
+import { AppStudio, type StudioTab } from './components/AppStudio';
+import { LegalModal } from './components/ui/LegalModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { NotFoundView } from './components/NotFoundView';
+
+function StudioLayout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive active Studio tab from current route path
+  const isUploadRoute = location.pathname === '/closet/add';
+  const path = location.pathname.replace(/^\//, '');
+  const validStudioTabs: StudioTab[] = [
+    'home',
+    'closet',
+    'stylist',
+    'saved',
+    'shopping',
+    'destinations',
+    'calendar',
+    'ideas',
+    'tryon',
+  ];
+  const activeTab: StudioTab =
+    isUploadRoute || path === 'closet'
+      ? 'closet'
+      : (validStudioTabs.includes(path as StudioTab) ? (path as StudioTab) : 'home');
+
+  const handleTabChange = (tab: StudioTab) => {
+    if (tab === 'closet') {
+      navigate('/closet');
+    } else {
+      navigate(`/${tab}`);
+    }
+  };
+
+  return (
+    <>
+      <AppStudio
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        isUploadRoute={isUploadRoute}
+        onNavigateToUpload={() => navigate('/closet/add')}
+        onBackFromUpload={() => navigate('/closet')}
+        onOpenAddPiece={() => navigate('/closet/add')}
+        onOpenProfile={() => navigate('/profile', { state: { backgroundLocation: location } })}
+        onBackToLanding={() => navigate('/')}
+      />
+
+      <Outlet />
+    </>
+  );
+}
 
 function AppContent() {
-  const [viewMode, setViewMode] = useState<'landing' | 'studio'>('landing');
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isAddPieceModalOpen, setIsAddPieceModalOpen] = useState(false);
-  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
+
+  // Modal route identification
+  const isLogin = location.pathname === '/login';
+  const isRegister = location.pathname === '/register';
+  const isOnboarding = location.pathname === '/onboarding';
+  const isProfile = location.pathname === '/profile';
+  const isModalRoute = isLogin || isRegister || isOnboarding || isProfile;
+
+  // Background location calculation for modal routes:
+  // If state?.backgroundLocation exists, use it.
+  // Otherwise (direct URL entry, fresh tab, or refresh):
+  // - /profile defaults to /home
+  // - /login, /register, /onboarding default to /
+  const state = location.state as { backgroundLocation?: Location } | null;
+  const backgroundLocation =
+    state?.backgroundLocation ||
+    (isModalRoute
+      ? ({
+          pathname: isProfile ? '/home' : '/',
+          search: '',
+          hash: '',
+          state: null,
+          key: 'modal-default-bg',
+        } as Location)
+      : undefined);
+
+  // Safe modal closing handler that respects browser history and direct navigation
+  const handleCloseModal = (defaultFallback: string = '/') => {
+    const hasInternalHistory =
+      Boolean(state?.backgroundLocation) && location.key !== 'default';
+
+    if (hasInternalHistory) {
+      navigate(-1);
+    } else {
+      navigate(defaultFallback, { replace: true });
+    }
+  };
 
   const handleOpenDownload = () => {
     setIsApkModalOpen(true);
@@ -40,51 +128,40 @@ function AppContent() {
     }
   };
 
-  if (viewMode === 'studio') {
-    return (
-      <>
-        <AppStudio
-          onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
-          onOpenProfile={() => setIsProfileModalOpen(true)}
-          onBackToLanding={() => setViewMode('landing')}
-        />
-
-        {/* Global Modals in Studio */}
-        <UserProfileModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-        />
-        <AddPieceModal
-          isOpen={isAddPieceModalOpen}
-          onClose={() => setIsAddPieceModalOpen(false)}
-        />
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-        />
-      </>
-    );
-  }
-
-  return (
+  const landingElement = (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-body)] flex flex-col selection:bg-[var(--gold-primary)]/30 selection:text-[var(--text-heading)] transition-colors duration-300">
+      {/* Skip to Main Content Link for Keyboard & Screen Reader Users */}
+      <a href="#main-content" className="sr-only skip-to-content">
+        Skip to main content
+      </a>
+
       {/* Navigation Header matching Screenshot 1 */}
       <Navbar
         onOpenDownload={handleOpenDownload}
         onExploreDemo={handleExploreDemo}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
-        onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
-        onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
-        onLaunchStudio={() => setViewMode('studio')}
+        onOpenProfile={() =>
+          navigate('/profile', { state: { backgroundLocation: location } })
+        }
+        onOpenAddPiece={() => navigate('/closet/add')}
+        onOpenOnboarding={() =>
+          navigate('/onboarding', { state: { backgroundLocation: location } })
+        }
+        onOpenAuth={() =>
+          navigate('/login', { state: { backgroundLocation: location } })
+        }
+        onLaunchStudio={() => navigate('/home')}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero Section matching Screenshot 1 + Context Engine matching Screenshot 2 */}
         <Hero
-          onOpenProfile={() => setIsProfileModalOpen(true)}
-          onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+          onOpenProfile={() =>
+            navigate('/profile', { state: { backgroundLocation: location } })
+          }
+          onOpenOnboarding={() =>
+            navigate('/onboarding', { state: { backgroundLocation: location } })
+          }
           onExploreDemo={handleExploreDemo}
         />
 
@@ -96,7 +173,7 @@ function AppContent() {
 
         {/* Smart Closet Digital Matrix (Screenshot 2: Screen 11) */}
         <WardrobeStudio
-          onOpenAddPiece={() => setIsAddPieceModalOpen(true)}
+          onOpenAddPiece={() => navigate('/closet/add')}
         />
 
         {/* Closet Gap Intelligence Graph */}
@@ -110,15 +187,9 @@ function AppContent() {
       </main>
 
       {/* Luxury Footer */}
-      <Footer />
-
-      {/* Dedicated Authentication Modal (Matching Reference Screenshot) */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={() => {
-          setViewMode('studio');
-        }}
+      <Footer
+        onPrivacyClick={() => setLegalModalType('privacy')}
+        onTermsClick={() => setLegalModalType('terms')}
       />
 
       {/* Direct APK Download Modal */}
@@ -126,38 +197,93 @@ function AppContent() {
         isOpen={isApkModalOpen}
         onClose={handleCloseDownload}
       />
-
-      {/* Complete 4-Step Onboarding Modal (Screenshots 3, 4, 5) */}
-      <OnboardingModal
-        isOpen={isOnboardingModalOpen}
-        onClose={() => setIsOnboardingModalOpen(false)}
-        onComplete={() => {
-          setViewMode('studio');
-        }}
-      />
-
-      {/* Quick User Profile & Style DNA Calibration Modal */}
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
-
-      {/* Add Garment / Photo Upload & AI Scan Modal (Screenshot 2: Screen 12) */}
-      <AddPieceModal
-        isOpen={isAddPieceModalOpen}
-        onClose={() => setIsAddPieceModalOpen(false)}
-      />
     </div>
+  );
+
+  return (
+    <>
+      <Routes location={backgroundLocation || location}>
+        <Route path="/" element={landingElement} />
+        <Route
+          element={<StudioLayout />}
+        >
+          <Route path="/home" element={null} />
+          <Route path="/closet" element={null} />
+          <Route path="/closet/add" element={null} />
+          <Route path="/stylist" element={null} />
+          <Route path="/saved" element={null} />
+          <Route path="/shopping" element={null} />
+          <Route path="/destinations" element={null} />
+          <Route path="/calendar" element={null} />
+          <Route path="/ideas" element={null} />
+          <Route path="/tryon" element={null} />
+        </Route>
+        <Route path="*" element={<NotFoundView />} />
+      </Routes>
+
+      {/* Route-driven Modals (mounted seamlessly over background screen) */}
+      {(isLogin || isRegister) && (
+        <AuthModal
+          isOpen={true}
+          initialMode={isRegister ? 'signup' : 'signin'}
+          onClose={() => handleCloseModal('/')}
+          onExploreDemo={() => navigate('/home')}
+          onSuccess={() => {
+            navigate('/home');
+          }}
+          onModeChange={(newMode) => {
+            if (newMode === 'signup' && isLogin) {
+              navigate('/register', { replace: true, state: location.state });
+            } else if (newMode === 'signin' && isRegister) {
+              navigate('/login', { replace: true, state: location.state });
+            }
+          }}
+        />
+      )}
+
+      {isOnboarding && (
+        <OnboardingModal
+          isOpen={true}
+          onClose={() => handleCloseModal('/')}
+          onComplete={(destination?: string) => {
+            navigate(destination === 'home' ? '/home' : '/closet');
+          }}
+        />
+      )}
+
+      {isProfile && (
+        <UserProfileModal
+          isOpen={true}
+          onClose={() =>
+            handleCloseModal(
+              state?.backgroundLocation?.pathname &&
+                state.backgroundLocation.pathname !== '/profile'
+                ? state.backgroundLocation.pathname
+                : '/home'
+            )
+          }
+        />
+      )}
+
+      {/* Legal Information Modal */}
+      <LegalModal
+        isOpen={legalModalType !== null}
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
+      />
+    </>
   );
 }
 
 export function App() {
   return (
-    <ThemeProvider>
-      <ClosetProvider>
-        <AppContent />
-      </ClosetProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ClosetProvider>
+          <AppContent />
+        </ClosetProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
