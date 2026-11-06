@@ -1,48 +1,84 @@
-
 import torch
-from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
 
 class MaterialDetector:
 
-    def __init__(self):
+    def __init__(self, model_manager):
 
-        self.model_name = "patrickjohncyh/fashion-clip"
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = model_manager.model
+        self.processor = model_manager.processor
+        self.device = model_manager.device
 
-        print("Loading Material Detection Model...")
+        self.material_prompts = {
+            "Cotton": [
+                "a cotton fabric clothing item",
+                "clothing made of soft cotton",
+                "a garment with cotton texture"
+            ],
+            "Denim": [
+                "a denim clothing item",
+                "clothing made of denim fabric",
+                "a garment with denim texture"
+            ],
+            "Wool": [
+                "a wool clothing item",
+                "clothing made of wool",
+                "a garment with wool texture"
+            ],
+            "Silk": [
+                "a silk clothing item",
+                "clothing made of silk fabric",
+                "a garment with smooth silk texture"
+            ],
+            "Polyester": [
+                "a polyester clothing item",
+                "clothing made of polyester",
+                "a garment with synthetic polyester texture"
+            ],
+            "Linen": [
+                "a linen clothing item",
+                "clothing made of linen fabric",
+                "a garment with linen texture"
+            ],
+            "Leather": [
+                "a leather clothing item",
+                "clothing made of leather",
+                "a garment with leather texture"
+            ],
+            "Nylon": [
+                "a nylon clothing item",
+                "clothing made of nylon",
+                "a garment with nylon texture"
+            ],
+            "Fleece": [
+                "a fleece clothing item",
+                "clothing made of fleece",
+                "a garment with fleece texture"
+            ],
+            "Unknown": [
+                "a clothing item made of an unknown material",
+                "a fabric that cannot be identified",
+                "a garment with unclear material texture"
+            ]
+        }
 
-        self.processor = CLIPProcessor.from_pretrained(
-            self.model_name
-        )
+        print("Material Detector Connected!")
 
-        self.model = CLIPModel.from_pretrained(
-            self.model_name
-        )
-
-        self.model.to(self.device)
-        self.model.eval()
-
-        self.materials = [
-            "a close-up photo of cotton fabric",
-            "a close-up photo of denim fabric",
-            "a close-up photo of wool fabric",
-            "a close-up photo of silk fabric",
-            "a close-up photo of polyester fabric",
-            "a close-up photo of linen fabric",
-            "a close-up photo of leather material",
-            "a clothing image where the fabric material is unclear"
-        ]
-
-        print("Material Detector Loaded!")
-
-    def detect_material(self, image_path):
+    def detect_material(self, image_path, top_k=3):
 
         image = Image.open(image_path).convert("RGB")
 
+        materials = list(self.material_prompts.keys())
+
+        all_prompts = [
+            prompt
+            for prompts in self.material_prompts.values()
+            for prompt in prompts
+        ]
+
         inputs = self.processor(
-            text=self.materials,
+            text=all_prompts,
             images=image,
             return_tensors="pt",
             padding=True
@@ -56,31 +92,37 @@ class MaterialDetector:
         with torch.inference_mode():
             outputs = self.model(**inputs)
 
-        scores = outputs.logits_per_image.softmax(dim=1)[0]
+        logits = outputs.logits_per_image[0]
 
-        top_indices = torch.topk(
-            scores, k=3
-        ).indices
+        material_scores = []
+
+        for index, material in enumerate(materials):
+
+            start = index * 3
+            end = start + 3
+
+            average_score = logits[start:end].mean()
+
+            material_scores.append(average_score)
+
+        material_scores = torch.stack(material_scores)
+        probabilities = material_scores.softmax(dim=0)
+
+        top_k = min(top_k, len(materials))
+
+        values, indices = torch.topk(
+            probabilities,
+            top_k
+        )
 
         results = []
 
-        for index in top_indices:
-
-            material = self.materials[index.item()]
-
-            material = material.replace(
-                "a close-up photo of ", ""
-            )
-
-            material = material.replace(
-                "a clothing image where the fabric material is unclear",
-                "Unknown"
-            )
+        for score, index in zip(values, indices):
 
             results.append({
-                "material": material.replace(" fabric", "").title(),
+                "material": materials[index.item()],
                 "match_score": round(
-                    scores[index].item() * 100, 2
+                    score.item() * 100, 2
                 )
             })
 

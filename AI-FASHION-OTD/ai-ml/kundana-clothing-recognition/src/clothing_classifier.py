@@ -1,31 +1,15 @@
-# OTD Clothing Recognition
-# Model: FashionCLIP
 
 import torch
-from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
 
 class ClothingClassifier:
 
-    def __init__(self):
-        self.model_name = "patrickjohncyh/fashion-clip"
+    def __init__(self, model_manager):
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        print("Loading FashionCLIP model...")
-        print("Device:", self.device)
-
-        self.processor = CLIPProcessor.from_pretrained(
-            self.model_name
-        )
-
-        self.model = CLIPModel.from_pretrained(
-            self.model_name
-        )
-
-        self.model.to(self.device)
-        self.model.eval()
+        self.model = model_manager.model
+        self.processor = model_manager.processor
+        self.device = model_manager.device
 
         self.categories = [
             "a photo of a t-shirt",
@@ -46,7 +30,7 @@ class ClothingClassifier:
             "a photo of a jumpsuit"
         ]
 
-        print("FashionCLIP loaded successfully!")
+        print("Clothing Classifier Connected!")
 
     def predict(self, image_path, top_k=5):
 
@@ -70,13 +54,16 @@ class ClothingClassifier:
         scores = outputs.logits_per_image.softmax(dim=1)[0]
 
         top_k = min(top_k, len(self.categories))
+
         values, indices = torch.topk(scores, top_k)
 
         predictions = []
 
         for score, index in zip(values, indices):
+
             category = self.categories[index.item()]
             category = category.replace("a photo of a ", "")
+            category = category.replace("a photo of ", "")
 
             predictions.append({
                 "category": category,

@@ -1,50 +1,35 @@
-
 import torch
-from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
 
 class AttributeDetector:
 
-    def __init__(self):
+    def __init__(self, model_manager):
 
-        self.model_name = "patrickjohncyh/fashion-clip"
-
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        print("Loading Attribute Detection Model...")
-
-        self.processor = CLIPProcessor.from_pretrained(
-            self.model_name
-        )
-
-        self.model = CLIPModel.from_pretrained(
-            self.model_name
-        )
-
-        self.model.to(self.device)
-        self.model.eval()
+        self.model = model_manager.model
+        self.processor = model_manager.processor
+        self.device = model_manager.device
 
         self.sleeve_labels = [
-            "a person wearing a sleeveless top",
-            "a person wearing a short sleeve t-shirt",
-            "a person wearing a half sleeve shirt",
-            "a person wearing a three quarter sleeve top",
-            "a person wearing a full sleeve shirt"
+            "a sleeveless clothing item",
+            "a short sleeve shirt",
+            "a half sleeve shirt",
+            "a three quarter sleeve top",
+            "a full sleeve shirt"
         ]
 
         self.neckline_labels = [
-            "a garment with a round neckline",
-            "a garment with a V neckline",
-            "a garment with a crew neckline",
-            "a garment with a square neckline",
-            "a garment with a scoop neckline",
-            "a garment with a boat neckline",
-            "a garment with a sweetheart neckline",
-            "a garment with a collared neckline"
+            "a round neckline",
+            "a V neckline",
+            "a crew neckline",
+            "a square neckline",
+            "a scoop neckline",
+            "a boat neckline",
+            "a sweetheart neckline",
+            "a collared neckline"
         ]
 
-        print("Attribute Detector Loaded!")
+        print("Attribute Detector Connected!")
 
     def predict_attribute(self, image, labels):
 
@@ -65,12 +50,12 @@ class AttributeDetector:
 
         scores = outputs.logits_per_image.softmax(dim=1)[0]
 
-        index = torch.argmax(scores).item()
+        best_index = torch.argmax(scores).item()
 
         return {
-            "attribute": labels[index],
+            "attribute": labels[best_index].replace("a ", "").replace(" shirt", "").replace(" top", "").replace(" clothing item", "").title(),
             "match_score": round(
-                scores[index].item() * 100, 2
+                scores[best_index].item() * 100, 2
             )
         }
 
@@ -79,11 +64,13 @@ class AttributeDetector:
         image = Image.open(image_path).convert("RGB")
 
         sleeve = self.predict_attribute(
-            image, self.sleeve_labels
+            image,
+            self.sleeve_labels
         )
 
         neckline = self.predict_attribute(
-            image, self.neckline_labels
+            image,
+            self.neckline_labels
         )
 
         return {

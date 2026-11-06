@@ -1,41 +1,27 @@
 
 import torch
-from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
 
 class PatternDetector:
 
-    def __init__(self):
+    def __init__(self, model_manager):
 
-        self.model_name = "patrickjohncyh/fashion-clip"
-
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        print("Loading Pattern Detection Model...")
-
-        self.processor = CLIPProcessor.from_pretrained(
-            self.model_name
-        )
-
-        self.model = CLIPModel.from_pretrained(
-            self.model_name
-        )
-
-        self.model.to(self.device)
-        self.model.eval()
+        self.model = model_manager.model
+        self.processor = model_manager.processor
+        self.device = model_manager.device
 
         self.patterns = [
-            "a photo of plain clothing",
-            "a photo of floral patterned clothing",
-            "a photo of striped clothing",
-            "a photo of checked clothing",
-            "a photo of polka dot clothing",
-            "a photo of printed clothing",
-            "a photo of geometric patterned clothing"
+            "a plain clothing item",
+            "a floral patterned clothing item",
+            "a striped clothing item",
+            "a checked clothing item",
+            "a polka dot clothing item",
+            "a printed clothing item",
+            "a geometric patterned clothing item"
         ]
 
-        print("Pattern Detector Loaded!")
+        print("Pattern Detector Connected!")
 
     def detect_pattern(self, image_path):
 
@@ -58,15 +44,15 @@ class PatternDetector:
 
         scores = outputs.logits_per_image.softmax(dim=1)[0]
 
-        index = torch.argmax(scores).item()
+        best_index = torch.argmax(scores).item()
 
-        pattern = self.patterns[index]
-
-        pattern = pattern.replace(
-            "a photo of ", ""
-        ).replace(" clothing", "")
+        pattern = self.patterns[best_index]
+        pattern = pattern.replace("a ", "")
+        pattern = pattern.replace(" clothing item", "")
 
         return {
             "pattern": pattern.title(),
-            "match_score": round(scores[index].item() * 100, 2)
+            "match_score": round(
+                scores[best_index].item() * 100, 2
+            )
         }

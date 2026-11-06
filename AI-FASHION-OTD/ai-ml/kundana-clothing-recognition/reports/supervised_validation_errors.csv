@@ -1,0 +1,1612 @@
+image_file,actual_category,predicted_category,confidence,correct
+dress\50508_82854.jpg,dress,skirt,41.730394766726555,False
+jumpsuit\12043_48564.jpg,jumpsuit,dress,90.41574173047044,False
+skirt\12368_44042.jpg,skirt,dress,62.09271277260518,False
+top_t_shirt_sweatshirt\14879_117242.jpg,"top, t-shirt, sweatshirt",dress,46.24253607385989,False
+coat\27981_322760.jpg,coat,dress,36.51588450564873,False
+shirt_blouse\38534_235446.jpg,"shirt, blouse",cardigan,43.63341000656372,False
+jacket\26486_307741.jpg,jacket,coat,47.446603258554745,False
+coat\32007_263597.jpg,coat,jacket,81.62394976001829,False
+shirt_blouse\32007_263601.jpg,"shirt, blouse","top, t-shirt, sweatshirt",62.96425240671621,False
+coat\38303_319789.jpg,coat,"shirt, blouse",35.99030729082815,False
+skirt\48105_174844.jpg,skirt,pants,43.33406083491098,False
+sweater\48105_174845.jpg,sweater,"top, t-shirt, sweatshirt",75.02424738767927,False
+shirt_blouse\13871_110806.jpg,"shirt, blouse",jacket,57.89410753660883,False
+top_t_shirt_sweatshirt\13653_109422.jpg,"top, t-shirt, sweatshirt",pants,40.01943032193093,False
+jumpsuit\37505_229881.jpg,jumpsuit,dress,87.85351248105717,False
+top_t_shirt_sweatshirt\2036_152777.jpg,"top, t-shirt, sweatshirt",coat,32.99629715083594,False
+pants\2036_152781.jpg,pants,dress,69.86503176720562,False
+shirt_blouse\48910_73449.jpg,"shirt, blouse",jacket,72.18714158403402,False
+dress\24537_295990.jpg,dress,jumpsuit,51.034127717727614,False
+dress\29639_256784.jpg,dress,cardigan,73.39243977455779,False
+skirt\25473_331492.jpg,skirt,"top, t-shirt, sweatshirt",40.49697425863736,False
+pants\13123_113485.jpg,pants,skirt,39.5301638685127,False
+skirt\39785_89650.jpg,skirt,dress,62.0645199007647,False
+top_t_shirt_sweatshirt\24490_330438.jpg,"top, t-shirt, sweatshirt",jacket,39.81986187925961,False
+jacket\10700_36388.jpg,jacket,"top, t-shirt, sweatshirt",53.75769058214698,False
+skirt\23520_289149.jpg,skirt,pants,36.09172690346676,False
+dress\16146_15764.jpg,dress,skirt,33.36675351654688,False
+cardigan\10344_34514.jpg,cardigan,sweater,46.35748319942212,False
+top_t_shirt_sweatshirt\32744_267813.jpg,"top, t-shirt, sweatshirt",jacket,60.31521156666756,False
+sweater\40720_94679.jpg,sweater,"top, t-shirt, sweatshirt",76.48400126525019,False
+top_t_shirt_sweatshirt\32333_265706.jpg,"top, t-shirt, sweatshirt","shirt, blouse",58.37841139044821,False
+vest\32333_265707.jpg,vest,"shirt, blouse",69.018737788556,False
+pants\32333_265708.jpg,pants,shorts,47.69540053126569,False
+dress\28671_243624.jpg,dress,sweater,96.12712154742937,False
+dress\49219_81892.jpg,dress,skirt,95.37154995030312,False
+coat\29768_250049.jpg,coat,jacket,47.663323015938865,False
+shirt_blouse\6755_129014.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.2936870234651,False
+top_t_shirt_sweatshirt\15458_2044.jpg,"top, t-shirt, sweatshirt",dress,53.63682248790881,False
+top_t_shirt_sweatshirt\45251_52108.jpg,"top, t-shirt, sweatshirt",dress,40.24803036847997,False
+cardigan\13782_110318.jpg,cardigan,jacket,59.534415395846985,False
+top_t_shirt_sweatshirt\10081_33096.jpg,"top, t-shirt, sweatshirt","shirt, blouse",85.72914589597082,False
+top_t_shirt_sweatshirt\13520_49674.jpg,"top, t-shirt, sweatshirt",shorts,79.00658062034648,False
+jumpsuit\13520_49679.jpg,jumpsuit,"top, t-shirt, sweatshirt",87.44766261581786,False
+top_t_shirt_sweatshirt\4022_154146.jpg,"top, t-shirt, sweatshirt",coat,55.80392257720038,False
+cape\25130_299404.jpg,cape,"top, t-shirt, sweatshirt",73.06036420373239,False
+shorts\25130_299407.jpg,shorts,skirt,69.7676795437561,False
+top_t_shirt_sweatshirt\20201_25311.jpg,"top, t-shirt, sweatshirt",vest,86.30404170066883,False
+shorts\20201_25320.jpg,shorts,pants,65.8061524602032,False
+dress\1245_164645.jpg,dress,"top, t-shirt, sweatshirt",45.47994935173047,False
+dress\4220_154473.jpg,dress,"top, t-shirt, sweatshirt",80.20633249909994,False
+skirt\4220_154475.jpg,skirt,shorts,35.86387809155693,False
+top_t_shirt_sweatshirt\46425_58944.jpg,"top, t-shirt, sweatshirt",dress,44.751529629877204,False
+jumpsuit\41023_96806.jpg,jumpsuit,dress,78.55945827941187,False
+cardigan\41023_96807.jpg,cardigan,jacket,43.79101921722363,False
+top_t_shirt_sweatshirt\14737_116111.jpg,"top, t-shirt, sweatshirt",skirt,57.944493212744575,False
+pants\43433_195774.jpg,pants,jumpsuit,49.52906695222737,False
+pants\14177_112646.jpg,pants,"top, t-shirt, sweatshirt",45.223888255666836,False
+dress\19813_327648.jpg,dress,pants,87.13600116612335,False
+skirt\21366_275389.jpg,skirt,dress,87.3458373485864,False
+skirt\1460_188234.jpg,skirt,shorts,65.42867330513064,False
+pants\32554_266960.jpg,pants,"shirt, blouse",55.89884992391184,False
+skirt\4786_190742.jpg,skirt,pants,89.69451091880859,False
+jumpsuit\6827_129414.jpg,jumpsuit,dress,93.07660489840328,False
+dress\6827_129418.jpg,dress,"top, t-shirt, sweatshirt",67.59009442275678,False
+pants\45725_54706.jpg,pants,shorts,43.320798341389185,False
+cardigan\48663_72043.jpg,cardigan,dress,62.116161701331976,False
+dress\32076_325080.jpg,dress,skirt,46.487206201522454,False
+coat\12045_42197.jpg,coat,dress,43.43826956960519,False
+dress\12045_42199.jpg,dress,"top, t-shirt, sweatshirt",57.26127884921925,False
+jacket\8651_141602.jpg,jacket,coat,45.78466207212502,False
+sweater\13753_116897.jpg,sweater,"top, t-shirt, sweatshirt",45.982353211812594,False
+jacket\37200_318791.jpg,jacket,dress,25.364256492692995,False
+skirt\27695_238146.jpg,skirt,"top, t-shirt, sweatshirt",45.75184444344541,False
+dress\24455_295567.jpg,dress,sweater,53.261649940403835,False
+shirt_blouse\47920_67510.jpg,"shirt, blouse","top, t-shirt, sweatshirt",85.8950325026337,False
+dress\47912_67465.jpg,dress,"top, t-shirt, sweatshirt",83.47760253414228,False
+top_t_shirt_sweatshirt\39697_96386.jpg,"top, t-shirt, sweatshirt",sweater,73.0339862270145,False
+shirt_blouse\13801_110429.jpg,"shirt, blouse","top, t-shirt, sweatshirt",96.65829231051086,False
+skirt\33386_314957.jpg,skirt,pants,57.573553379846345,False
+jumpsuit\17143_16345.jpg,jumpsuit,pants,75.16477777041078,False
+coat\3255_147986.jpg,coat,"top, t-shirt, sweatshirt",57.241058887854045,False
+jacket\21765_277544.jpg,jacket,"top, t-shirt, sweatshirt",55.290999692496214,False
+top_t_shirt_sweatshirt\6732_128894.jpg,"top, t-shirt, sweatshirt","shirt, blouse",47.078587344878905,False
+pants\2112_169648.jpg,pants,skirt,40.9014978213284,False
+dress\7012_130345.jpg,dress,"top, t-shirt, sweatshirt",54.27156220378316,False
+cape\5007_190983.jpg,cape,jacket,46.31869309771223,False
+skirt\19925_24093.jpg,skirt,pants,95.10342106725959,False
+dress\5266_158831.jpg,dress,jumpsuit,60.68277277115671,False
+coat\30011_101185.jpg,coat,jacket,94.50823832633424,False
+top_t_shirt_sweatshirt\38408_234833.jpg,"top, t-shirt, sweatshirt",dress,51.901563021165664,False
+skirt\38408_234836.jpg,skirt,"top, t-shirt, sweatshirt",47.457952648371545,False
+skirt\21347_275306.jpg,skirt,dress,38.164372116657105,False
+top_t_shirt_sweatshirt\21347_275310.jpg,"top, t-shirt, sweatshirt",dress,62.30668944632952,False
+coat\49368_76195.jpg,coat,"top, t-shirt, sweatshirt",71.76724422080764,False
+coat\22029_279981.jpg,coat,jacket,90.08880754674777,False
+shirt_blouse\22029_279988.jpg,"shirt, blouse",jacket,72.06769670848033,False
+cape\44561_202107.jpg,cape,sweater,46.18142576489251,False
+pants\13404_49011.jpg,pants,jumpsuit,49.44743503413957,False
+shirt_blouse\49792_78655.jpg,"shirt, blouse","top, t-shirt, sweatshirt",34.40069639884519,False
+top_t_shirt_sweatshirt\35238_216008.jpg,"top, t-shirt, sweatshirt",pants,30.194309134195713,False
+top_t_shirt_sweatshirt\49682_176745.jpg,"top, t-shirt, sweatshirt",jacket,31.156487385664366,False
+cardigan\4397_154851.jpg,cardigan,"top, t-shirt, sweatshirt",53.94410438166,False
+dress\3851_152102.jpg,dress,"top, t-shirt, sweatshirt",31.83823820221897,False
+jacket\3851_152103.jpg,jacket,cape,84.79265854917375,False
+top_t_shirt_sweatshirt\28814_244720.jpg,"top, t-shirt, sweatshirt",sweater,81.50828303685348,False
+cape\44325_200728.jpg,cape,dress,61.396328924781386,False
+cardigan\38599_236345.jpg,cardigan,jacket,31.74436303211002,False
+dress\48311_69763.jpg,dress,vest,38.00588115363375,False
+dress\34735_316195.jpg,dress,"top, t-shirt, sweatshirt",72.09000037728663,False
+pants\4437_153539.jpg,pants,skirt,63.41346001890739,False
+skirt\4437_153540.jpg,skirt,coat,34.17750328171187,False
+pants\10422_42463.jpg,pants,dress,36.88013848831766,False
+jacket\10422_42469.jpg,jacket,skirt,65.25392891609478,False
+top_t_shirt_sweatshirt\34321_210893.jpg,"top, t-shirt, sweatshirt",dress,91.46302375109845,False
+skirt\43620_313426.jpg,skirt,dress,58.69456368558359,False
+vest\14692_115895.jpg,vest,"top, t-shirt, sweatshirt",35.42782690622466,False
+dress\38469_235058.jpg,dress,"shirt, blouse",82.9010812575954,False
+shirt_blouse\11995_41992.jpg,"shirt, blouse",jacket,92.30979668579742,False
+jacket\885_145704.jpg,jacket,"top, t-shirt, sweatshirt",29.552626369533307,False
+dress\885_145705.jpg,dress,skirt,79.7472374047406,False
+coat\44471_201581.jpg,coat,jacket,64.66380983101445,False
+skirt\44471_201582.jpg,skirt,"top, t-shirt, sweatshirt",74.13598058439881,False
+shirt_blouse\49204_176227.jpg,"shirt, blouse",jacket,59.632268861148695,False
+skirt\25754_303223.jpg,skirt,dress,49.72834911542329,False
+top_t_shirt_sweatshirt\30039_252153.jpg,"top, t-shirt, sweatshirt","shirt, blouse",44.38631231079486,False
+shorts\30039_252156.jpg,shorts,dress,51.57264397963491,False
+top_t_shirt_sweatshirt\20239_278184.jpg,"top, t-shirt, sweatshirt",jumpsuit,36.63328473413815,False
+jacket\33113_270018.jpg,jacket,coat,89.25123531983081,False
+pants\16706_7565.jpg,pants,dress,32.00752284901846,False
+top_t_shirt_sweatshirt\31114_258598.jpg,"top, t-shirt, sweatshirt",dress,71.9529224030161,False
+cape\24755_297175.jpg,cape,coat,28.50932392641155,False
+pants\24755_297176.jpg,pants,"top, t-shirt, sweatshirt",44.61279038795917,False
+dress\24755_297179.jpg,dress,pants,71.01944403423782,False
+skirt\3964_189654.jpg,skirt,dress,79.19322015619863,False
+jacket\45886_55681.jpg,jacket,"top, t-shirt, sweatshirt",57.05485564465951,False
+shirt_blouse\50286_81508.jpg,"shirt, blouse",pants,73.84010697677618,False
+cardigan\44870_64639.jpg,cardigan,dress,59.70262854986472,False
+dress\337_168191.jpg,dress,"top, t-shirt, sweatshirt",75.0852570999386,False
+shirt_blouse\31283_259570.jpg,"shirt, blouse","top, t-shirt, sweatshirt",71.30967365358707,False
+coat\30758_256921.jpg,coat,jacket,75.64101231392661,False
+jumpsuit\14558_115211.jpg,jumpsuit,pants,77.80372605381864,False
+shorts\36681_224933.jpg,shorts,pants,56.03977312162358,False
+jacket\39150_85651.jpg,jacket,"shirt, blouse",59.59579301619997,False
+top_t_shirt_sweatshirt\22710_283970.jpg,"top, t-shirt, sweatshirt",jacket,89.53860071401552,False
+coat\8214_37578.jpg,coat,dress,71.8900517982328,False
+coat\9189_29063.jpg,coat,jacket,46.03419875889595,False
+pants\9189_29066.jpg,pants,dress,54.0427322348309,False
+shirt_blouse\49000_74193.jpg,"shirt, blouse",jacket,93.06647937126917,False
+dress\21087_273698.jpg,dress,skirt,61.103243077982405,False
+top_t_shirt_sweatshirt\26645_308508.jpg,"top, t-shirt, sweatshirt",coat,58.54558950269071,False
+shirt_blouse\44982_50785.jpg,"shirt, blouse","top, t-shirt, sweatshirt",60.19189185278175,False
+vest\44982_50788.jpg,vest,"shirt, blouse",51.51963071464929,False
+top_t_shirt_sweatshirt\34699_213134.jpg,"top, t-shirt, sweatshirt",dress,35.75995545376214,False
+pants\34699_213145.jpg,pants,coat,76.93978939429205,False
+dress\43470_195913.jpg,dress,"top, t-shirt, sweatshirt",74.2113556238372,False
+sweater\3021_188585.jpg,sweater,"top, t-shirt, sweatshirt",76.53743349970746,False
+shirt_blouse\33528_206540.jpg,"shirt, blouse","top, t-shirt, sweatshirt",69.4769593334087,False
+top_t_shirt_sweatshirt\10532_35429.jpg,"top, t-shirt, sweatshirt",dress,72.23211651647533,False
+sweater\39459_87406.jpg,sweater,"top, t-shirt, sweatshirt",69.7925748307289,False
+pants\34884_214186.jpg,pants,"top, t-shirt, sweatshirt",40.686474148412394,False
+dress\17973_13821.jpg,dress,"top, t-shirt, sweatshirt",51.13564604151812,False
+dress\47374_64221.jpg,dress,"top, t-shirt, sweatshirt",73.08488689560079,False
+dress\2288_170558.jpg,dress,skirt,59.20927144142918,False
+shirt_blouse\18484_16993.jpg,"shirt, blouse",jacket,40.81862543344978,False
+vest\18188_14800.jpg,vest,"top, t-shirt, sweatshirt",40.92444116645907,False
+jacket\18188_14801.jpg,jacket,vest,28.787004766315015,False
+shirt_blouse\14087_112199.jpg,"shirt, blouse","top, t-shirt, sweatshirt",62.07477208009715,False
+cape\18385_15492.jpg,cape,"top, t-shirt, sweatshirt",98.00405025867956,False
+jacket\219_159717.jpg,jacket,pants,62.158769060790206,False
+shirt_blouse\26390_306436.jpg,"shirt, blouse","top, t-shirt, sweatshirt",56.42667568074463,False
+coat\26390_306441.jpg,coat,jacket,66.63871618979631,False
+skirt\38945_84490.jpg,skirt,dress,55.247761738450926,False
+shirt_blouse\3331_148775.jpg,"shirt, blouse","top, t-shirt, sweatshirt",53.0208357642101,False
+jacket\23364_328091.jpg,jacket,coat,59.53397010285577,False
+shirt_blouse\23364_328096.jpg,"shirt, blouse",jacket,64.76036859484674,False
+dress\34480_315931.jpg,dress,"top, t-shirt, sweatshirt",96.48664819994859,False
+skirt\11554_40160.jpg,skirt,dress,61.50879050197394,False
+shirt_blouse\6687_128698.jpg,"shirt, blouse",jacket,75.1309375854754,False
+jacket\16879_8369.jpg,jacket,coat,61.92574209305812,False
+dress\16879_8378.jpg,dress,coat,61.526881500099925,False
+pants\16879_8380.jpg,pants,"top, t-shirt, sweatshirt",61.02178712514473,False
+pants\34674_213015.jpg,pants,skirt,86.03346556923097,False
+top_t_shirt_sweatshirt\869_145688.jpg,"top, t-shirt, sweatshirt",sweater,82.67733672436984,False
+skirt\48147_68815.jpg,skirt,dress,82.63659202371754,False
+top_t_shirt_sweatshirt\48147_68820.jpg,"top, t-shirt, sweatshirt","shirt, blouse",78.4499614789937,False
+top_t_shirt_sweatshirt\3029_147038.jpg,"top, t-shirt, sweatshirt",dress,94.24200218483142,False
+dress\11771_41074.jpg,dress,"top, t-shirt, sweatshirt",53.786218546256194,False
+top_t_shirt_sweatshirt\40011_179009.jpg,"top, t-shirt, sweatshirt",dress,60.297859313030024,False
+dress\1946_167887.jpg,dress,skirt,47.28756564011364,False
+skirt\41543_99610.jpg,skirt,dress,51.627164064754425,False
+cardigan\38125_233362.jpg,cardigan,"shirt, blouse",93.65568135836088,False
+shirt_blouse\29063_246069.jpg,"shirt, blouse",jacket,45.71942007963143,False
+shirt_blouse\11625_40551.jpg,"shirt, blouse","top, t-shirt, sweatshirt",63.52377374683178,False
+sweater\26873_205247.jpg,sweater,jacket,76.9556671661946,False
+top_t_shirt_sweatshirt\42430_105712.jpg,"top, t-shirt, sweatshirt",dress,58.29596297567734,False
+cardigan\42320_108344.jpg,cardigan,"shirt, blouse",44.25507149211553,False
+shirt_blouse\18259_15080.jpg,"shirt, blouse",jacket,52.3228036699617,False
+top_t_shirt_sweatshirt\10652_36181.jpg,"top, t-shirt, sweatshirt",dress,77.27997190568045,False
+top_t_shirt_sweatshirt\33074_326125.jpg,"top, t-shirt, sweatshirt",skirt,39.35519029843107,False
+jacket\33074_326131.jpg,jacket,"top, t-shirt, sweatshirt",24.476160581910694,False
+skirt\3659_155440.jpg,skirt,pants,39.86296608759138,False
+top_t_shirt_sweatshirt\11675_40689.jpg,"top, t-shirt, sweatshirt",jacket,84.6445933995374,False
+shirt_blouse\48182_69033.jpg,"shirt, blouse",jacket,57.03853876951538,False
+dress\19421_21264.jpg,dress,"top, t-shirt, sweatshirt",29.555057606947372,False
+top_t_shirt_sweatshirt\1186_192084.jpg,"top, t-shirt, sweatshirt",coat,71.60692244457574,False
+shorts\1186_192085.jpg,shorts,pants,99.32655776558032,False
+sweater\50494_83143.jpg,sweater,"top, t-shirt, sweatshirt",80.38969549117124,False
+top_t_shirt_sweatshirt\21717_277262.jpg,"top, t-shirt, sweatshirt",dress,42.5928394638218,False
+coat\21717_277268.jpg,coat,dress,30.93403967632502,False
+coat\31074_324030.jpg,coat,jacket,61.38508177935187,False
+dress\27480_237143.jpg,dress,skirt,73.28095036276329,False
+jacket\27480_237144.jpg,jacket,"top, t-shirt, sweatshirt",63.15199940415002,False
+coat\17003_16822.jpg,coat,jacket,57.83413192135076,False
+shirt_blouse\17003_16825.jpg,"shirt, blouse","top, t-shirt, sweatshirt",34.1851636378744,False
+top_t_shirt_sweatshirt\10472_35107.jpg,"top, t-shirt, sweatshirt",pants,62.45264373580547,False
+dress\5520_120423.jpg,dress,"top, t-shirt, sweatshirt",36.63719017280811,False
+jacket\39134_85515.jpg,jacket,"top, t-shirt, sweatshirt",96.7694816437622,False
+coat\33529_206554.jpg,coat,jacket,63.5753213314247,False
+dress\40110_179123.jpg,dress,"top, t-shirt, sweatshirt",46.96806356163349,False
+shirt_blouse\6233_124890.jpg,"shirt, blouse",jacket,35.506955826504196,False
+skirt\16628_7231.jpg,skirt,dress,84.86124569762468,False
+top_t_shirt_sweatshirt\11388_39497.jpg,"top, t-shirt, sweatshirt",jumpsuit,44.841598247671705,False
+jacket\28187_240885.jpg,jacket,pants,51.17196621249517,False
+jacket\1376_165163.jpg,jacket,dress,32.547712521087426,False
+shorts\1606_166212.jpg,shorts,skirt,78.85018681117917,False
+dress\38770_236697.jpg,dress,"top, t-shirt, sweatshirt",45.91713942044146,False
+shirt_blouse\38770_236701.jpg,"shirt, blouse","top, t-shirt, sweatshirt",86.44208423495893,False
+coat\9652_31128.jpg,coat,pants,67.64005117050621,False
+skirt\3045_147111.jpg,skirt,dress,80.8011799838183,False
+cardigan\44838_203744.jpg,cardigan,"top, t-shirt, sweatshirt",29.884569934345762,False
+coat\8616_141380.jpg,coat,dress,85.92669785065677,False
+coat\22139_280589.jpg,coat,skirt,56.636548121819295,False
+pants\22139_280591.jpg,pants,"top, t-shirt, sweatshirt",54.00119864252913,False
+top_t_shirt_sweatshirt\38666_236097.jpg,"top, t-shirt, sweatshirt",jacket,30.59885406258598,False
+dress\35158_215564.jpg,dress,jumpsuit,37.080792586592615,False
+shorts\17214_10497.jpg,shorts,"shirt, blouse",40.208955077175375,False
+sweater\41729_100730.jpg,sweater,"top, t-shirt, sweatshirt",58.942603172496874,False
+dress\42532_106441.jpg,dress,skirt,58.61952335196723,False
+top_t_shirt_sweatshirt\4874_157221.jpg,"top, t-shirt, sweatshirt",jacket,47.14003713032627,False
+skirt\35110_316562.jpg,skirt,dress,88.80308387347122,False
+jacket\20670_285230.jpg,jacket,coat,50.06462334896907,False
+dress\20670_285239.jpg,dress,"top, t-shirt, sweatshirt",38.368749347868395,False
+top_t_shirt_sweatshirt\31634_261466.jpg,"top, t-shirt, sweatshirt",pants,37.05785078168324,False
+coat\30929_257528.jpg,coat,jacket,66.29296493712044,False
+shirt_blouse\641_161618.jpg,"shirt, blouse",jacket,45.52433234978092,False
+dress\7949_186941.jpg,dress,"top, t-shirt, sweatshirt",52.94047634756429,False
+top_t_shirt_sweatshirt\11743_40975.jpg,"top, t-shirt, sweatshirt",pants,47.665903585147866,False
+top_t_shirt_sweatshirt\27377_236966.jpg,"top, t-shirt, sweatshirt",cardigan,50.11628563910858,False
+jumpsuit\23570_289420.jpg,jumpsuit,dress,58.526520392217265,False
+skirt\37021_226804.jpg,skirt,dress,72.77866633340376,False
+vest\35952_317466.jpg,vest,"shirt, blouse",57.74587228779604,False
+skirt\14412_3998.jpg,skirt,shorts,58.77904524285834,False
+top_t_shirt_sweatshirt\32426_266328.jpg,"top, t-shirt, sweatshirt",coat,65.59460854935834,False
+dress\7132_131088.jpg,dress,coat,96.38018259651123,False
+coat\25610_252930.jpg,coat,jacket,51.89900769902697,False
+pants\20520_26817.jpg,pants,"top, t-shirt, sweatshirt",42.44058468044078,False
+top_t_shirt_sweatshirt\4030_153076.jpg,"top, t-shirt, sweatshirt",dress,74.1243991472355,False
+jumpsuit\5077_158007.jpg,jumpsuit,shorts,65.80814719300628,False
+dress\32804_268248.jpg,dress,pants,43.35217441242673,False
+top_t_shirt_sweatshirt\40747_94885.jpg,"top, t-shirt, sweatshirt",jacket,52.01931098275702,False
+top_t_shirt_sweatshirt\1644_166408.jpg,"top, t-shirt, sweatshirt",pants,77.60832716105011,False
+jacket\1644_166414.jpg,jacket,"top, t-shirt, sweatshirt",38.80153220519014,False
+top_t_shirt_sweatshirt\12446_44430.jpg,"top, t-shirt, sweatshirt",pants,57.89349081209468,False
+pants\4305_183924.jpg,pants,"top, t-shirt, sweatshirt",60.991040394317665,False
+pants\16088_5059.jpg,pants,shorts,75.92682478076864,False
+skirt\552_161088.jpg,skirt,pants,66.2658896379618,False
+coat\34027_209164.jpg,coat,skirt,59.669905825185445,False
+skirt\34448_211695.jpg,skirt,dress,59.544597904758945,False
+dress\13444_49323.jpg,dress,skirt,58.267824613041554,False
+vest\39295_86388.jpg,vest,"shirt, blouse",52.49593171886148,False
+shirt_blouse\39295_86399.jpg,"shirt, blouse",vest,72.37508479102695,False
+jacket\39295_86401.jpg,jacket,"shirt, blouse",31.408628746019485,False
+dress\41167_97390.jpg,dress,skirt,64.56651987798217,False
+jacket\22662_283665.jpg,jacket,dress,47.919189659199084,False
+cardigan\13044_113406.jpg,cardigan,"top, t-shirt, sweatshirt",41.04258378633908,False
+skirt\2675_144024.jpg,skirt,dress,53.80711298550447,False
+cardigan\50387_82255.jpg,cardigan,"top, t-shirt, sweatshirt",63.362403594657835,False
+shirt_blouse\39510_87681.jpg,"shirt, blouse",sweater,59.31046483972987,False
+vest\31809_262406.jpg,vest,dress,40.15630981720591,False
+dress\49235_75379.jpg,dress,sweater,85.14690784244607,False
+shirt_blouse\137_159431.jpg,"shirt, blouse","top, t-shirt, sweatshirt",72.40474292034716,False
+skirt\41224_97889.jpg,skirt,"top, t-shirt, sweatshirt",71.59058636743228,False
+skirt\23053_287017.jpg,skirt,dress,62.07684387402607,False
+coat\23053_287018.jpg,coat,dress,58.13083945225519,False
+jacket\48747_72459.jpg,jacket,"shirt, blouse",39.64723235293343,False
+skirt\48747_72463.jpg,skirt,"top, t-shirt, sweatshirt",51.23033655002056,False
+dress\95_159240.jpg,dress,jacket,48.212586471849384,False
+shirt_blouse\35925_220280.jpg,"shirt, blouse",jacket,53.209704940316,False
+cardigan\33013_222828.jpg,cardigan,"top, t-shirt, sweatshirt",37.605648459945904,False
+dress\14616_115504.jpg,dress,"top, t-shirt, sweatshirt",28.993509146254894,False
+top_t_shirt_sweatshirt\38500_235115.jpg,"top, t-shirt, sweatshirt",pants,59.91581652186211,False
+shorts\38500_235117.jpg,shorts,skirt,41.4987341165683,False
+cardigan\48092_68498.jpg,cardigan,"top, t-shirt, sweatshirt",44.21294065033131,False
+top_t_shirt_sweatshirt\20795_272167.jpg,"top, t-shirt, sweatshirt",skirt,34.673743641573765,False
+jacket\10870_37206.jpg,jacket,coat,49.006456527997564,False
+skirt\16837_16778.jpg,skirt,shorts,32.13899341210655,False
+shorts\4809_156977.jpg,shorts,pants,46.352188376568435,False
+jacket\40173_91860.jpg,jacket,coat,60.74393511005422,False
+jacket\271_159908.jpg,jacket,"top, t-shirt, sweatshirt",62.521654358785085,False
+top_t_shirt_sweatshirt\3042_188633.jpg,"top, t-shirt, sweatshirt",pants,88.62684149493883,False
+coat\3042_188634.jpg,coat,vest,77.06766044870831,False
+pants\24271_294628.jpg,pants,"top, t-shirt, sweatshirt",31.49223926295255,False
+skirt\29981_251897.jpg,skirt,dress,85.76096891368411,False
+sweater\28964_245599.jpg,sweater,"top, t-shirt, sweatshirt",74.9967824959933,False
+jacket\25111_299322.jpg,jacket,dress,44.00171005136397,False
+skirt\42806_108099.jpg,skirt,shorts,57.24245715066105,False
+top_t_shirt_sweatshirt\42806_108100.jpg,"top, t-shirt, sweatshirt",dress,63.412564012762964,False
+jacket\83_159207.jpg,jacket,"shirt, blouse",51.08922440775206,False
+skirt\19494_21576.jpg,skirt,pants,91.10175693869103,False
+jacket\4855_157134.jpg,jacket,"top, t-shirt, sweatshirt",63.03019844154559,False
+top_t_shirt_sweatshirt\4855_157138.jpg,"top, t-shirt, sweatshirt",pants,37.908149748371315,False
+top_t_shirt_sweatshirt\35139_215776.jpg,"top, t-shirt, sweatshirt",dress,81.21494606908207,False
+top_t_shirt_sweatshirt\21782_327763.jpg,"top, t-shirt, sweatshirt",pants,67.86309008388322,False
+shirt_blouse\9075_28587.jpg,"shirt, blouse","top, t-shirt, sweatshirt",88.06091833944892,False
+skirt\9075_28588.jpg,skirt,dress,65.1946373296891,False
+dress\14049_111778.jpg,dress,"top, t-shirt, sweatshirt",25.88912368815441,False
+top_t_shirt_sweatshirt\17107_10140.jpg,"top, t-shirt, sweatshirt",dress,45.94613145683032,False
+shirt_blouse\26678_308528.jpg,"shirt, blouse","top, t-shirt, sweatshirt",46.42260240121923,False
+skirt\24838_297611.jpg,skirt,"top, t-shirt, sweatshirt",45.38876234962879,False
+shirt_blouse\6168_124429.jpg,"shirt, blouse","top, t-shirt, sweatshirt",98.43949182391351,False
+jacket\6168_124431.jpg,jacket,shorts,97.07653369234257,False
+pants\9670_31222.jpg,pants,shorts,77.54257535257176,False
+cardigan\322_160230.jpg,cardigan,"shirt, blouse",83.7015628306294,False
+dress\7711_135135.jpg,dress,jacket,30.80737878239585,False
+top_t_shirt_sweatshirt\31852_262671.jpg,"top, t-shirt, sweatshirt",dress,64.52092163524419,False
+skirt\37132_227545.jpg,skirt,shorts,78.88033223043105,False
+top_t_shirt_sweatshirt\37132_227555.jpg,"top, t-shirt, sweatshirt",dress,31.68648973115215,False
+top_t_shirt_sweatshirt\14194_112735.jpg,"top, t-shirt, sweatshirt",vest,95.15698991670722,False
+shorts\14194_112740.jpg,shorts,"top, t-shirt, sweatshirt",39.184965478076386,False
+cardigan\50073_177127.jpg,cardigan,jacket,45.09078821030901,False
+top_t_shirt_sweatshirt\50073_177129.jpg,"top, t-shirt, sweatshirt",dress,66.37030649163428,False
+skirt\46098_57044.jpg,skirt,dress,39.89599739661861,False
+vest\546_161354.jpg,vest,"shirt, blouse",40.67876463683119,False
+skirt\43550_196375.jpg,skirt,shorts,49.68074420612473,False
+shirt_blouse\33004_269431.jpg,"shirt, blouse",jacket,58.08886806404716,False
+shirt_blouse\7420_133406.jpg,"shirt, blouse","top, t-shirt, sweatshirt",66.62690003512358,False
+dress\41406_98866.jpg,dress,"top, t-shirt, sweatshirt",64.46021254217499,False
+top_t_shirt_sweatshirt\16361_15934.jpg,"top, t-shirt, sweatshirt",jacket,71.61539538536184,False
+top_t_shirt_sweatshirt\12878_39086.jpg,"top, t-shirt, sweatshirt",shorts,32.12930775692351,False
+top_t_shirt_sweatshirt\3747_151132.jpg,"top, t-shirt, sweatshirt",skirt,29.185447077460474,False
+jacket\3747_151134.jpg,jacket,coat,49.509253775191375,False
+shirt_blouse\39442_87316.jpg,"shirt, blouse",skirt,29.43391860750924,False
+pants\39442_87321.jpg,pants,skirt,54.52659358280989,False
+top_t_shirt_sweatshirt\22457_282445.jpg,"top, t-shirt, sweatshirt",pants,66.83603572644824,False
+top_t_shirt_sweatshirt\6597_185211.jpg,"top, t-shirt, sweatshirt",dress,48.003165354039645,False
+jacket\6597_185215.jpg,jacket,"top, t-shirt, sweatshirt",32.86195323857154,False
+dress\453_168238.jpg,dress,"top, t-shirt, sweatshirt",48.56014559543387,False
+coat\453_168239.jpg,coat,jacket,50.01737476033189,False
+skirt\19901_24019.jpg,skirt,dress,86.76941765478885,False
+dress\46401_58632.jpg,dress,cape,74.26995348391908,False
+dress\14354_182973.jpg,dress,"top, t-shirt, sweatshirt",33.00193358202325,False
+coat\14354_182979.jpg,coat,jacket,36.02161057450865,False
+dress\1296_164771.jpg,dress,coat,63.4000847375609,False
+jacket\72_159127.jpg,jacket,"shirt, blouse",38.71174096686353,False
+dress\72_159132.jpg,dress,skirt,58.43294819026158,False
+shirt_blouse\5160_158385.jpg,"shirt, blouse","top, t-shirt, sweatshirt",38.43903189412684,False
+dress\3484_149311.jpg,dress,"top, t-shirt, sweatshirt",43.171667046136555,False
+skirt\21516_276222.jpg,skirt,shorts,74.4169241483009,False
+shorts\5100_158104.jpg,shorts,skirt,55.845294660068824,False
+top_t_shirt_sweatshirt\45964_56087.jpg,"top, t-shirt, sweatshirt",dress,71.40329831117144,False
+pants\49110_74764.jpg,pants,"top, t-shirt, sweatshirt",51.59817919592565,False
+dress\9882_32421.jpg,dress,coat,86.91767123971128,False
+sweater\28246_241125.jpg,sweater,dress,56.47211478131442,False
+dress\25777_303331.jpg,dress,"shirt, blouse",36.21552122858889,False
+top_t_shirt_sweatshirt\2339_170829.jpg,"top, t-shirt, sweatshirt",sweater,55.521521757916545,False
+skirt\18593_17462.jpg,skirt,"top, t-shirt, sweatshirt",49.23911304635374,False
+dress\483_148084.jpg,dress,skirt,52.9611843988215,False
+top_t_shirt_sweatshirt\17217_10512.jpg,"top, t-shirt, sweatshirt",dress,42.82109553568421,False
+coat\28090_240030.jpg,coat,jacket,51.425515415092335,False
+skirt\19783_23559.jpg,skirt,"top, t-shirt, sweatshirt",55.1960971874064,False
+shirt_blouse\19783_23560.jpg,"shirt, blouse","top, t-shirt, sweatshirt",68.29127867570303,False
+jacket\19783_23563.jpg,jacket,"top, t-shirt, sweatshirt",66.43173287200635,False
+top_t_shirt_sweatshirt\21247_274615.jpg,"top, t-shirt, sweatshirt",jacket,32.48955173827872,False
+top_t_shirt_sweatshirt\3690_151046.jpg,"top, t-shirt, sweatshirt",jacket,46.803754428497065,False
+top_t_shirt_sweatshirt\846_144394.jpg,"top, t-shirt, sweatshirt",dress,58.90681791142468,False
+dress\37512_229915.jpg,dress,skirt,56.623955494099086,False
+skirt\16679_7444.jpg,skirt,jumpsuit,29.287282111025153,False
+shirt_blouse\14397_114300.jpg,"shirt, blouse",jacket,44.54175209248657,False
+dress\14397_114302.jpg,dress,"top, t-shirt, sweatshirt",43.999875973762784,False
+cardigan\48046_68268.jpg,cardigan,coat,59.49780308852111,False
+coat\46279_58763.jpg,coat,dress,39.616470010600764,False
+dress\28491_242423.jpg,dress,"top, t-shirt, sweatshirt",41.90750712620897,False
+jacket\29353_247511.jpg,jacket,coat,50.35261341414362,False
+dress\39278_86261.jpg,dress,skirt,73.48879591458658,False
+jumpsuit\40985_96611.jpg,jumpsuit,dress,92.1368931206374,False
+shirt_blouse\12356_113193.jpg,"shirt, blouse",pants,52.71469565517647,False
+top_t_shirt_sweatshirt\737_162101.jpg,"top, t-shirt, sweatshirt",dress,93.19520534296379,False
+pants\737_162102.jpg,pants,dress,55.738939349334814,False
+skirt\1498_192358.jpg,skirt,shorts,85.76718990097301,False
+jacket\5787_167639.jpg,jacket,dress,71.75916917632937,False
+jacket\5787_167640.jpg,jacket,"top, t-shirt, sweatshirt",82.2198753936885,False
+jacket\5787_167641.jpg,jacket,"top, t-shirt, sweatshirt",65.24055213506182,False
+jacket\5787_167642.jpg,jacket,"top, t-shirt, sweatshirt",60.36985356881267,False
+skirt\21690_277120.jpg,skirt,"top, t-shirt, sweatshirt",70.01290979816814,False
+pants\3492_149348.jpg,pants,"top, t-shirt, sweatshirt",47.88878005985524,False
+skirt\24959_330919.jpg,skirt,shorts,92.731514047573,False
+sweater\3913_189613.jpg,sweater,"top, t-shirt, sweatshirt",55.155062486640084,False
+dress\7860_135644.jpg,dress,"top, t-shirt, sweatshirt",45.993830708085035,False
+pants\37955_232459.jpg,pants,"top, t-shirt, sweatshirt",61.1981830603947,False
+top_t_shirt_sweatshirt\45612_172392.jpg,"top, t-shirt, sweatshirt",jacket,55.66215901439829,False
+jacket\45612_172397.jpg,jacket,"top, t-shirt, sweatshirt",37.117892172923796,False
+shorts\39080_85249.jpg,shorts,pants,87.98839924185154,False
+pants\4955_157576.jpg,pants,"top, t-shirt, sweatshirt",87.52257996276582,False
+shirt_blouse\45068_51144.jpg,"shirt, blouse",jacket,92.85825829911232,False
+jacket\37214_227978.jpg,jacket,"top, t-shirt, sweatshirt",65.8796944268575,False
+vest\15943_4479.jpg,vest,"top, t-shirt, sweatshirt",56.704815668525896,False
+shorts\15943_4482.jpg,shorts,"top, t-shirt, sweatshirt",36.71971118950181,False
+dress\3486_149326.jpg,dress,"top, t-shirt, sweatshirt",70.68501597898253,False
+coat\3342_148818.jpg,coat,dress,66.16158784968279,False
+coat\25281_300223.jpg,coat,dress,57.8786396087042,False
+top_t_shirt_sweatshirt\18030_22130.jpg,"top, t-shirt, sweatshirt",jacket,74.91375011616401,False
+pants\36501_223571.jpg,pants,"top, t-shirt, sweatshirt",74.8533979397783,False
+sweater\35733_229635.jpg,sweater,"top, t-shirt, sweatshirt",25.196405497432607,False
+shirt_blouse\35733_229640.jpg,"shirt, blouse","top, t-shirt, sweatshirt",78.99494445177744,False
+dress\11899_41569.jpg,dress,pants,66.44779572048728,False
+jacket\41323_98443.jpg,jacket,coat,50.68449175556595,False
+jumpsuit\44066_199306.jpg,jumpsuit,pants,78.254362119267,False
+coat\48969_74083.jpg,coat,dress,56.52693787407087,False
+jacket\16766_7977.jpg,jacket,skirt,56.32163434996684,False
+skirt\7125_131026.jpg,skirt,"top, t-shirt, sweatshirt",67.39719447003338,False
+dress\17804_13110.jpg,dress,"top, t-shirt, sweatshirt",67.17863921404958,False
+sweater\33524_206406.jpg,sweater,"top, t-shirt, sweatshirt",31.501009897716166,False
+shirt_blouse\12297_43720.jpg,"shirt, blouse",pants,45.10130774783862,False
+sweater\12297_43725.jpg,sweater,"top, t-shirt, sweatshirt",68.16427160137584,False
+shirt_blouse\20419_26199.jpg,"shirt, blouse","top, t-shirt, sweatshirt",46.14609885119515,False
+top_t_shirt_sweatshirt\12393_44112.jpg,"top, t-shirt, sweatshirt",pants,36.21953369511298,False
+skirt\36569_224434.jpg,skirt,pants,96.36735196304866,False
+dress\22217_280994.jpg,dress,"top, t-shirt, sweatshirt",92.0668119439075,False
+skirt\45578_53973.jpg,skirt,pants,97.3146366217527,False
+skirt\36418_317982.jpg,skirt,jacket,25.773182695446877,False
+top_t_shirt_sweatshirt\36418_317983.jpg,"top, t-shirt, sweatshirt",sweater,49.96588768386712,False
+jacket\20871_272730.jpg,jacket,dress,46.332779375935914,False
+skirt\42644_107030.jpg,skirt,dress,97.09128877311308,False
+jacket\23501_288940.jpg,jacket,"top, t-shirt, sweatshirt",86.1914259663137,False
+coat\12777_45831.jpg,coat,dress,57.69112485469095,False
+jumpsuit\13058_182883.jpg,jumpsuit,"top, t-shirt, sweatshirt",81.49852940383154,False
+jumpsuit\7404_133095.jpg,jumpsuit,jacket,82.17121664600494,False
+top_t_shirt_sweatshirt\5033_122094.jpg,"top, t-shirt, sweatshirt",jacket,86.00156413021485,False
+dress\31904_324948.jpg,dress,jacket,46.59693515080062,False
+shorts\40120_91482.jpg,shorts,skirt,55.44090473618745,False
+top_t_shirt_sweatshirt\40120_91488.jpg,"top, t-shirt, sweatshirt","shirt, blouse",51.0720683808932,False
+dress\1267_164374.jpg,dress,skirt,60.38604436451891,False
+sweater\43457_195858.jpg,sweater,coat,69.56516358847163,False
+jacket\30626_255471.jpg,jacket,cardigan,49.356458602114905,False
+dress\411_160543.jpg,dress,coat,57.99694459549853,False
+shirt_blouse\48643_71962.jpg,"shirt, blouse",jacket,84.60046882819961,False
+dress\16057_4923.jpg,dress,"top, t-shirt, sweatshirt",53.974208952409356,False
+shorts\17709_12733.jpg,shorts,skirt,34.33075362165595,False
+vest\31188_259015.jpg,vest,"shirt, blouse",50.62668355381123,False
+top_t_shirt_sweatshirt\36026_229678.jpg,"top, t-shirt, sweatshirt",jacket,81.57878072366633,False
+jumpsuit\2364_170973.jpg,jumpsuit,dress,70.69347091168054,False
+shirt_blouse\15292_275166.jpg,"shirt, blouse",jacket,43.571473629786645,False
+top_t_shirt_sweatshirt\49686_77998.jpg,"top, t-shirt, sweatshirt","shirt, blouse",46.312832149222075,False
+shirt_blouse\5926_122541.jpg,"shirt, blouse",pants,46.11604902024783,False
+top_t_shirt_sweatshirt\21668_277002.jpg,"top, t-shirt, sweatshirt",dress,65.52013697008452,False
+dress\9345_29590.jpg,dress,"top, t-shirt, sweatshirt",56.93463196121924,False
+dress\50518_82895.jpg,dress,sweater,73.44020113600563,False
+pants\41693_100556.jpg,pants,shorts,58.1318873089042,False
+jacket\41693_100560.jpg,jacket,coat,70.64922849178107,False
+top_t_shirt_sweatshirt\29371_322318.jpg,"top, t-shirt, sweatshirt","shirt, blouse",57.775359683320005,False
+top_t_shirt_sweatshirt\38588_235761.jpg,"top, t-shirt, sweatshirt",sweater,89.86601339037891,False
+skirt\33364_271407.jpg,skirt,dress,72.8502924298092,False
+top_t_shirt_sweatshirt\24864_297888.jpg,"top, t-shirt, sweatshirt",coat,61.2402047235524,False
+cardigan\24864_297899.jpg,cardigan,coat,64.84052178455309,False
+top_t_shirt_sweatshirt\34883_214172.jpg,"top, t-shirt, sweatshirt",sweater,51.36027873339499,False
+skirt\14998_117851.jpg,skirt,dress,58.836159659733624,False
+skirt\22983_286422.jpg,skirt,dress,49.150581981904715,False
+dress\37130_227398.jpg,dress,sweater,44.32786621369827,False
+jacket\39395_87015.jpg,jacket,coat,56.419561624595495,False
+top_t_shirt_sweatshirt\11086_38156.jpg,"top, t-shirt, sweatshirt",jacket,56.729521519377634,False
+jumpsuit\3511_150777.jpg,jumpsuit,dress,93.36615512357628,False
+top_t_shirt_sweatshirt\3753_149964.jpg,"top, t-shirt, sweatshirt",skirt,37.09502820927348,False
+skirt\9720_35917.jpg,skirt,dress,62.428043848683714,False
+top_t_shirt_sweatshirt\9720_35923.jpg,"top, t-shirt, sweatshirt",pants,42.60860847913715,False
+shorts\3175_147689.jpg,shorts,skirt,78.91453281558374,False
+sweater\3175_147696.jpg,sweater,"top, t-shirt, sweatshirt",81.67166294077762,False
+coat\36156_221571.jpg,coat,dress,35.69705492499812,False
+skirt\18897_18824.jpg,skirt,pants,33.43239800421371,False
+coat\7441_133483.jpg,coat,jacket,89.49607848485094,False
+skirt\25788_303400.jpg,skirt,dress,56.718949926648996,False
+dress\893_162705.jpg,dress,"top, t-shirt, sweatshirt",50.831451959283704,False
+dress\23750_329532.jpg,dress,skirt,55.04013514802144,False
+dress\39491_178503.jpg,dress,skirt,73.9339848012007,False
+sweater\1035_150406.jpg,sweater,jacket,59.122354978265015,False
+shorts\45438_53140.jpg,shorts,sweater,28.38856521927105,False
+top_t_shirt_sweatshirt\45438_53141.jpg,"top, t-shirt, sweatshirt",dress,38.52252047150371,False
+top_t_shirt_sweatshirt\11193_49145.jpg,"top, t-shirt, sweatshirt",shorts,75.05719231995225,False
+jacket\11193_49151.jpg,jacket,"shirt, blouse",33.56894067997596,False
+jacket\15302_1544.jpg,jacket,"top, t-shirt, sweatshirt",42.33474521894208,False
+dress\43463_313183.jpg,dress,coat,31.691604627483542,False
+coat\21559_276497.jpg,coat,jacket,72.30801539422698,False
+top_t_shirt_sweatshirt\21559_276501.jpg,"top, t-shirt, sweatshirt",pants,45.94936567156842,False
+shirt_blouse\728_162071.jpg,"shirt, blouse","top, t-shirt, sweatshirt",39.0770525595752,False
+coat\1512_165831.jpg,coat,"top, t-shirt, sweatshirt",43.28384881955176,False
+skirt\1512_165832.jpg,skirt,"top, t-shirt, sweatshirt",56.02106210584126,False
+jumpsuit\13641_109406.jpg,jumpsuit,dress,63.05625660960339,False
+jacket\28164_321012.jpg,jacket,cardigan,56.87185786096808,False
+skirt\28164_321015.jpg,skirt,dress,53.407929728747085,False
+shorts\14648_115613.jpg,shorts,"top, t-shirt, sweatshirt",64.19369490108176,False
+coat\24698_308449.jpg,coat,jacket,73.87439988173466,False
+shirt_blouse\1359_165107.jpg,"shirt, blouse",jacket,76.51627280688564,False
+top_t_shirt_sweatshirt\48584_71798.jpg,"top, t-shirt, sweatshirt",jacket,65.07050656340365,False
+dress\42205_104192.jpg,dress,coat,69.23617284651233,False
+pants\11608_48330.jpg,pants,dress,88.66184831271707,False
+top_t_shirt_sweatshirt\11608_48331.jpg,"top, t-shirt, sweatshirt",dress,46.98918738001915,False
+shirt_blouse\11608_48336.jpg,"shirt, blouse",jacket,69.48856689982546,False
+top_t_shirt_sweatshirt\49484_176522.jpg,"top, t-shirt, sweatshirt",cardigan,80.02693671723408,False
+dress\20183_249.jpg,dress,"top, t-shirt, sweatshirt",58.4585940941898,False
+jacket\20183_252.jpg,jacket,"top, t-shirt, sweatshirt",43.27068915361732,False
+dress\26545_307085.jpg,dress,"shirt, blouse",89.93780224073754,False
+shirt_blouse\2136_189511.jpg,"shirt, blouse",jacket,55.792567186464815,False
+top_t_shirt_sweatshirt\12435_44389.jpg,"top, t-shirt, sweatshirt",jacket,49.06509824203259,False
+shirt_blouse\31304_259707.jpg,"shirt, blouse",jacket,54.149741559352435,False
+dress\21150_274044.jpg,dress,pants,37.36978925568569,False
+jacket\21150_274050.jpg,jacket,coat,78.69721914175368,False
+coat\19429_205186.jpg,coat,dress,54.43746136758973,False
+dress\40762_94947.jpg,dress,jacket,63.27085465151917,False
+sweater\38139_71718.jpg,sweater,dress,57.86729291665939,False
+top_t_shirt_sweatshirt\43365_195381.jpg,"top, t-shirt, sweatshirt",sweater,51.50546724771732,False
+dress\9086_28640.jpg,dress,skirt,56.79248799801261,False
+dress\42246_104376.jpg,dress,skirt,50.96195953546505,False
+shirt_blouse\4892_122022.jpg,"shirt, blouse","top, t-shirt, sweatshirt",62.34814790450106,False
+dress\3415_155214.jpg,dress,skirt,30.961987207954,False
+jumpsuit\17670_12581.jpg,jumpsuit,dress,83.01942331322543,False
+shorts\597_161465.jpg,shorts,pants,72.98768336021816,False
+top_t_shirt_sweatshirt\22886_284964.jpg,"top, t-shirt, sweatshirt","shirt, blouse",83.66353568648908,False
+top_t_shirt_sweatshirt\8014_137266.jpg,"top, t-shirt, sweatshirt","shirt, blouse",70.24155109006993,False
+shorts\23899_329701.jpg,shorts,"top, t-shirt, sweatshirt",38.667131522813676,False
+dress\23899_329706.jpg,dress,"top, t-shirt, sweatshirt",45.91051998483586,False
+skirt\4401_154862.jpg,skirt,dress,41.56543057370945,False
+jumpsuit\4498_154965.jpg,jumpsuit,dress,44.13984543626936,False
+pants\3040_147081.jpg,pants,"top, t-shirt, sweatshirt",73.50394740518273,False
+top_t_shirt_sweatshirt\3040_147087.jpg,"top, t-shirt, sweatshirt",dress,88.02450337378792,False
+dress\14241_117034.jpg,dress,coat,83.13079862620944,False
+jacket\40797_95010.jpg,jacket,"top, t-shirt, sweatshirt",45.2613373244822,False
+jacket\22617_283352.jpg,jacket,coat,42.498222356281765,False
+shirt_blouse\115_152732.jpg,"shirt, blouse","top, t-shirt, sweatshirt",74.17300505162682,False
+pants\47767_66614.jpg,pants,dress,67.37596207744109,False
+jacket\6973_130197.jpg,jacket,coat,48.28254950087996,False
+dress\1969_167928.jpg,dress,"top, t-shirt, sweatshirt",69.68131656444041,False
+jacket\41705_100622.jpg,jacket,"top, t-shirt, sweatshirt",86.65020239766721,False
+top_t_shirt_sweatshirt\28462_242317.jpg,"top, t-shirt, sweatshirt",dress,78.53420442431171,False
+dress\15154_984.jpg,dress,skirt,56.2552444032566,False
+dress\12411_44198.jpg,dress,skirt,68.3791096168141,False
+top_t_shirt_sweatshirt\23659_300716.jpg,"top, t-shirt, sweatshirt",pants,41.75283688445385,False
+cardigan\49421_76530.jpg,cardigan,"top, t-shirt, sweatshirt",43.6043400829416,False
+skirt\20091_24836.jpg,skirt,pants,44.05549325697163,False
+shirt_blouse\41497_193524.jpg,"shirt, blouse","top, t-shirt, sweatshirt",38.50901451350315,False
+coat\41497_193525.jpg,coat,jacket,66.74052641218499,False
+vest\41497_193527.jpg,vest,"shirt, blouse",62.0048662111064,False
+top_t_shirt_sweatshirt\31029_323996.jpg,"top, t-shirt, sweatshirt","shirt, blouse",66.5692497632135,False
+top_t_shirt_sweatshirt\40942_180035.jpg,"top, t-shirt, sweatshirt",skirt,47.43257536650701,False
+skirt\31142_258805.jpg,skirt,dress,57.706148506125324,False
+dress\13561_110647.jpg,dress,"top, t-shirt, sweatshirt",31.62550944342421,False
+vest\7317_132690.jpg,vest,jacket,31.088498490216914,False
+shorts\7317_132692.jpg,shorts,skirt,56.83633935737371,False
+cardigan\24874_297935.jpg,cardigan,coat,55.465638646902825,False
+skirt\24874_297936.jpg,skirt,shorts,87.24670796348222,False
+jacket\6966_130128.jpg,jacket,pants,46.045201630534535,False
+vest\63_168072.jpg,vest,"top, t-shirt, sweatshirt",79.31728600612003,False
+shorts\3317_148711.jpg,shorts,"top, t-shirt, sweatshirt",74.5162877152424,False
+sweater\41619_100089.jpg,sweater,"top, t-shirt, sweatshirt",69.36145784296275,False
+shirt_blouse\31216_259164.jpg,"shirt, blouse","top, t-shirt, sweatshirt",35.530537373189915,False
+jacket\31216_259166.jpg,jacket,"top, t-shirt, sweatshirt",27.017448590610755,False
+coat\881_191867.jpg,coat,dress,52.21124169117887,False
+top_t_shirt_sweatshirt\1687_166652.jpg,"top, t-shirt, sweatshirt",dress,40.288815594375,False
+pants\37948_232397.jpg,pants,"top, t-shirt, sweatshirt",44.446882328970354,False
+jacket\1700_192500.jpg,jacket,"top, t-shirt, sweatshirt",58.390935299718215,False
+shirt_blouse\46902_61506.jpg,"shirt, blouse","top, t-shirt, sweatshirt",66.18848811304755,False
+dress\48116_68643.jpg,dress,"top, t-shirt, sweatshirt",63.883363151566584,False
+jacket\34131_209745.jpg,jacket,coat,47.98011626033179,False
+shorts\34131_209749.jpg,shorts,"top, t-shirt, sweatshirt",46.131656953520114,False
+top_t_shirt_sweatshirt\36236_222083.jpg,"top, t-shirt, sweatshirt","shirt, blouse",45.856054706855936,False
+pants\48146_68797.jpg,pants,"top, t-shirt, sweatshirt",48.64240050852353,False
+top_t_shirt_sweatshirt\36750_225296.jpg,"top, t-shirt, sweatshirt",dress,28.913688938204956,False
+pants\2466_150584.jpg,pants,"top, t-shirt, sweatshirt",80.3525454379388,False
+top_t_shirt_sweatshirt\2466_150588.jpg,"top, t-shirt, sweatshirt",sweater,54.92317331790223,False
+skirt\26273_305693.jpg,skirt,dress,95.19420267371146,False
+shirt_blouse\3262_152905.jpg,"shirt, blouse",skirt,31.32997719480104,False
+vest\3262_152908.jpg,vest,"shirt, blouse",71.79866076911217,False
+pants\50502_82806.jpg,pants,skirt,81.20292968892367,False
+skirt\41578_99888.jpg,skirt,"top, t-shirt, sweatshirt",53.31215557756681,False
+dress\8324_139470.jpg,dress,shorts,54.328339598307075,False
+jumpsuit\1986_168622.jpg,jumpsuit,pants,95.71781910501426,False
+top_t_shirt_sweatshirt\3205_147798.jpg,"top, t-shirt, sweatshirt",dress,40.14446919985416,False
+top_t_shirt_sweatshirt\12950_46321.jpg,"top, t-shirt, sweatshirt",dress,37.32295650617888,False
+skirt\47722_66358.jpg,skirt,pants,75.0325038755786,False
+vest\22040_328044.jpg,vest,jacket,26.875123369891558,False
+jumpsuit\23403_283470.jpg,jumpsuit,dress,82.99641839408316,False
+jacket\7812_135580.jpg,jacket,"top, t-shirt, sweatshirt",75.7238161388268,False
+jacket\8570_187546.jpg,jacket,"top, t-shirt, sweatshirt",81.60885712622269,False
+skirt\8570_187547.jpg,skirt,dress,70.03711067333408,False
+skirt\5503_127442.jpg,skirt,"top, t-shirt, sweatshirt",53.72148174555734,False
+top_t_shirt_sweatshirt\5503_127443.jpg,"top, t-shirt, sweatshirt",dress,98.13848695148883,False
+dress\50116_82002.jpg,dress,pants,34.224394990875375,False
+coat\50116_82003.jpg,coat,dress,86.91301516766976,False
+pants\26558_307821.jpg,pants,skirt,31.314932104583114,False
+top_t_shirt_sweatshirt\2859_146250.jpg,"top, t-shirt, sweatshirt",dress,67.71501491024392,False
+top_t_shirt_sweatshirt\23170_287832.jpg,"top, t-shirt, sweatshirt",dress,37.94609082142409,False
+skirt\7207_185985.jpg,skirt,dress,52.760060579474946,False
+sweater\39826_89861.jpg,sweater,"top, t-shirt, sweatshirt",88.89090453263519,False
+shorts\45011_50871.jpg,shorts,skirt,32.851273879642655,False
+top_t_shirt_sweatshirt\48352_70010.jpg,"top, t-shirt, sweatshirt",dress,72.4120343640612,False
+skirt\44367_201397.jpg,skirt,pants,99.95543369546373,False
+top_t_shirt_sweatshirt\6563_126711.jpg,"top, t-shirt, sweatshirt",sweater,38.80404029205373,False
+jumpsuit\7451_133556.jpg,jumpsuit,pants,97.23982959357691,False
+vest\9932_130908.jpg,vest,"shirt, blouse",55.629051370750894,False
+top_t_shirt_sweatshirt\9932_130912.jpg,"top, t-shirt, sweatshirt",jacket,41.4884587065179,False
+coat\44430_314170.jpg,coat,jacket,72.09324009466427,False
+shirt_blouse\21858_279141.jpg,"shirt, blouse","top, t-shirt, sweatshirt",73.77730538225441,False
+skirt\6663_128638.jpg,skirt,dress,74.2409501166006,False
+skirt\23622_289658.jpg,skirt,dress,37.81153186701326,False
+top_t_shirt_sweatshirt\23622_289659.jpg,"top, t-shirt, sweatshirt",dress,60.260050591935496,False
+vest\36524_223690.jpg,vest,"shirt, blouse",73.36707339249723,False
+top_t_shirt_sweatshirt\36524_223692.jpg,"top, t-shirt, sweatshirt",pants,31.704728647964313,False
+coat\36524_223699.jpg,coat,jacket,67.07538757768964,False
+cardigan\24208_204847.jpg,cardigan,"top, t-shirt, sweatshirt",60.846864650420265,False
+dress\30546_323444.jpg,dress,skirt,49.68687288281606,False
+jumpsuit\33763_207841.jpg,jumpsuit,pants,96.24962339365725,False
+coat\14911_464.jpg,coat,dress,42.395431941061716,False
+skirt\14911_468.jpg,skirt,"top, t-shirt, sweatshirt",46.8935109891974,False
+top_t_shirt_sweatshirt\14911_471.jpg,"top, t-shirt, sweatshirt",jacket,38.02900736288307,False
+skirt\26475_332409.jpg,skirt,dress,65.43092135650211,False
+jacket\48062_68312.jpg,jacket,dress,69.30115934903634,False
+shorts\45593_53903.jpg,shorts,"top, t-shirt, sweatshirt",84.17463781150356,False
+pants\6297_132264.jpg,pants,"top, t-shirt, sweatshirt",65.36231755846241,False
+sweater\6297_132265.jpg,sweater,"top, t-shirt, sweatshirt",84.71495185578904,False
+jacket\6297_132271.jpg,jacket,"top, t-shirt, sweatshirt",90.99862625388916,False
+coat\2521_148397.jpg,coat,dress,71.46917067951422,False
+pants\13452_49356.jpg,pants,dress,62.6966857817776,False
+top_t_shirt_sweatshirt\350_160332.jpg,"top, t-shirt, sweatshirt",shorts,51.27864052473168,False
+jacket\36045_220994.jpg,jacket,"shirt, blouse",42.03842559426574,False
+skirt\36045_220995.jpg,skirt,"top, t-shirt, sweatshirt",45.30704590201354,False
+shirt_blouse\18953_19011.jpg,"shirt, blouse",jacket,88.78218794282448,False
+sweater\45765_54943.jpg,sweater,"top, t-shirt, sweatshirt",84.0240397779491,False
+dress\3081_147243.jpg,dress,"top, t-shirt, sweatshirt",53.57603645758616,False
+dress\12762_45783.jpg,dress,skirt,42.8121348068075,False
+shirt_blouse\47470_64997.jpg,"shirt, blouse","top, t-shirt, sweatshirt",96.40038444627301,False
+shirt_blouse\1136_163841.jpg,"shirt, blouse",dress,44.47095759987364,False
+shirt_blouse\1136_163842.jpg,"shirt, blouse",skirt,39.20720044331137,False
+dress\1136_163843.jpg,dress,"top, t-shirt, sweatshirt",57.50101115815942,False
+top_t_shirt_sweatshirt\6671_128249.jpg,"top, t-shirt, sweatshirt",dress,91.69583045539892,False
+jacket\4879_190848.jpg,jacket,pants,65.15764259653469,False
+coat\7303_131889.jpg,coat,dress,39.75440011867935,False
+dress\1041_163315.jpg,dress,pants,42.83525611522819,False
+coat\48021_68128.jpg,coat,jacket,68.94874905842406,False
+jacket\25920_304053.jpg,jacket,coat,28.095541674353942,False
+top_t_shirt_sweatshirt\37798_231499.jpg,"top, t-shirt, sweatshirt",dress,49.407261050659194,False
+jacket\22246_281130.jpg,jacket,"top, t-shirt, sweatshirt",49.06178302017557,False
+shorts\26128_304876.jpg,shorts,skirt,57.85681416318198,False
+shirt_blouse\761_162162.jpg,"shirt, blouse","top, t-shirt, sweatshirt",79.18418958433762,False
+top_t_shirt_sweatshirt\29837_322732.jpg,"top, t-shirt, sweatshirt","shirt, blouse",77.99125969298942,False
+skirt\9878_32402.jpg,skirt,dress,56.203596144169055,False
+coat\9878_32410.jpg,coat,jacket,72.72830368866559,False
+skirt\2034_168857.jpg,skirt,"top, t-shirt, sweatshirt",65.80033104814773,False
+shirt_blouse\332_160252.jpg,"shirt, blouse",dress,41.22959979746704,False
+jacket\332_160254.jpg,jacket,"top, t-shirt, sweatshirt",65.50421313284183,False
+jacket\24564_330557.jpg,jacket,"top, t-shirt, sweatshirt",69.95179692467501,False
+top_t_shirt_sweatshirt\24564_330560.jpg,"top, t-shirt, sweatshirt",skirt,95.24747881029577,False
+jacket\25904_83200.jpg,jacket,coat,58.966374830975155,False
+shirt_blouse\21518_276455.jpg,"shirt, blouse",sweater,69.61174265535837,False
+jacket\17871_13336.jpg,jacket,"shirt, blouse",54.55360177992702,False
+shirt_blouse\12462_111964.jpg,"shirt, blouse",jacket,85.59874291797146,False
+skirt\9208_29150.jpg,skirt,dress,85.03112728190716,False
+coat\18407_15574.jpg,coat,dress,78.74855237437245,False
+pants\33100_269934.jpg,pants,"top, t-shirt, sweatshirt",70.39642448462112,False
+top_t_shirt_sweatshirt\680_161848.jpg,"top, t-shirt, sweatshirt",jacket,70.80136546043548,False
+shorts\7921_136623.jpg,shorts,pants,65.31825945282344,False
+skirt\23467_288754.jpg,skirt,pants,80.34001107435465,False
+shorts\48850_73107.jpg,shorts,pants,84.52674372612154,False
+jumpsuit\24534_295976.jpg,jumpsuit,"top, t-shirt, sweatshirt",52.712026824088895,False
+top_t_shirt_sweatshirt\43624_196699.jpg,"top, t-shirt, sweatshirt",sweater,27.435171353391958,False
+dress\17657_12543.jpg,dress,skirt,48.263980779082104,False
+skirt\24423_295348.jpg,skirt,pants,46.64149368066513,False
+dress\10369_34636.jpg,dress,shorts,33.03327248242628,False
+top_t_shirt_sweatshirt\7422_133408.jpg,"top, t-shirt, sweatshirt",pants,57.068231060250895,False
+top_t_shirt_sweatshirt\43155_194233.jpg,"top, t-shirt, sweatshirt",dress,50.55354396966272,False
+dress\1319_164871.jpg,dress,skirt,54.80249708520136,False
+coat\1319_164878.jpg,coat,jacket,48.6585488536166,False
+pants\29248_247003.jpg,pants,"top, t-shirt, sweatshirt",55.697736027758346,False
+pants\25296_300305.jpg,pants,dress,53.30416462043266,False
+shirt_blouse\6923_185725.jpg,"shirt, blouse",vest,43.6244128284232,False
+jumpsuit\49817_78774.jpg,jumpsuit,dress,79.82520197845501,False
+pants\16410_6335.jpg,pants,"top, t-shirt, sweatshirt",25.800217998616787,False
+dress\42373_105388.jpg,dress,"top, t-shirt, sweatshirt",32.654608760780505,False
+dress\11335_48220.jpg,dress,"top, t-shirt, sweatshirt",54.850592889540415,False
+dress\9502_30440.jpg,dress,coat,64.93779554466033,False
+top_t_shirt_sweatshirt\18024_14046.jpg,"top, t-shirt, sweatshirt",jacket,54.09333359975443,False
+top_t_shirt_sweatshirt\13437_49317.jpg,"top, t-shirt, sweatshirt",pants,90.39701689904264,False
+shirt_blouse\27592_237651.jpg,"shirt, blouse",jacket,65.58624710089437,False
+shirt_blouse\5886_122361.jpg,"shirt, blouse",jacket,79.32388712747766,False
+jacket\46443_59036.jpg,jacket,cardigan,67.36162187805198,False
+dress\14902_116749.jpg,dress,"top, t-shirt, sweatshirt",31.758865406671216,False
+dress\23277_288421.jpg,dress,"top, t-shirt, sweatshirt",73.82644780158901,False
+cardigan\25724_205268.jpg,cardigan,"top, t-shirt, sweatshirt",44.96571524553434,False
+dress\25724_205271.jpg,dress,skirt,52.32670442627878,False
+top_t_shirt_sweatshirt\21047_273466.jpg,"top, t-shirt, sweatshirt","shirt, blouse",30.442812875781033,False
+top_t_shirt_sweatshirt\47809_66805.jpg,"top, t-shirt, sweatshirt",pants,81.04895598498497,False
+shirt_blouse\47809_66810.jpg,"shirt, blouse",jacket,67.53775423206773,False
+top_t_shirt_sweatshirt\32491_266625.jpg,"top, t-shirt, sweatshirt",dress,62.63011623781147,False
+shirt_blouse\33288_314875.jpg,"shirt, blouse",jacket,65.81442773762134,False
+jacket\781_191785.jpg,jacket,dress,32.72268925031216,False
+shirt_blouse\26174_305216.jpg,"shirt, blouse","top, t-shirt, sweatshirt",55.643274404943796,False
+top_t_shirt_sweatshirt\19242_205.jpg,"top, t-shirt, sweatshirt","shirt, blouse",59.44410270448752,False
+skirt\23102_287300.jpg,skirt,dress,52.293307174783955,False
+shirt_blouse\23102_287303.jpg,"shirt, blouse","top, t-shirt, sweatshirt",47.89888844187432,False
+dress\15641_9907.jpg,dress,sweater,35.03363506156411,False
+coat\7308_132653.jpg,coat,skirt,88.77847044655996,False
+vest\40633_94217.jpg,vest,dress,57.41669696837035,False
+top_t_shirt_sweatshirt\44583_202237.jpg,"top, t-shirt, sweatshirt","shirt, blouse",31.056720499290787,False
+pants\19564_22582.jpg,pants,shorts,49.545483881036056,False
+jumpsuit\37421_229138.jpg,jumpsuit,"top, t-shirt, sweatshirt",36.72592017254676,False
+coat\14447_114563.jpg,coat,dress,62.56982097665983,False
+dress\13143_47226.jpg,dress,skirt,80.42555016416692,False
+cape\114_159331.jpg,cape,skirt,57.227233461965156,False
+pants\2728_145208.jpg,pants,dress,48.53249262254875,False
+shirt_blouse\2728_145211.jpg,"shirt, blouse",cardigan,47.345330743457104,False
+jumpsuit\12164_42982.jpg,jumpsuit,dress,94.51628140221634,False
+top_t_shirt_sweatshirt\24497_295776.jpg,"top, t-shirt, sweatshirt",jacket,84.0810413185375,False
+skirt\24497_295780.jpg,skirt,dress,67.65781367326883,False
+cardigan\49597_77552.jpg,cardigan,dress,95.931399610833,False
+shorts\1676_166583.jpg,shorts,skirt,67.6022442990029,False
+coat\49296_75783.jpg,coat,dress,93.94740349776481,False
+top_t_shirt_sweatshirt\36119_221386.jpg,"top, t-shirt, sweatshirt",cardigan,68.22285405625492,False
+top_t_shirt_sweatshirt\13333_48728.jpg,"top, t-shirt, sweatshirt",pants,56.415915340026665,False
+skirt\5371_119716.jpg,skirt,dress,61.91939879889722,False
+jacket\30405_254357.jpg,jacket,"top, t-shirt, sweatshirt",98.44960587194845,False
+top_t_shirt_sweatshirt\40710_179754.jpg,"top, t-shirt, sweatshirt",skirt,56.129360816655726,False
+skirt\14389_114265.jpg,skirt,dress,75.41055992986372,False
+dress\3713_151084.jpg,dress,pants,72.45987750214282,False
+dress\3305_148663.jpg,dress,pants,48.42633940724613,False
+sweater\7728_135229.jpg,sweater,jacket,31.554098481277233,False
+top_t_shirt_sweatshirt\15472_9875.jpg,"top, t-shirt, sweatshirt","shirt, blouse",37.13918932494053,False
+shirt_blouse\37326_236293.jpg,"shirt, blouse","top, t-shirt, sweatshirt",39.955987704022846,False
+top_t_shirt_sweatshirt\42598_106829.jpg,"top, t-shirt, sweatshirt",sweater,61.61066281536405,False
+coat\7800_140842.jpg,coat,dress,60.4404302739771,False
+dress\7800_140849.jpg,dress,skirt,64.25532221216056,False
+vest\4773_156796.jpg,vest,"top, t-shirt, sweatshirt",64.28909189604266,False
+pants\4773_156800.jpg,pants,dress,36.11273419981064,False
+shorts\36566_224404.jpg,shorts,"top, t-shirt, sweatshirt",56.18899280838392,False
+cardigan\28980_245702.jpg,cardigan,dress,78.23109287580972,False
+top_t_shirt_sweatshirt\13208_47487.jpg,"top, t-shirt, sweatshirt",shorts,45.75303871540896,False
+jacket\10067_33065.jpg,jacket,"top, t-shirt, sweatshirt",42.18558090537735,False
+sweater\43024_197986.jpg,sweater,vest,46.99161531157005,False
+shirt_blouse\11605_48320.jpg,"shirt, blouse",jacket,42.6918122529691,False
+pants\11605_48328.jpg,pants,jacket,63.54097970147971,False
+shorts\7625_138441.jpg,shorts,"top, t-shirt, sweatshirt",56.68378581593526,False
+skirt\1572_166003.jpg,skirt,shorts,50.74796273304392,False
+shirt_blouse\1572_166005.jpg,"shirt, blouse",jacket,58.28514719297143,False
+shorts\45655_54326.jpg,shorts,pants,55.09692296928439,False
+cardigan\21453_275891.jpg,cardigan,jacket,26.048700450610333,False
+dress\18732_18065.jpg,dress,"top, t-shirt, sweatshirt",38.22764240624853,False
+cardigan\42679_107343.jpg,cardigan,sweater,51.84176545305209,False
+dress\15408_1909.jpg,dress,jacket,38.816949973561776,False
+dress\28873_245100.jpg,dress,"top, t-shirt, sweatshirt",49.82343765745101,False
+shorts\3300_151839.jpg,shorts,skirt,76.9400492252347,False
+top_t_shirt_sweatshirt\41156_97616.jpg,"top, t-shirt, sweatshirt","shirt, blouse",67.02178154332346,False
+coat\30687_255816.jpg,coat,jacket,46.197117286034896,False
+shorts\23990_329741.jpg,shorts,"top, t-shirt, sweatshirt",62.11419109661853,False
+dress\6215_124754.jpg,dress,"top, t-shirt, sweatshirt",68.90748460685336,False
+dress\19885_23919.jpg,dress,coat,45.094800372332934,False
+jacket\19885_23924.jpg,jacket,"top, t-shirt, sweatshirt",75.16632786504691,False
+shorts\25944_304178.jpg,shorts,pants,72.31497678165894,False
+sweater\9589_30831.jpg,sweater,"top, t-shirt, sweatshirt",56.10649562633172,False
+shirt_blouse\1202_192742.jpg,"shirt, blouse",jacket,54.1682744245614,False
+dress\24496_330455.jpg,dress,"top, t-shirt, sweatshirt",68.65669398081423,False
+top_t_shirt_sweatshirt\28096_240483.jpg,"top, t-shirt, sweatshirt",sweater,28.906188396188703,False
+skirt\3000_188577.jpg,skirt,"top, t-shirt, sweatshirt",33.96650900990034,False
+skirt\18361_16435.jpg,skirt,dress,60.12067594025463,False
+jumpsuit\44712_314460.jpg,jumpsuit,pants,58.09327069372115,False
+shirt_blouse\17830_13217.jpg,"shirt, blouse",jacket,43.8452093521062,False
+top_t_shirt_sweatshirt\8858_142816.jpg,"top, t-shirt, sweatshirt",jacket,39.132350419448144,False
+cardigan\8858_142817.jpg,cardigan,coat,45.66621236100828,False
+pants\9580_30786.jpg,pants,jumpsuit,47.37175167259457,False
+vest\10897_37282.jpg,vest,"top, t-shirt, sweatshirt",51.705817165635324,False
+dress\31824_262485.jpg,dress,skirt,62.161787811453706,False
+dress\6751_132416.jpg,dress,skirt,56.50937875026556,False
+coat\6751_132417.jpg,coat,dress,92.74582066894777,False
+top_t_shirt_sweatshirt\33291_210177.jpg,"top, t-shirt, sweatshirt",skirt,29.219475277162932,False
+dress\24609_296318.jpg,dress,"top, t-shirt, sweatshirt",60.625857412531836,False
+sweater\48589_80816.jpg,sweater,"top, t-shirt, sweatshirt",67.3722667598011,False
+jacket\48589_80825.jpg,jacket,coat,85.82951840416277,False
+pants\17891_13408.jpg,pants,"top, t-shirt, sweatshirt",38.2275736447394,False
+pants\17806_21986.jpg,pants,"shirt, blouse",32.88717681335756,False
+skirt\8053_137479.jpg,skirt,dress,53.59539172436695,False
+jumpsuit\45017_50906.jpg,jumpsuit,"shirt, blouse",56.94146580581844,False
+skirt\30336_253919.jpg,skirt,"top, t-shirt, sweatshirt",40.445542450371086,False
+top_t_shirt_sweatshirt\11007_37826.jpg,"top, t-shirt, sweatshirt",dress,53.50150529496168,False
+coat\48938_73557.jpg,coat,jacket,60.15821731418222,False
+shirt_blouse\48938_73558.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.84630277646883,False
+top_t_shirt_sweatshirt\26985_242778.jpg,"top, t-shirt, sweatshirt",coat,23.731554002844625,False
+coat\22913_286046.jpg,coat,jacket,48.32853028239984,False
+skirt\6292_132258.jpg,skirt,"top, t-shirt, sweatshirt",37.77214985701897,False
+sweater\6292_132262.jpg,sweater,"top, t-shirt, sweatshirt",66.77895101137035,False
+shirt_blouse\28857_245011.jpg,"shirt, blouse",dress,60.37033937820372,False
+pants\1433_188219.jpg,pants,"top, t-shirt, sweatshirt",37.26498830710294,False
+dress\2558_143381.jpg,dress,"top, t-shirt, sweatshirt",71.9087967448807,False
+coat\2558_143382.jpg,coat,"top, t-shirt, sweatshirt",50.274814273608214,False
+coat\2558_143383.jpg,coat,"top, t-shirt, sweatshirt",22.880811402676763,False
+jumpsuit\42916_108749.jpg,jumpsuit,dress,71.61887468573993,False
+skirt\16718_7605.jpg,skirt,shorts,47.61039357437243,False
+dress\12799_303.jpg,dress,skirt,53.393076445633326,False
+vest\49359_76128.jpg,vest,jacket,37.176409889915355,False
+dress\28665_243614.jpg,dress,skirt,63.201282010011376,False
+jacket\23405_293501.jpg,jacket,"shirt, blouse",20.43489586472323,False
+top_t_shirt_sweatshirt\23405_293503.jpg,"top, t-shirt, sweatshirt",skirt,32.73093809580167,False
+top_t_shirt_sweatshirt\28405_242044.jpg,"top, t-shirt, sweatshirt",skirt,62.65681468603778,False
+top_t_shirt_sweatshirt\28104_240516.jpg,"top, t-shirt, sweatshirt",jacket,43.846318869209476,False
+top_t_shirt_sweatshirt\8695_141861.jpg,"top, t-shirt, sweatshirt",dress,79.44168028964165,False
+dress\47064_62415.jpg,dress,"top, t-shirt, sweatshirt",50.30479018533135,False
+dress\31268_259456.jpg,dress,skirt,49.099443391845924,False
+skirt\130_159394.jpg,skirt,dress,72.56695552219813,False
+shirt_blouse\22907_328797.jpg,"shirt, blouse","top, t-shirt, sweatshirt",40.2169061752826,False
+top_t_shirt_sweatshirt\34229_210511.jpg,"top, t-shirt, sweatshirt","shirt, blouse",57.32519274246704,False
+shirt_blouse\38362_319868.jpg,"shirt, blouse",jacket,83.45010576053828,False
+skirt\32931_326031.jpg,skirt,"top, t-shirt, sweatshirt",23.433972920908946,False
+dress\47688_174549.jpg,dress,coat,47.19334660401172,False
+top_t_shirt_sweatshirt\43937_198583.jpg,"top, t-shirt, sweatshirt",dress,47.34942849706281,False
+skirt\10915_37653.jpg,skirt,dress,54.56107204413464,False
+top_t_shirt_sweatshirt\33663_207282.jpg,"top, t-shirt, sweatshirt","shirt, blouse",51.678995122760206,False
+skirt\31779_262325.jpg,skirt,dress,60.021024235182296,False
+jacket\48031_68014.jpg,jacket,"top, t-shirt, sweatshirt",54.205106362225784,False
+dress\17063_9475.jpg,dress,"shirt, blouse",96.23562566794833,False
+shirt_blouse\44599_314373.jpg,"shirt, blouse","top, t-shirt, sweatshirt",48.42619535996508,False
+jacket\21343_327058.jpg,jacket,"top, t-shirt, sweatshirt",78.19784704877549,False
+dress\49889_79128.jpg,dress,"shirt, blouse",50.310686169982624,False
+dress\42039_103104.jpg,dress,jacket,66.465318572858,False
+top_t_shirt_sweatshirt\8451_140237.jpg,"top, t-shirt, sweatshirt",skirt,48.638830641754154,False
+vest\47335_174135.jpg,vest,"shirt, blouse",74.48883371958132,False
+jacket\13210_3877.jpg,jacket,coat,47.67399667958399,False
+shorts\12837_3855.jpg,shorts,pants,70.11650595774914,False
+top_t_shirt_sweatshirt\37742_231241.jpg,"top, t-shirt, sweatshirt",pants,79.76586004028859,False
+top_t_shirt_sweatshirt\29147_246425.jpg,"top, t-shirt, sweatshirt","shirt, blouse",98.19007797214573,False
+shirt_blouse\43264_194841.jpg,"shirt, blouse",dress,35.74408381627063,False
+top_t_shirt_sweatshirt\24053_292273.jpg,"top, t-shirt, sweatshirt",pants,38.03332163027701,False
+jacket\24053_292274.jpg,jacket,coat,63.81605714283949,False
+top_t_shirt_sweatshirt\36151_228698.jpg,"top, t-shirt, sweatshirt","shirt, blouse",67.63351071349827,False
+coat\40117_91448.jpg,coat,jacket,56.19165052915906,False
+top_t_shirt_sweatshirt\23685_290158.jpg,"top, t-shirt, sweatshirt","shirt, blouse",66.7270957341626,False
+skirt\6284_125211.jpg,skirt,dress,69.51148875129472,False
+jacket\1674_166567.jpg,jacket,"shirt, blouse",57.20602508124897,False
+jumpsuit\42358_105304.jpg,jumpsuit,dress,96.68597293471512,False
+top_t_shirt_sweatshirt\21460_275919.jpg,"top, t-shirt, sweatshirt",dress,55.10440342181276,False
+skirt\46565_59863.jpg,skirt,"top, t-shirt, sweatshirt",58.44737277257215,False
+sweater\46565_59867.jpg,sweater,"top, t-shirt, sweatshirt",68.6941406248035,False
+jacket\41634_100199.jpg,jacket,dress,72.5765489112342,False
+dress\41634_100205.jpg,dress,"top, t-shirt, sweatshirt",80.03209264999207,False
+skirt\23273_288397.jpg,skirt,"top, t-shirt, sweatshirt",74.15997716882401,False
+top_t_shirt_sweatshirt\23273_288398.jpg,"top, t-shirt, sweatshirt",dress,46.889063784455026,False
+pants\6937_130655.jpg,pants,"top, t-shirt, sweatshirt",37.8019278282904,False
+jacket\12634_117962.jpg,jacket,"top, t-shirt, sweatshirt",27.98197961017046,False
+shorts\12634_117963.jpg,shorts,pants,55.372169500345,False
+jumpsuit\29934_251578.jpg,jumpsuit,pants,89.28357233477715,False
+shorts\18844_18531.jpg,shorts,pants,89.74804521512529,False
+shirt_blouse\10064_33061.jpg,"shirt, blouse","top, t-shirt, sweatshirt",56.181324820813636,False
+sweater\46168_172897.jpg,sweater,"top, t-shirt, sweatshirt",65.02590679499711,False
+shirt_blouse\33705_216967.jpg,"shirt, blouse","top, t-shirt, sweatshirt",64.3631027298558,False
+jacket\25267_300941.jpg,jacket,coat,71.9862686767313,False
+dress\36472_223520.jpg,dress,"top, t-shirt, sweatshirt",33.461922447785795,False
+skirt\40293_92443.jpg,skirt,dress,93.77676653635031,False
+sweater\7093_130829.jpg,sweater,"top, t-shirt, sweatshirt",49.49950789482144,False
+top_t_shirt_sweatshirt\787_149202.jpg,"top, t-shirt, sweatshirt",sweater,40.58032415223272,False
+shirt_blouse\1479_145915.jpg,"shirt, blouse","top, t-shirt, sweatshirt",76.25862631558822,False
+shorts\35802_317302.jpg,shorts,skirt,82.14639922117254,False
+jacket\3744_149936.jpg,jacket,dress,64.15157155049509,False
+top_t_shirt_sweatshirt\23456_288724.jpg,"top, t-shirt, sweatshirt",jacket,29.3781327320964,False
+shorts\17828_13201.jpg,shorts,pants,76.86069446464191,False
+dress\17828_13203.jpg,dress,"top, t-shirt, sweatshirt",90.54863342245665,False
+top_t_shirt_sweatshirt\19253_27424.jpg,"top, t-shirt, sweatshirt",dress,41.11571884524744,False
+skirt\47701_66247.jpg,skirt,dress,44.96389961711889,False
+dress\25421_301576.jpg,dress,"top, t-shirt, sweatshirt",98.02203539963337,False
+sweater\42091_103580.jpg,sweater,"top, t-shirt, sweatshirt",44.35824571009678,False
+shirt_blouse\42091_103593.jpg,"shirt, blouse",jacket,85.68852975216554,False
+shirt_blouse\37903_319491.jpg,"shirt, blouse","top, t-shirt, sweatshirt",73.45134381445457,False
+dress\8526_140649.jpg,dress,skirt,54.612174743627364,False
+pants\15544_2411.jpg,pants,dress,49.856356034817736,False
+pants\3259_188841.jpg,pants,dress,53.04398912931244,False
+jacket\20354_278266.jpg,jacket,"shirt, blouse",56.98764773137671,False
+dress\19138_19796.jpg,dress,skirt,61.78052199607065,False
+shirt_blouse\42406_181459.jpg,"shirt, blouse","top, t-shirt, sweatshirt",77.7984636501137,False
+coat\42406_181461.jpg,coat,jacket,76.2484100631664,False
+top_t_shirt_sweatshirt\32522_266761.jpg,"top, t-shirt, sweatshirt","shirt, blouse",53.09226677151643,False
+pants\32859_268548.jpg,pants,dress,57.80607012075305,False
+sweater\3661_151992.jpg,sweater,"top, t-shirt, sweatshirt",85.69806858130931,False
+pants\3661_151996.jpg,pants,"top, t-shirt, sweatshirt",55.994105528058356,False
+skirt\7258_131737.jpg,skirt,dress,74.1745857359415,False
+vest\31651_261565.jpg,vest,"top, t-shirt, sweatshirt",90.74955547140948,False
+skirt\7291_131850.jpg,skirt,dress,57.866093060352775,False
+shirt_blouse\7291_131852.jpg,"shirt, blouse",dress,44.06468749617139,False
+skirt\16232_5577.jpg,skirt,dress,74.27777844350014,False
+dress\32980_326049.jpg,dress,"top, t-shirt, sweatshirt",96.57938045513771,False
+dress\8252_139070.jpg,dress,jumpsuit,47.00788650090042,False
+coat\34395_211089.jpg,coat,cape,32.90268732479941,False
+sweater\39860_90033.jpg,sweater,"top, t-shirt, sweatshirt",81.75394340742857,False
+dress\3660_151023.jpg,dress,"top, t-shirt, sweatshirt",78.09622626240582,False
+shirt_blouse\16872_16215.jpg,"shirt, blouse","top, t-shirt, sweatshirt",89.49463159303517,False
+skirt\12459_44480.jpg,skirt,"top, t-shirt, sweatshirt",49.621933080091445,False
+dress\5142_158288.jpg,dress,coat,35.66110172162077,False
+coat\31712_261864.jpg,coat,cardigan,60.424662847267896,False
+top_t_shirt_sweatshirt\31712_261869.jpg,"top, t-shirt, sweatshirt","shirt, blouse",40.40199226957766,False
+jumpsuit\27664_238068.jpg,jumpsuit,dress,92.54720413449206,False
+dress\9296_29463.jpg,dress,skirt,49.61570000585661,False
+top_t_shirt_sweatshirt\45770_54976.jpg,"top, t-shirt, sweatshirt",dress,44.248010068605645,False
+coat\21787_278690.jpg,coat,dress,73.39704144585598,False
+dress\21787_278693.jpg,dress,"top, t-shirt, sweatshirt",68.33940898406325,False
+skirt\2935_146615.jpg,skirt,dress,78.3477180003325,False
+jacket\19520_285136.jpg,jacket,coat,55.660400598541685,False
+jumpsuit\19520_285143.jpg,jumpsuit,dress,69.1432776272959,False
+dress\302_160006.jpg,dress,skirt,51.60968870451336,False
+top_t_shirt_sweatshirt\302_160009.jpg,"top, t-shirt, sweatshirt",dress,32.720610440075376,False
+dress\24463_295609.jpg,dress,coat,34.82118724549259,False
+pants\31778_262318.jpg,pants,jumpsuit,58.20426977677307,False
+coat\13821_182317.jpg,coat,dress,60.715256788368734,False
+shirt_blouse\13690_109862.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.34069380660375,False
+sweater\13690_109863.jpg,sweater,"top, t-shirt, sweatshirt",68.761105518807,False
+jacket\13690_109865.jpg,jacket,coat,86.72029553452887,False
+shirt_blouse\7253_136044.jpg,"shirt, blouse","top, t-shirt, sweatshirt",38.17745330665767,False
+jacket\6185_124608.jpg,jacket,"top, t-shirt, sweatshirt",50.51135962872916,False
+skirt\6185_124610.jpg,skirt,pants,57.82225522984166,False
+shirt_blouse\44154_199786.jpg,"shirt, blouse",jacket,81.66876537904093,False
+top_t_shirt_sweatshirt\42157_103905.jpg,"top, t-shirt, sweatshirt",dress,87.96559108813304,False
+dress\33455_206104.jpg,dress,jacket,42.167591295826135,False
+jacket\39737_89056.jpg,jacket,cardigan,34.57276144674519,False
+jacket\23381_282328.jpg,jacket,"top, t-shirt, sweatshirt",38.43408595469416,False
+dress\44702_314429.jpg,dress,"top, t-shirt, sweatshirt",47.5514858055382,False
+coat\25902_304013.jpg,coat,jacket,54.07297689883781,False
+dress\6134_124328.jpg,dress,jacket,87.50773285860856,False
+skirt\35358_216584.jpg,skirt,pants,44.446856996489764,False
+jacket\27228_311311.jpg,jacket,coat,80.46235697449332,False
+skirt\12671_113314.jpg,skirt,dress,54.09929957281266,False
+sweater\47506_174347.jpg,sweater,"top, t-shirt, sweatshirt",74.6355210768078,False
+vest\45262_55205.jpg,vest,pants,32.41877450888331,False
+top_t_shirt_sweatshirt\21786_278680.jpg,"top, t-shirt, sweatshirt",jacket,33.367134029194304,False
+skirt\21786_278682.jpg,skirt,dress,28.242514319164847,False
+cardigan\15118_812.jpg,cardigan,pants,65.5992179715379,False
+top_t_shirt_sweatshirt\15118_816.jpg,"top, t-shirt, sweatshirt",cardigan,48.28081200383759,False
+shirt_blouse\8258_139114.jpg,"shirt, blouse","top, t-shirt, sweatshirt",70.26996325750284,False
+cardigan\45362_52702.jpg,cardigan,jacket,75.03000551552971,False
+shirt_blouse\3098_188654.jpg,"shirt, blouse","top, t-shirt, sweatshirt",42.811839102025935,False
+top_t_shirt_sweatshirt\33150_102412.jpg,"top, t-shirt, sweatshirt",pants,69.883907093529,False
+coat\33150_102413.jpg,coat,jacket,94.72553325826598,False
+shirt_blouse\42037_103093.jpg,"shirt, blouse","top, t-shirt, sweatshirt",85.44741125625744,False
+jacket\13017_46664.jpg,jacket,"shirt, blouse",47.14565678284454,False
+jacket\41611_100046.jpg,jacket,coat,73.27903198600974,False
+top_t_shirt_sweatshirt\3287_189009.jpg,"top, t-shirt, sweatshirt","shirt, blouse",56.91909955380823,False
+shirt_blouse\7942_186924.jpg,"shirt, blouse",jacket,62.59461976593289,False
+shirt_blouse\31037_265013.jpg,"shirt, blouse","top, t-shirt, sweatshirt",37.052366270497785,False
+dress\15256_1377.jpg,dress,pants,47.99862626792075,False
+sweater\10965_37523.jpg,sweater,"top, t-shirt, sweatshirt",88.48875374385698,False
+coat\49312_75835.jpg,coat,jacket,77.18776690465154,False
+vest\19543_22528.jpg,vest,"top, t-shirt, sweatshirt",67.64025059207638,False
+cardigan\5446_184033.jpg,cardigan,dress,52.74405741175479,False
+skirt\4776_156825.jpg,skirt,"top, t-shirt, sweatshirt",62.81659731350635,False
+shirt_blouse\32021_263661.jpg,"shirt, blouse",vest,37.93532139643011,False
+shirt_blouse\44940_50703.jpg,"shirt, blouse","top, t-shirt, sweatshirt",66.69923593941358,False
+shirt_blouse\2552_143356.jpg,"shirt, blouse","top, t-shirt, sweatshirt",80.30885624952624,False
+shirt_blouse\30583_255187.jpg,"shirt, blouse","top, t-shirt, sweatshirt",77.48270674491503,False
+jacket\15011_4276.jpg,jacket,"top, t-shirt, sweatshirt",82.28164717910597,False
+coat\15011_4285.jpg,coat,jacket,64.69513789597185,False
+dress\32404_266866.jpg,dress,"top, t-shirt, sweatshirt",60.77202671510942,False
+shirt_blouse\30977_257954.jpg,"shirt, blouse",jacket,35.11244752555953,False
+top_t_shirt_sweatshirt\50244_177343.jpg,"top, t-shirt, sweatshirt","shirt, blouse",25.410440470461797,False
+skirt\30066_252287.jpg,skirt,dress,62.777067501892304,False
+top_t_shirt_sweatshirt\23585_290130.jpg,"top, t-shirt, sweatshirt",dress,66.8315942163892,False
+dress\18774_18225.jpg,dress,sweater,47.34025150149019,False
+shirt_blouse\47939_67606.jpg,"shirt, blouse","top, t-shirt, sweatshirt",65.33998864014971,False
+jumpsuit\1274_192164.jpg,jumpsuit,shorts,47.48536879091546,False
+shirt_blouse\21722_277302.jpg,"shirt, blouse",jacket,93.48491700194607,False
+dress\29687_322598.jpg,dress,skirt,95.23598299510786,False
+jacket\46073_56901.jpg,jacket,pants,65.13849754418591,False
+jacket\46073_56902.jpg,jacket,dress,67.11305747466152,False
+jumpsuit\46073_56912.jpg,jumpsuit,pants,99.57529291738871,False
+cardigan\163_159517.jpg,cardigan,dress,32.064690244968524,False
+shirt_blouse\8893_27866.jpg,"shirt, blouse","top, t-shirt, sweatshirt",29.74743984837705,False
+dress\43081_193820.jpg,dress,"top, t-shirt, sweatshirt",61.861846483046236,False
+vest\28170_240802.jpg,vest,"shirt, blouse",61.35250709676699,False
+top_t_shirt_sweatshirt\23741_290382.jpg,"top, t-shirt, sweatshirt","shirt, blouse",36.19742456696765,False
+skirt\30335_253906.jpg,skirt,dress,92.78458573358057,False
+pants\316_169344.jpg,pants,dress,44.726495897356,False
+dress\14140_112461.jpg,dress,"top, t-shirt, sweatshirt",56.62183418474901,False
+coat\14140_112462.jpg,coat,dress,97.36319800361736,False
+top_t_shirt_sweatshirt\49220_75324.jpg,"top, t-shirt, sweatshirt",dress,70.86085283127885,False
+shorts\49220_75328.jpg,shorts,"top, t-shirt, sweatshirt",44.65189703765471,False
+dress\21833_285829.jpg,dress,"top, t-shirt, sweatshirt",35.15591468379254,False
+jacket\47175_63331.jpg,jacket,cardigan,46.7809999878399,False
+top_t_shirt_sweatshirt\47175_63332.jpg,"top, t-shirt, sweatshirt",dress,65.28293676935778,False
+sweater\23116_287371.jpg,sweater,coat,94.44587555789388,False
+dress\22438_282382.jpg,dress,jumpsuit,81.16829188002873,False
+jumpsuit\50267_81406.jpg,jumpsuit,dress,55.63606179233035,False
+dress\168_169270.jpg,dress,jumpsuit,55.5655074697181,False
+top_t_shirt_sweatshirt\1924_167788.jpg,"top, t-shirt, sweatshirt","shirt, blouse",86.98229202012908,False
+dress\6423_132321.jpg,dress,coat,87.14643611590034,False
+jacket\17212_10474.jpg,jacket,"shirt, blouse",46.54633719771668,False
+pants\32444_266420.jpg,pants,"top, t-shirt, sweatshirt",52.24092930304594,False
+cardigan\7110_132453.jpg,cardigan,dress,36.74644379919065,False
+sweater\48389_70183.jpg,sweater,cardigan,38.91015183949057,False
+shirt_blouse\44203_200053.jpg,"shirt, blouse",dress,61.81823166479179,False
+pants\30679_255773.jpg,pants,jumpsuit,30.271283320946353,False
+sweater\38450_70557.jpg,sweater,"top, t-shirt, sweatshirt",86.31132678410204,False
+dress\22844_284760.jpg,dress,"top, t-shirt, sweatshirt",38.74709041596616,False
+coat\22844_284762.jpg,coat,vest,51.8905326935117,False
+sweater\3016_151705.jpg,sweater,pants,47.11852808946382,False
+jumpsuit\24300_308428.jpg,jumpsuit,dress,89.84287171645013,False
+cardigan\27722_249315.jpg,cardigan,jacket,73.59632415736084,False
+skirt\6790_129237.jpg,skirt,shorts,57.12575426595674,False
+skirt\47564_65798.jpg,skirt,dress,57.07411528384475,False
+shirt_blouse\36734_225243.jpg,"shirt, blouse","top, t-shirt, sweatshirt",53.56206503546028,False
+top_t_shirt_sweatshirt\9429_30114.jpg,"top, t-shirt, sweatshirt","shirt, blouse",51.47641874846091,False
+skirt\37383_228971.jpg,skirt,pants,79.80528384677253,False
+vest\3788_151203.jpg,vest,jacket,32.42655044909185,False
+jacket\3788_151208.jpg,jacket,coat,32.36365360141478,False
+sweater\11280_39006.jpg,sweater,cardigan,48.28721463616828,False
+cardigan\42642_107013.jpg,cardigan,"shirt, blouse",44.75823883864093,False
+shirt_blouse\42642_107016.jpg,"shirt, blouse","top, t-shirt, sweatshirt",85.99043399999773,False
+pants\42642_107019.jpg,pants,skirt,39.62707232350166,False
+shirt_blouse\36318_222601.jpg,"shirt, blouse",jacket,60.407399626439165,False
+shirt_blouse\36318_222602.jpg,"shirt, blouse","top, t-shirt, sweatshirt",73.61357901844251,False
+jacket\23942_291665.jpg,jacket,"shirt, blouse",42.654073910048915,False
+skirt\41265_180424.jpg,skirt,dress,52.92717546900477,False
+shorts\4330_190178.jpg,shorts,"top, t-shirt, sweatshirt",52.15053636764947,False
+shirt_blouse\16304_5901.jpg,"shirt, blouse","top, t-shirt, sweatshirt",70.00239082730756,False
+skirt\12224_43193.jpg,skirt,"top, t-shirt, sweatshirt",39.02872616994259,False
+jumpsuit\8545_140712.jpg,jumpsuit,skirt,32.03467438147078,False
+skirt\26814_309034.jpg,skirt,"top, t-shirt, sweatshirt",74.52895632011288,False
+dress\12238_43212.jpg,dress,"top, t-shirt, sweatshirt",77.97816844706557,False
+top_t_shirt_sweatshirt\2399_171177.jpg,"top, t-shirt, sweatshirt",sweater,49.16786559537578,False
+jacket\5717_127638.jpg,jacket,"shirt, blouse",41.79001453754495,False
+dress\7899_186878.jpg,dress,"shirt, blouse",23.268021360307444,False
+skirt\23952_291729.jpg,skirt,dress,54.7314508331513,False
+dress\21094_326788.jpg,dress,"top, t-shirt, sweatshirt",55.83477162978971,False
+coat\21094_326790.jpg,coat,dress,97.66376326337841,False
+shirt_blouse\4570_153892.jpg,"shirt, blouse","top, t-shirt, sweatshirt",56.82280246795924,False
+shirt_blouse\48117_68655.jpg,"shirt, blouse",jacket,61.30152111761702,False
+dress\20704_27730.jpg,dress,"top, t-shirt, sweatshirt",91.26946831340912,False
+dress\26596_332580.jpg,dress,"top, t-shirt, sweatshirt",49.34256787078341,False
+dress\7689_135042.jpg,dress,"top, t-shirt, sweatshirt",50.938732028228216,False
+jacket\7689_135050.jpg,jacket,dress,40.89379828596095,False
+coat\43236_194689.jpg,coat,"shirt, blouse",43.52953804909057,False
+sweater\43236_194695.jpg,sweater,"top, t-shirt, sweatshirt",87.20584150283656,False
+dress\11573_48312.jpg,dress,"top, t-shirt, sweatshirt",31.032716804354965,False
+top_t_shirt_sweatshirt\2226_170158.jpg,"top, t-shirt, sweatshirt","shirt, blouse",28.933730752630442,False
+cardigan\42551_106557.jpg,cardigan,jumpsuit,79.8667881692716,False
+cardigan\4320_153335.jpg,cardigan,jacket,31.228054778626223,False
+sweater\6792_129249.jpg,sweater,cardigan,46.69706167141626,False
+shirt_blouse\491_169429.jpg,"shirt, blouse","top, t-shirt, sweatshirt",62.09406956652393,False
+pants\17999_13930.jpg,pants,shorts,70.9741271681212,False
+dress\17999_13934.jpg,dress,coat,88.01912916584949,False
+shirt_blouse\36261_222230.jpg,"shirt, blouse",jacket,50.80893643435721,False
+dress\18684_271576.jpg,dress,skirt,73.20253262974951,False
+pants\8415_140044.jpg,pants,shorts,96.4314067386727,False
+skirt\14704_183274.jpg,skirt,dress,50.29303735372108,False
+cardigan\35665_218816.jpg,cardigan,coat,55.71603859878185,False
+pants\44592_202289.jpg,pants,coat,46.664172162927855,False
+jacket\44592_202292.jpg,jacket,coat,52.86960808663053,False
+shirt_blouse\25154_299558.jpg,"shirt, blouse","top, t-shirt, sweatshirt",44.51125754018227,False
+coat\25154_299560.jpg,coat,jacket,84.0146583616221,False
+top_t_shirt_sweatshirt\41412_98895.jpg,"top, t-shirt, sweatshirt",dress,64.13166828595972,False
+dress\9181_29023.jpg,dress,coat,91.29519301478801,False
+skirt\31331_259846.jpg,skirt,dress,46.7163436239452,False
+jacket\21687_285799.jpg,jacket,pants,35.78722329542312,False
+jacket\19095_19469.jpg,jacket,"shirt, blouse",88.12684313512204,False
+dress\35493_217741.jpg,dress,pants,62.67488601412996,False
+jumpsuit\26971_332882.jpg,jumpsuit,pants,89.38694188397909,False
+shirt_blouse\8850_142767.jpg,"shirt, blouse",jacket,88.42837983428673,False
+dress\8850_142769.jpg,dress,"shirt, blouse",49.40619897556546,False
+shirt_blouse\21574_276541.jpg,"shirt, blouse","top, t-shirt, sweatshirt",79.88768329820608,False
+sweater\8077_137627.jpg,sweater,"top, t-shirt, sweatshirt",64.6827068230724,False
+jumpsuit\8077_137628.jpg,jumpsuit,shorts,96.21275691133023,False
+cardigan\31313_259774.jpg,cardigan,"top, t-shirt, sweatshirt",93.27893404073878,False
+pants\12059_42258.jpg,pants,dress,34.989122801169216,False
+jacket\12059_42262.jpg,jacket,"top, t-shirt, sweatshirt",39.60256665293248,False
+shirt_blouse\6675_185468.jpg,"shirt, blouse","top, t-shirt, sweatshirt",54.358409518843395,False
+skirt\17164_10278.jpg,skirt,shorts,54.88938795198528,False
+top_t_shirt_sweatshirt\47811_66815.jpg,"top, t-shirt, sweatshirt","shirt, blouse",64.44422578990566,False
+jacket\15603_2649.jpg,jacket,"top, t-shirt, sweatshirt",84.7251355668877,False
+jacket\27755_238422.jpg,jacket,"shirt, blouse",49.29899199148775,False
+shirt_blouse\47528_65733.jpg,"shirt, blouse",jacket,36.66391089558599,False
+sweater\6968_130159.jpg,sweater,"shirt, blouse",81.77966040213379,False
+dress\20895_326635.jpg,dress,"top, t-shirt, sweatshirt",79.87912514432122,False
+shirt_blouse\20605_234.jpg,"shirt, blouse","top, t-shirt, sweatshirt",78.26689435526214,False
+top_t_shirt_sweatshirt\28744_244399.jpg,"top, t-shirt, sweatshirt",dress,55.91772112534174,False
+jacket\37042_226907.jpg,jacket,"shirt, blouse",59.85629432999389,False
+top_t_shirt_sweatshirt\1402_165310.jpg,"top, t-shirt, sweatshirt",dress,52.00597389626074,False
+coat\16569_7016.jpg,coat,"top, t-shirt, sweatshirt",53.717931442339214,False
+dress\33216_326277.jpg,dress,skirt,68.52052179028661,False
+skirt\48982_73721.jpg,skirt,dress,52.16739390736368,False
+skirt\7244_131689.jpg,skirt,"top, t-shirt, sweatshirt",44.7208245499333,False
+sweater\45610_54089.jpg,sweater,"top, t-shirt, sweatshirt",56.646949498613196,False
+sweater\14318_183491.jpg,sweater,"top, t-shirt, sweatshirt",41.48308604268155,False
+cardigan\19770_23466.jpg,cardigan,"top, t-shirt, sweatshirt",46.659290048539404,False
+shorts\38087_233052.jpg,shorts,pants,55.90482704875313,False
+skirt\33107_269986.jpg,skirt,dress,87.80744432839766,False
+coat\35962_220655.jpg,coat,jacket,83.23411307782578,False
+shorts\31043_258290.jpg,shorts,skirt,48.823210367437014,False
+dress\48989_73737.jpg,dress,"top, t-shirt, sweatshirt",66.31394896541761,False
+jumpsuit\6912_135905.jpg,jumpsuit,dress,41.36088006973484,False
+dress\23241_329269.jpg,dress,jumpsuit,57.60145430142685,False
+top_t_shirt_sweatshirt\16119_5166.jpg,"top, t-shirt, sweatshirt",dress,28.458151000510885,False
+shirt_blouse\25983_304318.jpg,"shirt, blouse",jacket,44.545133270793755,False
+skirt\25983_304337.jpg,skirt,shorts,71.24286047497456,False
+shirt_blouse\47391_64317.jpg,"shirt, blouse",coat,34.27179874537348,False
+dress\611_164424.jpg,dress,"top, t-shirt, sweatshirt",57.048222990197715,False
+sweater\3509_150774.jpg,sweater,"top, t-shirt, sweatshirt",42.9841612368108,False
+top_t_shirt_sweatshirt\40755_94915.jpg,"top, t-shirt, sweatshirt",pants,30.393426608141304,False
+skirt\22116_293024.jpg,skirt,"top, t-shirt, sweatshirt",34.58857236483683,False
+skirt\47545_65787.jpg,skirt,dress,67.66891499654936,False
+jumpsuit\68_159099.jpg,jumpsuit,pants,59.71434700387772,False
+vest\1185_164073.jpg,vest,"top, t-shirt, sweatshirt",71.90683331243832,False
+skirt\31925_324967.jpg,skirt,"top, t-shirt, sweatshirt",80.4507625987251,False
+dress\26258_305607.jpg,dress,"top, t-shirt, sweatshirt",38.16134251116857,False
+skirt\10530_35417.jpg,skirt,dress,87.92190635698864,False
+skirt\20908_326694.jpg,skirt,shorts,65.8488126594102,False
+jacket\20908_326695.jpg,jacket,"shirt, blouse",40.20742266825516,False
+top_t_shirt_sweatshirt\44244_313972.jpg,"top, t-shirt, sweatshirt",sweater,83.00756578470067,False
+shirt_blouse\30071_252333.jpg,"shirt, blouse",jacket,57.14457088515786,False
+dress\39964_178945.jpg,dress,"top, t-shirt, sweatshirt",39.169353177073184,False
+coat\27415_312317.jpg,coat,jacket,49.778627978502904,False
+dress\32443_325476.jpg,dress,"top, t-shirt, sweatshirt",73.18348465128503,False
+jacket\35367_224271.jpg,jacket,"shirt, blouse",34.99475784753455,False
+jacket\39692_88796.jpg,jacket,"shirt, blouse",62.12992288444177,False
+skirt\5478_120264.jpg,skirt,dress,49.963500422075995,False
+top_t_shirt_sweatshirt\38729_236558.jpg,"top, t-shirt, sweatshirt","shirt, blouse",61.76484030883213,False
+jacket\40656_94336.jpg,jacket,cardigan,73.29933849715553,False
+shirt_blouse\46745_173545.jpg,"shirt, blouse",jacket,49.601736796335096,False
+top_t_shirt_sweatshirt\4745_156697.jpg,"top, t-shirt, sweatshirt",sweater,89.86318010083346,False
+shirt_blouse\24277_307276.jpg,"shirt, blouse","top, t-shirt, sweatshirt",59.523711118443416,False
+cardigan\24277_307278.jpg,cardigan,"top, t-shirt, sweatshirt",61.5191515224638,False
+skirt\2682_144066.jpg,skirt,shorts,40.93485525637524,False
+vest\44358_201376.jpg,vest,"top, t-shirt, sweatshirt",61.68519009422011,False
+skirt\6475_126247.jpg,skirt,coat,67.58317473840872,False
+jumpsuit\6475_126248.jpg,jumpsuit,"top, t-shirt, sweatshirt",31.069900128952405,False
+skirt\14741_116134.jpg,skirt,pants,79.92490854842677,False
+jacket\9826_32181.jpg,jacket,"top, t-shirt, sweatshirt",90.70090008668784,False
+jacket\4264_189782.jpg,jacket,"top, t-shirt, sweatshirt",43.816943846060646,False
+shirt_blouse\25452_311779.jpg,"shirt, blouse",jacket,61.91976570407288,False
+pants\4255_154592.jpg,pants,dress,69.21627357384442,False
+top_t_shirt_sweatshirt\1269_164388.jpg,"top, t-shirt, sweatshirt",cardigan,31.63617712159812,False
+dress\17926_13559.jpg,dress,"top, t-shirt, sweatshirt",32.241858774522605,False
+shirt_blouse\1861_167412.jpg,"shirt, blouse","top, t-shirt, sweatshirt",48.39955985359908,False
+shirt_blouse\1861_167413.jpg,"shirt, blouse",skirt,44.2839505944526,False
+shirt_blouse\25044_298895.jpg,"shirt, blouse",coat,40.094435019406035,False
+skirt\12643_45161.jpg,skirt,dress,59.642228246027216,False
+jacket\12643_45162.jpg,jacket,"top, t-shirt, sweatshirt",50.55667932896585,False
+top_t_shirt_sweatshirt\1515_144725.jpg,"top, t-shirt, sweatshirt","shirt, blouse",52.527420950815504,False
+jacket\18911_18851.jpg,jacket,cardigan,69.21819780646828,False
+shirt_blouse\32357_325384.jpg,"shirt, blouse",jacket,91.48250398538552,False
+top_t_shirt_sweatshirt\37680_319289.jpg,"top, t-shirt, sweatshirt","shirt, blouse",40.09961024249479,False
+pants\32391_266177.jpg,pants,dress,45.90972963437442,False
+cardigan\24301_294737.jpg,cardigan,coat,84.92605580753245,False
+jacket\1491_145922.jpg,jacket,"top, t-shirt, sweatshirt",39.93412698117705,False
+dress\32277_265501.jpg,dress,cardigan,91.37192229347573,False
+shorts\8983_28215.jpg,shorts,skirt,51.72215741223209,False
+jacket\40076_91239.jpg,jacket,"shirt, blouse",51.914344070282034,False
+jacket\22136_280575.jpg,jacket,pants,67.7013619728905,False
+top_t_shirt_sweatshirt\9192_29082.jpg,"top, t-shirt, sweatshirt",dress,38.13725914614293,False
+sweater\15357_1720.jpg,sweater,"top, t-shirt, sweatshirt",59.57588684634383,False
+shirt_blouse\41242_97988.jpg,"shirt, blouse",coat,48.26469758708431,False
+top_t_shirt_sweatshirt\3391_118459.jpg,"top, t-shirt, sweatshirt",pants,80.6932525207651,False
+shirt_blouse\3391_118461.jpg,"shirt, blouse",coat,41.9657236600709,False
+dress\24297_294723.jpg,dress,skirt,51.23889650741048,False
+shirt_blouse\4227_118757.jpg,"shirt, blouse","top, t-shirt, sweatshirt",75.57858622466482,False
+pants\4227_118762.jpg,pants,shorts,80.2906114458606,False
+coat\4227_118768.jpg,coat,pants,54.700655932957986,False
+skirt\5029_138304.jpg,skirt,pants,91.12190292404982,False
+shirt_blouse\8378_139841.jpg,"shirt, blouse","top, t-shirt, sweatshirt",86.23927354173078,False
+jacket\42427_181482.jpg,jacket,cardigan,45.57334490536336,False
+skirt\20222_25395.jpg,skirt,dress,76.63848943354128,False
+shirt_blouse\45390_172230.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.48851135043587,False
+jacket\45390_172234.jpg,jacket,cardigan,40.3781674583037,False
+coat\22068_280227.jpg,coat,cardigan,72.8748681042574,False
+vest\34389_211436.jpg,vest,"shirt, blouse",34.88345225216833,False
+top_t_shirt_sweatshirt\34389_211437.jpg,"top, t-shirt, sweatshirt","shirt, blouse",49.22300170062368,False
+dress\14680_4131.jpg,dress,skirt,58.39702433375174,False
+skirt\41659_100345.jpg,skirt,"top, t-shirt, sweatshirt",49.868400771237695,False
+shorts\8512_141047.jpg,shorts,"top, t-shirt, sweatshirt",78.05937146879096,False
+pants\229_169288.jpg,pants,"top, t-shirt, sweatshirt",62.103748652085336,False
+pants\229_169289.jpg,pants,"top, t-shirt, sweatshirt",57.015158975088184,False
+top_t_shirt_sweatshirt\1914_192655.jpg,"top, t-shirt, sweatshirt",cardigan,33.70496055856875,False
+dress\42020_103001.jpg,dress,skirt,65.844657547844,False
+dress\13556_183437.jpg,dress,"top, t-shirt, sweatshirt",36.09547614536718,False
+dress\2236_170192.jpg,dress,skirt,44.69620566027075,False
+top_t_shirt_sweatshirt\31756_262092.jpg,"top, t-shirt, sweatshirt",dress,71.72039537650129,False
+skirt\17520_11920.jpg,skirt,pants,80.91319404780617,False
+top_t_shirt_sweatshirt\2781_145399.jpg,"top, t-shirt, sweatshirt","shirt, blouse",44.496461245053496,False
+dress\36157_221576.jpg,dress,skirt,62.089183525958724,False
+sweater\27919_249372.jpg,sweater,jacket,57.711108825028305,False
+coat\11074_38501.jpg,coat,dress,55.40001867308614,False
+top_t_shirt_sweatshirt\5171_158547.jpg,"top, t-shirt, sweatshirt",jacket,89.24925105443502,False
+coat\27988_239534.jpg,coat,"top, t-shirt, sweatshirt",55.2216973469078,False
+dress\15581_2559.jpg,dress,sweater,32.281463519146705,False
+cardigan\28984_245734.jpg,cardigan,coat,59.65834847311579,False
+top_t_shirt_sweatshirt\32854_268512.jpg,"top, t-shirt, sweatshirt",dress,30.60606977109001,False
+shorts\32854_268513.jpg,shorts,dress,29.467507411605837,False
+shirt_blouse\35346_316792.jpg,"shirt, blouse","top, t-shirt, sweatshirt",78.98233439947377,False
+vest\38315_234373.jpg,vest,"top, t-shirt, sweatshirt",49.40502638005347,False
+top_t_shirt_sweatshirt\25969_304279.jpg,"top, t-shirt, sweatshirt",skirt,62.794926692387556,False
+jacket\11255_38887.jpg,jacket,pants,56.5014708760143,False
+jacket\17213_10487.jpg,jacket,pants,95.6081151408204,False
+top_t_shirt_sweatshirt\26931_243798.jpg,"top, t-shirt, sweatshirt","shirt, blouse",83.86589279097294,False
+top_t_shirt_sweatshirt\10682_36291.jpg,"top, t-shirt, sweatshirt",shorts,60.83714760109887,False
+pants\29143_246404.jpg,pants,jacket,49.84597456715917,False
+shirt_blouse\24062_292320.jpg,"shirt, blouse",dress,57.52561293589824,False
+jumpsuit\11889_41541.jpg,jumpsuit,dress,54.052669911026555,False
+top_t_shirt_sweatshirt\587_191588.jpg,"top, t-shirt, sweatshirt",jacket,46.4405609842158,False
+skirt\11655_40619.jpg,skirt,dress,77.7895931823775,False
+jumpsuit\24175_293896.jpg,jumpsuit,pants,48.592450055433105,False
+skirt\24188_293998.jpg,skirt,dress,87.35787031369267,False
+pants\37871_232015.jpg,pants,jumpsuit,75.28654884093807,False
+coat\30084_252357.jpg,coat,"top, t-shirt, sweatshirt",74.31469755703496,False
+dress\30084_252359.jpg,dress,"top, t-shirt, sweatshirt",66.58096289303566,False
+pants\16281_5833.jpg,pants,"top, t-shirt, sweatshirt",52.12955406197409,False
+shirt_blouse\36457_318033.jpg,"shirt, blouse",jacket,51.99053519401829,False
+shirt_blouse\27977_320854.jpg,"shirt, blouse","top, t-shirt, sweatshirt",78.98292497844793,False
+top_t_shirt_sweatshirt\36770_225406.jpg,"top, t-shirt, sweatshirt",skirt,38.993727790836665,False
+jacket\39338_86805.jpg,jacket,"top, t-shirt, sweatshirt",44.16666949247092,False
+top_t_shirt_sweatshirt\39338_86806.jpg,"top, t-shirt, sweatshirt",dress,42.06002806172467,False
+skirt\39338_86808.jpg,skirt,shorts,39.105357758284285,False
+skirt\46128_172864.jpg,skirt,dress,76.96556225501952,False
+sweater\10588_43361.jpg,sweater,"top, t-shirt, sweatshirt",82.01533054876852,False
+shorts\30588_255224.jpg,shorts,pants,45.93844534657535,False
+top_t_shirt_sweatshirt\30588_255227.jpg,"top, t-shirt, sweatshirt",vest,47.32845488293948,False
+vest\30588_255228.jpg,vest,"top, t-shirt, sweatshirt",84.27393271975428,False
+jacket\45310_52417.jpg,jacket,"top, t-shirt, sweatshirt",88.2659273047598,False
+skirt\10005_32779.jpg,skirt,shorts,52.25158136563313,False
+shirt_blouse\10005_32780.jpg,"shirt, blouse","top, t-shirt, sweatshirt",46.59067296056418,False
+shirt_blouse\31237_259287.jpg,"shirt, blouse","top, t-shirt, sweatshirt",84.90719113495241,False
+pants\22180_328185.jpg,pants,dress,56.161284821836574,False
+top_t_shirt_sweatshirt\28578_243261.jpg,"top, t-shirt, sweatshirt",sweater,36.298803173018946,False
+shirt_blouse\31499_324478.jpg,"shirt, blouse","top, t-shirt, sweatshirt",92.27555277698156,False
+sweater\31499_324483.jpg,sweater,"top, t-shirt, sweatshirt",53.697270342229494,False
+shirt_blouse\45595_54034.jpg,"shirt, blouse",vest,62.96114703801051,False
+cardigan\23511_289094.jpg,cardigan,dress,36.145293512854565,False
+shirt_blouse\2091_169102.jpg,"shirt, blouse","top, t-shirt, sweatshirt",64.60250580493604,False
+dress\9630_31033.jpg,dress,jumpsuit,62.121071727226486,False
+dress\32549_266933.jpg,dress,"top, t-shirt, sweatshirt",66.19110822666421,False
+pants\34467_211821.jpg,pants,dress,68.92130240288127,False
+dress\23098_329157.jpg,dress,shorts,50.46316563505506,False
+jumpsuit\20272_25614.jpg,jumpsuit,"top, t-shirt, sweatshirt",42.98419139709869,False
+dress\26719_308417.jpg,dress,"top, t-shirt, sweatshirt",64.20957237792373,False
+jumpsuit\16625_7212.jpg,jumpsuit,pants,92.58127349005859,False
+dress\14299_113864.jpg,dress,skirt,71.7540150637139,False
+dress\46141_57553.jpg,dress,coat,94.87941917323255,False
+top_t_shirt_sweatshirt\17645_12506.jpg,"top, t-shirt, sweatshirt",dress,85.27200461120673,False
+top_t_shirt_sweatshirt\18286_15180.jpg,"top, t-shirt, sweatshirt",dress,92.11751046095003,False
+skirt\25563_331547.jpg,skirt,dress,72.40676741880692,False
+jacket\7766_135407.jpg,jacket,dress,75.17094698353547,False
+skirt\27044_310144.jpg,skirt,dress,85.64791649285665,False
+skirt\11969_41893.jpg,skirt,dress,86.44094007833037,False
+jumpsuit\44446_201305.jpg,jumpsuit,"top, t-shirt, sweatshirt",77.63547150562428,False
+dress\3485_150739.jpg,dress,skirt,89.48010891552681,False
+coat\36813_225665.jpg,coat,jacket,81.93059307472672,False
+dress\756_191774.jpg,dress,skirt,62.71371931303015,False
+top_t_shirt_sweatshirt\3049_147134.jpg,"top, t-shirt, sweatshirt",jacket,69.11731004307408,False
+shirt_blouse\32045_263817.jpg,"shirt, blouse",jacket,41.318640959110894,False
+pants\22566_283127.jpg,pants,skirt,47.866437896099505,False
+vest\16272_15840.jpg,vest,"top, t-shirt, sweatshirt",50.85983202565081,False
+dress\15578_2541.jpg,dress,skirt,76.65684945179896,False
+jacket\11690_40738.jpg,jacket,dress,79.95175793487854,False
+shirt_blouse\46863_61298.jpg,"shirt, blouse",jacket,74.09747693195646,False
+top_t_shirt_sweatshirt\6311_125348.jpg,"top, t-shirt, sweatshirt",dress,63.838235078473836,False
+shorts\5271_191152.jpg,shorts,skirt,66.244645628867,False
+coat\14698_115942.jpg,coat,"top, t-shirt, sweatshirt",91.74623674930157,False
+jacket\17943_13615.jpg,jacket,"top, t-shirt, sweatshirt",56.1596646272376,False
+skirt\13917_182431.jpg,skirt,pants,78.1333018337869,False
+dress\8178_138691.jpg,dress,skirt,58.513551117270154,False
+pants\8642_141541.jpg,pants,"top, t-shirt, sweatshirt",76.03133180131314,False
+top_t_shirt_sweatshirt\43138_194123.jpg,"top, t-shirt, sweatshirt","shirt, blouse",78.61617777525196,False
+coat\38392_234724.jpg,coat,dress,29.750679698914123,False
+skirt\23486_288851.jpg,skirt,dress,67.49038394646823,False
+shorts\24680_296731.jpg,shorts,"top, t-shirt, sweatshirt",73.0010639439771,False
+top_t_shirt_sweatshirt\35921_220254.jpg,"top, t-shirt, sweatshirt",dress,64.20507022620366,False
+shirt_blouse\39038_85038.jpg,"shirt, blouse",vest,51.96092275595463,False
+shirt_blouse\4656_190641.jpg,"shirt, blouse","top, t-shirt, sweatshirt",74.42185210978701,False
+top_t_shirt_sweatshirt\27118_310955.jpg,"top, t-shirt, sweatshirt",dress,62.30709831551441,False
+shirt_blouse\18018_22112.jpg,"shirt, blouse",dress,45.079071086908954,False
+shirt_blouse\47804_66967.jpg,"shirt, blouse","top, t-shirt, sweatshirt",98.94971443143677,False
+dress\23690_290159.jpg,dress,jumpsuit,53.37672048838555,False
+cardigan\25560_302263.jpg,cardigan,"shirt, blouse",35.786809535225665,False
+jacket\43089_193865.jpg,jacket,coat,46.39668672631087,False
+top_t_shirt_sweatshirt\35019_214884.jpg,"top, t-shirt, sweatshirt",sweater,41.824815632336154,False
+shirt_blouse\33636_207144.jpg,"shirt, blouse","top, t-shirt, sweatshirt",41.59831263387359,False
+top_t_shirt_sweatshirt\28571_244011.jpg,"top, t-shirt, sweatshirt","shirt, blouse",62.5130987735236,False
+dress\35834_219701.jpg,dress,skirt,28.143914849120787,False
+coat\35834_219704.jpg,coat,dress,69.6835988133773,False
+top_t_shirt_sweatshirt\11004_37796.jpg,"top, t-shirt, sweatshirt","shirt, blouse",66.01203596887643,False
+dress\31972_101282.jpg,dress,"top, t-shirt, sweatshirt",55.06818876765875,False
+cardigan\31972_101285.jpg,cardigan,coat,46.77749382101582,False
+shirt_blouse\31972_101288.jpg,"shirt, blouse","top, t-shirt, sweatshirt",65.16432115735145,False
+sweater\44281_200490.jpg,sweater,"top, t-shirt, sweatshirt",60.19255407610805,False
+skirt\19754_23413.jpg,skirt,pants,56.84864677539691,False
+shirt_blouse\1275_164682.jpg,"shirt, blouse","top, t-shirt, sweatshirt",69.13738593574033,False
+sweater\1275_164683.jpg,sweater,"top, t-shirt, sweatshirt",88.21770007117479,False
+top_t_shirt_sweatshirt\41846_101829.jpg,"top, t-shirt, sweatshirt",jacket,47.87211806120574,False
+shirt_blouse\44742_203338.jpg,"shirt, blouse",sweater,53.87085521572281,False
+top_t_shirt_sweatshirt\26270_305663.jpg,"top, t-shirt, sweatshirt",dress,62.47082961955901,False
+top_t_shirt_sweatshirt\43842_198061.jpg,"top, t-shirt, sweatshirt",dress,61.06327439081478,False
+dress\29477_322408.jpg,dress,"top, t-shirt, sweatshirt",50.01051757721918,False
+top_t_shirt_sweatshirt\47721_66349.jpg,"top, t-shirt, sweatshirt",cardigan,54.771337597257826,False
+top_t_shirt_sweatshirt\42696_181795.jpg,"top, t-shirt, sweatshirt",sweater,75.77318527413455,False
+top_t_shirt_sweatshirt\31959_263475.jpg,"top, t-shirt, sweatshirt",pants,38.08249402407561,False
+top_t_shirt_sweatshirt\35334_216484.jpg,"top, t-shirt, sweatshirt",coat,49.63759620935226,False
+shirt_blouse\45707_54626.jpg,"shirt, blouse",jacket,83.58019816031394,False
+shirt_blouse\9574_30759.jpg,"shirt, blouse","top, t-shirt, sweatshirt",88.09085136147952,False
+dress\22197_280923.jpg,dress,"top, t-shirt, sweatshirt",41.33030733867734,False
+coat\28917_245333.jpg,coat,jacket,41.31465831102954,False
+shirt_blouse\5855_121731.jpg,"shirt, blouse","top, t-shirt, sweatshirt",56.2281632500223,False
+pants\17446_11546.jpg,pants,"top, t-shirt, sweatshirt",31.608180898281873,False
+sweater\27877_238907.jpg,sweater,"top, t-shirt, sweatshirt",69.34739658207592,False
+shirt_blouse\27877_238917.jpg,"shirt, blouse",jacket,54.29494568849586,False
+shirt_blouse\28793_50111.jpg,"shirt, blouse",coat,35.62770378897877,False
+vest\28793_50114.jpg,vest,cardigan,28.259839456624793,False
+sweater\28793_50117.jpg,sweater,coat,44.211090666038075,False
+top_t_shirt_sweatshirt\3424_149089.jpg,"top, t-shirt, sweatshirt","shirt, blouse",48.35959211631477,False
+jacket\37842_231745.jpg,jacket,"shirt, blouse",71.94385576917661,False
+jumpsuit\7359_132888.jpg,jumpsuit,dress,54.870875444674574,False
+jumpsuit\35693_218968.jpg,jumpsuit,dress,83.42251845465343,False
+skirt\7654_134815.jpg,skirt,dress,79.69750331252953,False
+skirt\2845_188463.jpg,skirt,dress,53.70961472806116,False
+coat\43544_203817.jpg,coat,jacket,91.80293918289743,False
+shorts\43544_203818.jpg,shorts,"top, t-shirt, sweatshirt",39.89484136783065,False
+dress\23383_282648.jpg,dress,skirt,46.76327135524455,False
+top_t_shirt_sweatshirt\24586_296208.jpg,"top, t-shirt, sweatshirt",dress,61.86317101794347,False
+jacket\24586_296210.jpg,jacket,pants,53.35520923269264,False
+cardigan\26528_307784.jpg,cardigan,dress,73.37263863341431,False
+top_t_shirt_sweatshirt\26528_307787.jpg,"top, t-shirt, sweatshirt",dress,78.9436923753125,False
+pants\339_191433.jpg,pants,skirt,47.027195751909666,False
+top_t_shirt_sweatshirt\33936_208720.jpg,"top, t-shirt, sweatshirt",jacket,56.96747046917088,False
+dress\4679_123301.jpg,dress,"top, t-shirt, sweatshirt",60.36180392742939,False
+shirt_blouse\46212_172923.jpg,"shirt, blouse",cardigan,64.6713214073571,False
+jumpsuit\17211_10471.jpg,jumpsuit,dress,64.34291806680447,False
+skirt\34241_211284.jpg,skirt,dress,37.74565858513535,False
+dress\29550_248530.jpg,dress,"top, t-shirt, sweatshirt",67.05951924573168,False
+top_t_shirt_sweatshirt\10019_32876.jpg,"top, t-shirt, sweatshirt",dress,43.1651216519796,False
+skirt\10019_32877.jpg,skirt,dress,43.94478510343954,False
+jumpsuit\13063_46826.jpg,jumpsuit,pants,60.355501728353,False
+coat\23028_331232.jpg,coat,jacket,34.32971261172544,False
+cape\26859_309267.jpg,cape,coat,54.327003996423294,False
+jacket\24599_296272.jpg,jacket,coat,62.60606796837658,False
+dress\30165_314833.jpg,dress,coat,80.54665241960774,False
+pants\23399_283432.jpg,pants,skirt,91.73176373094046,False
+shorts\14537_115081.jpg,shorts,pants,99.11764622353815,False
+top_t_shirt_sweatshirt\4445_190488.jpg,"top, t-shirt, sweatshirt",sweater,44.57737519004255,False
+jacket\37131_227533.jpg,jacket,coat,38.757958970626014,False
+shirt_blouse\49822_78786.jpg,"shirt, blouse","top, t-shirt, sweatshirt",86.00684376628742,False
+coat\17038_9370.jpg,coat,jacket,50.56729122981377,False
+shorts\5197_123636.jpg,shorts,skirt,61.16432179962096,False
+top_t_shirt_sweatshirt\5197_123637.jpg,"top, t-shirt, sweatshirt","shirt, blouse",50.526118568937505,False
+dress\37127_227387.jpg,dress,skirt,74.84288184686774,False
+sweater\5246_158776.jpg,sweater,"top, t-shirt, sweatshirt",70.99695483808073,False
+dress\25799_303485.jpg,dress,"top, t-shirt, sweatshirt",79.42504827267743,False
+shirt_blouse\7826_138549.jpg,"shirt, blouse","top, t-shirt, sweatshirt",72.35244361527016,False
+jacket\7826_138550.jpg,jacket,coat,68.53655074547773,False
+jacket\31423_260390.jpg,jacket,"shirt, blouse",60.12536221962398,False
+shirt_blouse\6585_126849.jpg,"shirt, blouse",dress,81.81443865152094,False
+shirt_blouse\46364_58856.jpg,"shirt, blouse","top, t-shirt, sweatshirt",33.74522484202458,False
+top_t_shirt_sweatshirt\25147_299506.jpg,"top, t-shirt, sweatshirt",dress,48.07199688316768,False
+top_t_shirt_sweatshirt\29528_248419.jpg,"top, t-shirt, sweatshirt",dress,41.95286136496134,False
+skirt\29528_248423.jpg,skirt,"shirt, blouse",43.515054054346145,False
+jumpsuit\35001_214782.jpg,jumpsuit,skirt,80.21401759503205,False
+skirt\28204_240959.jpg,skirt,pants,41.48385860339758,False
+top_t_shirt_sweatshirt\3867_190351.jpg,"top, t-shirt, sweatshirt",jacket,63.50281581588173,False
+shirt_blouse\3867_190361.jpg,"shirt, blouse",pants,43.19616846889123,False
+dress\22120_280463.jpg,dress,"shirt, blouse",70.66285129044016,False
+dress\25252_300089.jpg,dress,"top, t-shirt, sweatshirt",64.83507800325695,False
+cardigan\9715_31368.jpg,cardigan,dress,53.535443909976635,False
+dress\44376_200986.jpg,dress,"top, t-shirt, sweatshirt",72.39800989722892,False
+shirt_blouse\19536_22712.jpg,"shirt, blouse","top, t-shirt, sweatshirt",87.70078012950032,False
+top_t_shirt_sweatshirt\10579_35592.jpg,"top, t-shirt, sweatshirt","shirt, blouse",63.42443916789857,False
+dress\10442_34980.jpg,dress,skirt,56.903786246502996,False
+top_t_shirt_sweatshirt\37612_319165.jpg,"top, t-shirt, sweatshirt",dress,26.308810279456974,False
+coat\37612_319167.jpg,coat,jacket,36.59712194785353,False
+jumpsuit\16670_7411.jpg,jumpsuit,dress,84.77554706065294,False
+shirt_blouse\26910_309486.jpg,"shirt, blouse","top, t-shirt, sweatshirt",69.98709978690049,False
+coat\41771_180963.jpg,coat,pants,33.36031128823473,False
+dress\28259_321087.jpg,dress,pants,84.87089129867172,False
+dress\34081_209480.jpg,dress,"top, t-shirt, sweatshirt",90.40481658847447,False
+jacket\26726_308612.jpg,jacket,"shirt, blouse",60.84372125940825,False
+dress\38997_96337.jpg,dress,coat,46.83646728417698,False
+jacket\10095_33173.jpg,jacket,"top, t-shirt, sweatshirt",81.37968016983852,False
+skirt\10095_33177.jpg,skirt,"top, t-shirt, sweatshirt",37.57036105582375,False
+top_t_shirt_sweatshirt\4509_153731.jpg,"top, t-shirt, sweatshirt","shirt, blouse",69.57970271087984,False
+top_t_shirt_sweatshirt\1331_164954.jpg,"top, t-shirt, sweatshirt",dress,34.37657007494449,False
+shorts\1331_164955.jpg,shorts,pants,94.81557809964038,False
+skirt\49266_75615.jpg,skirt,pants,48.69018953246487,False
+shirt_blouse\50167_80535.jpg,"shirt, blouse",jacket,70.19835288456642,False
+top_t_shirt_sweatshirt\5153_191073.jpg,"top, t-shirt, sweatshirt",cardigan,62.55607251162918,False
+top_t_shirt_sweatshirt\17707_12824.jpg,"top, t-shirt, sweatshirt",jacket,32.44791873827155,False
+pants\17707_12825.jpg,pants,dress,53.44442052962077,False
+shirt_blouse\17707_12828.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.76184198578847,False
+top_t_shirt_sweatshirt\4961_123485.jpg,"top, t-shirt, sweatshirt",dress,59.9086219650022,False
+shirt_blouse\25062_331008.jpg,"shirt, blouse","top, t-shirt, sweatshirt",80.11663524641112,False
+skirt\25062_331010.jpg,skirt,dress,69.67943567246051,False
+skirt\11418_39632.jpg,skirt,pants,86.6997268447376,False
+dress\20734_271858.jpg,dress,skirt,63.44704205787542,False
+vest\36196_229775.jpg,vest,"shirt, blouse",70.15722708038406,False
+dress\40322_92579.jpg,dress,"shirt, blouse",78.65316896453565,False
+top_t_shirt_sweatshirt\21382_275440.jpg,"top, t-shirt, sweatshirt",dress,68.26054384253699,False
+shirt_blouse\26098_332130.jpg,"shirt, blouse","top, t-shirt, sweatshirt",21.52334857134061,False
+vest\26098_332134.jpg,vest,"shirt, blouse",26.09046282986876,False
+top_t_shirt_sweatshirt\23096_329198.jpg,"top, t-shirt, sweatshirt",dress,49.74435980328818,False
+skirt\23096_329202.jpg,skirt,dress,60.631666660443706,False
+dress\2593_143628.jpg,dress,coat,51.07433650907189,False
+skirt\16838_8244.jpg,skirt,"top, t-shirt, sweatshirt",65.71766719367326,False
+dress\3001_188579.jpg,dress,"top, t-shirt, sweatshirt",67.05667374237575,False
+top_t_shirt_sweatshirt\2370_171018.jpg,"top, t-shirt, sweatshirt",dress,49.42567978671956,False
+skirt\22512_242496.jpg,skirt,dress,81.48661467288436,False
+sweater\20394_278281.jpg,sweater,"top, t-shirt, sweatshirt",54.741200077806326,False
+skirt\27594_237968.jpg,skirt,"top, t-shirt, sweatshirt",46.038363742231496,False
+dress\5754_121530.jpg,dress,"top, t-shirt, sweatshirt",51.55938505701172,False
+cardigan\5754_121532.jpg,cardigan,dress,66.44497209012195,False
+top_t_shirt_sweatshirt\6059_123932.jpg,"top, t-shirt, sweatshirt",dress,82.44544261249891,False
+cardigan\2678_155178.jpg,cardigan,pants,56.44821501232725,False
+dress\34792_213674.jpg,dress,"top, t-shirt, sweatshirt",64.04134712538152,False
+top_t_shirt_sweatshirt\16109_5128.jpg,"top, t-shirt, sweatshirt","shirt, blouse",54.768533592802235,False
+top_t_shirt_sweatshirt\33751_207829.jpg,"top, t-shirt, sweatshirt",dress,57.16011754464495,False
+dress\26318_305890.jpg,dress,skirt,48.747124298161594,False
+coat\34982_316441.jpg,coat,"shirt, blouse",49.15696409886748,False
+shorts\3578_155353.jpg,shorts,pants,92.66657128537918,False
+skirt\29403_247704.jpg,skirt,dress,71.12526831590277,False
+jacket\1384_192267.jpg,jacket,"top, t-shirt, sweatshirt",54.220512350257636,False
+skirt\13612_109321.jpg,skirt,shorts,50.9999148056586,False
+top_t_shirt_sweatshirt\27004_309926.jpg,"top, t-shirt, sweatshirt","shirt, blouse",93.90705300850613,False
+coat\27004_309933.jpg,coat,jacket,74.00175592983216,False
+jacket\1488_144704.jpg,jacket,cardigan,69.34237863717897,False
+pants\1488_144709.jpg,pants,dress,50.32931330216174,False
+shirt_blouse\42414_105638.jpg,"shirt, blouse","top, t-shirt, sweatshirt",84.09228755080697,False
+skirt\13415_49047.jpg,skirt,"top, t-shirt, sweatshirt",42.26715999875683,False
+coat\13415_49048.jpg,coat,dress,60.16311837448737,False
+top_t_shirt_sweatshirt\13415_49052.jpg,"top, t-shirt, sweatshirt",dress,27.261293643313977,False
+shirt_blouse\34585_212581.jpg,"shirt, blouse",jacket,64.82026069398546,False
+vest\34585_212584.jpg,vest,"top, t-shirt, sweatshirt",49.818859945972456,False
+jacket\47194_63019.jpg,jacket,"shirt, blouse",87.33450049712151,False
+dress\47225_63143.jpg,dress,pants,85.02114077093552,False
+jacket\47225_63145.jpg,jacket,"top, t-shirt, sweatshirt",83.74462038502185,False
+top_t_shirt_sweatshirt\23643_289770.jpg,"top, t-shirt, sweatshirt",dress,56.897356074496365,False
+jumpsuit\21235_274561.jpg,jumpsuit,dress,85.02780903662736,False
+skirt\27303_311601.jpg,skirt,dress,64.38913826844706,False
+pants\43228_194667.jpg,pants,sweater,55.71284285490816,False
+dress\20836_272390.jpg,dress,"top, t-shirt, sweatshirt",62.4184638690292,False
+shorts\20836_272391.jpg,shorts,"top, t-shirt, sweatshirt",44.130566335218305,False
+shirt_blouse\48642_71944.jpg,"shirt, blouse",jacket,50.633401978978284,False
+top_t_shirt_sweatshirt\36634_224705.jpg,"top, t-shirt, sweatshirt","shirt, blouse",72.74091316395003,False
+dress\6068_123989.jpg,dress,jacket,30.06706832687465,False
+coat\6068_123990.jpg,coat,jacket,39.70024846261014,False
+pants\6068_123992.jpg,pants,skirt,57.88987253788886,False
+shirt_blouse\45596_54057.jpg,"shirt, blouse",jacket,54.781775880750835,False
+skirt\4799_156887.jpg,skirt,"top, t-shirt, sweatshirt",49.22854913438507,False
+jacket\4799_156891.jpg,jacket,"top, t-shirt, sweatshirt",44.54090426829322,False
+shirt_blouse\15951_4506.jpg,"shirt, blouse","top, t-shirt, sweatshirt",50.25274555023832,False
+dress\45530_53639.jpg,dress,"top, t-shirt, sweatshirt",31.253604347996422,False
+top_t_shirt_sweatshirt\7650_186562.jpg,"top, t-shirt, sweatshirt",dress,72.51319034785313,False
+dress\9558_30589.jpg,dress,skirt,52.30648279037019,False
+top_t_shirt_sweatshirt\9448_30204.jpg,"top, t-shirt, sweatshirt",dress,97.39891944687005,False
+shorts\41942_102585.jpg,shorts,pants,82.20230572560484,False
+shirt_blouse\34628_224017.jpg,"shirt, blouse","top, t-shirt, sweatshirt",46.22479286506226,False
+jacket\9459_30266.jpg,jacket,"shirt, blouse",70.245723651717,False
+shirt_blouse\31366_262234.jpg,"shirt, blouse","top, t-shirt, sweatshirt",62.15259231658433,False
+top_t_shirt_sweatshirt\32102_270502.jpg,"top, t-shirt, sweatshirt","shirt, blouse",67.3461769574389,False
+dress\30112_323097.jpg,dress,coat,94.22073055889933,False
+jacket\1803_167165.jpg,jacket,dress,88.24337041252177,False
+shirt_blouse\34486_211967.jpg,"shirt, blouse","top, t-shirt, sweatshirt",45.40941355884029,False
+skirt\15745_3220.jpg,skirt,dress,91.30432803908623,False
+cardigan\15745_3221.jpg,cardigan,dress,79.99624727568113,False
+shirt_blouse\4081_152367.jpg,"shirt, blouse","top, t-shirt, sweatshirt",88.29270355297882,False
+coat\23781_290643.jpg,coat,dress,79.63274303091968,False
+skirt\23781_290648.jpg,skirt,shorts,45.85998364456448,False
+skirt\24574_296160.jpg,skirt,pants,31.796795826948987,False
+jacket\5465_122242.jpg,jacket,"top, t-shirt, sweatshirt",62.10679323780458,False
+top_t_shirt_sweatshirt\26188_305266.jpg,"top, t-shirt, sweatshirt","shirt, blouse",31.12734178078745,False
+cardigan\23943_291681.jpg,cardigan,jacket,43.123258410748214,False
+dress\21365_275381.jpg,dress,skirt,49.05727567024888,False
+shirt_blouse\43930_198536.jpg,"shirt, blouse","top, t-shirt, sweatshirt",51.64611596642929,False
+dress\46085_56969.jpg,dress,"top, t-shirt, sweatshirt",87.93838263897652,False
+dress\3673_149759.jpg,dress,"top, t-shirt, sweatshirt",36.771658494645834,False
+dress\10406_34819.jpg,dress,"top, t-shirt, sweatshirt",66.08383663538106,False
+top_t_shirt_sweatshirt\21298_275260.jpg,"top, t-shirt, sweatshirt",jacket,52.421386158845436,False
+dress\10952_42574.jpg,dress,"top, t-shirt, sweatshirt",71.66864179355441,False
+dress\35452_217509.jpg,dress,"top, t-shirt, sweatshirt",41.28405432221139,False
+jumpsuit\21466_275966.jpg,jumpsuit,pants,87.13628880427635,False
+jacket\20987_273138.jpg,jacket,dress,27.648272637054173,False
+jacket\22218_281006.jpg,jacket,"top, t-shirt, sweatshirt",25.198373797209683,False
+skirt\12607_45087.jpg,skirt,shorts,66.70379544119078,False
+shirt_blouse\16906_8995.jpg,"shirt, blouse",jacket,77.04188224156697,False
+sweater\48399_175163.jpg,sweater,cape,78.24912432747814,False
+shorts\48399_175169.jpg,shorts,"top, t-shirt, sweatshirt",56.37165777512049,False
+dress\19572_22617.jpg,dress,"top, t-shirt, sweatshirt",53.35785790238131,False
+coat\37358_70517.jpg,coat,jacket,55.384500474903284,False
+dress\36353_222767.jpg,dress,"top, t-shirt, sweatshirt",65.31315001042104,False
+dress\37552_230070.jpg,dress,"top, t-shirt, sweatshirt",84.18946695511032,False
+pants\15500_2212.jpg,pants,"top, t-shirt, sweatshirt",42.049327412495735,False
+shirt_blouse\15500_2216.jpg,"shirt, blouse",jacket,69.04226832028138,False
+dress\7609_134343.jpg,dress,"top, t-shirt, sweatshirt",66.32172959015087,False
+dress\23569_289410.jpg,dress,"top, t-shirt, sweatshirt",37.550250800275656,False
+shirt_blouse\5297_119327.jpg,"shirt, blouse",jacket,82.91787043326099,False
+pants\16994_9147.jpg,pants,dress,60.23556922073725,False
+top_t_shirt_sweatshirt\12024_42107.jpg,"top, t-shirt, sweatshirt",dress,95.11026130553697,False
+jacket\39223_85914.jpg,jacket,dress,48.5743390107133,False
+shirt_blouse\38557_235590.jpg,"shirt, blouse",dress,40.61415354839167,False
+dress\25575_310767.jpg,dress,jacket,58.4080722616108,False
+jumpsuit\15053_118163.jpg,jumpsuit,dress,97.98511914516214,False
+skirt\24460_295607.jpg,skirt,dress,52.80429299953894,False
+dress\42364_105328.jpg,dress,coat,83.20966727042159,False
+vest\43697_197245.jpg,vest,"top, t-shirt, sweatshirt",31.15904519177766,False
+top_t_shirt_sweatshirt\35565_218066.jpg,"top, t-shirt, sweatshirt","shirt, blouse",60.079287298294425,False
+jacket\3622_149614.jpg,jacket,vest,75.16405342045094,False
+dress\19177_19981.jpg,dress,skirt,62.62425898258404,False
+dress\32290_265576.jpg,dress,skirt,72.03099562932013,False
+jacket\5080_158029.jpg,jacket,"top, t-shirt, sweatshirt",47.072216244403556,False
+skirt\46921_61624.jpg,skirt,pants,83.94977545469229,False
+sweater\41633_100194.jpg,sweater,"top, t-shirt, sweatshirt",66.23873950018262,False
+shirt_blouse\32902_268786.jpg,"shirt, blouse","top, t-shirt, sweatshirt",61.60741394883203,False
+dress\26215_305402.jpg,dress,coat,48.93001747787416,False
+shirt_blouse\17358_11121.jpg,"shirt, blouse",jacket,62.84314198895967,False
+skirt\45432_53112.jpg,skirt,dress,53.40611489502447,False
+skirt\47609_65548.jpg,skirt,dress,91.49329894425253,False
+dress\7874_136396.jpg,dress,skirt,77.44996336294273,False
+skirt\22055_280111.jpg,skirt,shorts,41.825907241538864,False
+dress\13379_48913.jpg,dress,pants,56.585407270043795,False
+jumpsuit\22122_280478.jpg,jumpsuit,pants,95.97555486005976,False
+shirt_blouse\46638_60082.jpg,"shirt, blouse",jacket,59.17234549441147,False
+shirt_blouse\8632_141494.jpg,"shirt, blouse",jacket,57.483651262410305,False
+top_t_shirt_sweatshirt\8632_141496.jpg,"top, t-shirt, sweatshirt","shirt, blouse",33.79012490212382,False
+dress\19665_277758.jpg,dress,jacket,56.596617167530496,False
+coat\19665_277763.jpg,coat,shorts,35.184615850482594,False
+dress\23298_288565.jpg,dress,"top, t-shirt, sweatshirt",78.17655475944642,False
+jacket\23298_288569.jpg,jacket,"top, t-shirt, sweatshirt",38.32594179103977,False
+jumpsuit\40041_179052.jpg,jumpsuit,dress,96.67440181352156,False
+dress\30663_255688.jpg,dress,"shirt, blouse",51.861018925300314,False
+pants\24703_296864.jpg,pants,skirt,74.79929942828967,False
+shirt_blouse\35128_215456.jpg,"shirt, blouse",jacket,68.34379513139123,False
+dress\43828_198050.jpg,dress,jacket,76.76206570554353,False
+jacket\26402_311926.jpg,jacket,jumpsuit,38.79901696508685,False
+shirt_blouse\46954_61835.jpg,"shirt, blouse",pants,41.0348217076502,False
+skirt\40270_92335.jpg,skirt,pants,96.17374958930561,False
+shirt_blouse\40270_92336.jpg,"shirt, blouse","top, t-shirt, sweatshirt",53.41713214495284,False
+coat\839_162490.jpg,coat,dress,60.4058487010027,False
+dress\839_162492.jpg,dress,"top, t-shirt, sweatshirt",73.61174897465293,False
+dress\1273_192151.jpg,dress,"top, t-shirt, sweatshirt",75.75854632623333,False
+cardigan\1273_192152.jpg,cardigan,dress,33.595884807582394,False
+top_t_shirt_sweatshirt\25166_299628.jpg,"top, t-shirt, sweatshirt",pants,42.24931568761887,False
+pants\21611_285757.jpg,pants,"top, t-shirt, sweatshirt",68.6774759998008,False
+coat\22500_282787.jpg,coat,dress,39.359483405370845,False
+top_t_shirt_sweatshirt\14483_114771.jpg,"top, t-shirt, sweatshirt",shorts,34.26198275012465,False
+dress\12158_49239.jpg,dress,"top, t-shirt, sweatshirt",68.45565454246936,False
+top_t_shirt_sweatshirt\38446_234967.jpg,"top, t-shirt, sweatshirt",jacket,23.77065345180963,False
+cardigan\30160_252811.jpg,cardigan,coat,33.794738739011834,False
+shirt_blouse\4524_153770.jpg,"shirt, blouse",dress,55.41327623838336,False
+dress\4524_153771.jpg,dress,skirt,76.25700269449828,False
+top_t_shirt_sweatshirt\34188_209950.jpg,"top, t-shirt, sweatshirt",dress,45.38841021888606,False
+skirt\19341_20890.jpg,skirt,pants,85.45333256460867,False
+shirt_blouse\32379_325399.jpg,"shirt, blouse","top, t-shirt, sweatshirt",48.02468180005546,False
+sweater\45768_55257.jpg,sweater,"top, t-shirt, sweatshirt",83.45348227849699,False
+shorts\7123_131008.jpg,shorts,"top, t-shirt, sweatshirt",21.46736441881248,False
+shirt_blouse\9322_29525.jpg,"shirt, blouse",skirt,75.43598524073965,False
+coat\49428_76561.jpg,coat,jacket,91.34460427932576,False
+top_t_shirt_sweatshirt\37861_231811.jpg,"top, t-shirt, sweatshirt","shirt, blouse",40.003699124699374,False
+top_t_shirt_sweatshirt\36961_226491.jpg,"top, t-shirt, sweatshirt",coat,27.487659293362874,False
+pants\36961_226495.jpg,pants,"top, t-shirt, sweatshirt",52.542661898990815,False
+pants\5444_127413.jpg,pants,"top, t-shirt, sweatshirt",42.0757273678433,False
+pants\7934_186911.jpg,pants,"top, t-shirt, sweatshirt",74.32004832191001,False
+jacket\36149_221546.jpg,jacket,coat,57.59637077485835,False
+dress\18330_15339.jpg,dress,pants,84.4747489894839,False
+jacket\18330_15340.jpg,jacket,"top, t-shirt, sweatshirt",45.792868245946764,False
+jacket\20437_88.jpg,jacket,coat,73.90185733780102,False
+shorts\5301_119346.jpg,shorts,pants,97.24503147716202,False
+top_t_shirt_sweatshirt\10350_34520.jpg,"top, t-shirt, sweatshirt",dress,26.91427482458361,False
+pants\10350_34523.jpg,pants,dress,46.76560367546284,False
+jacket\8798_142506.jpg,jacket,cardigan,50.480801964835834,False
+dress\33321_326362.jpg,dress,coat,93.18099849209958,False
+dress\40553_93719.jpg,dress,skirt,47.13665159896312,False
+dress\19793_23494.jpg,dress,"top, t-shirt, sweatshirt",63.175096551265675,False
+dress\24160_330059.jpg,dress,jumpsuit,87.94569150203235,False
+dress\18602_17508.jpg,dress,skirt,69.38521165764568,False
+shirt_blouse\37646_319183.jpg,"shirt, blouse","top, t-shirt, sweatshirt",68.13920478116138,False
+top_t_shirt_sweatshirt\4270_189795.jpg,"top, t-shirt, sweatshirt",pants,38.81815952739895,False
+shirt_blouse\4270_189798.jpg,"shirt, blouse",jacket,82.78157913768536,False
+jumpsuit\227_159773.jpg,jumpsuit,pants,46.95046959019711,False
+vest\1380_192249.jpg,vest,"top, t-shirt, sweatshirt",58.362570682073454,False
+jacket\2625_143810.jpg,jacket,"top, t-shirt, sweatshirt",89.36790299129864,False
+skirt\17814_13138.jpg,skirt,"top, t-shirt, sweatshirt",40.96154701919231,False
+top_t_shirt_sweatshirt\40267_179283.jpg,"top, t-shirt, sweatshirt",dress,66.00394977880578,False
+shorts\9380_29938.jpg,shorts,pants,95.33691801076894,False
+shirt_blouse\40503_93423.jpg,"shirt, blouse","top, t-shirt, sweatshirt",92.92950740676187,False
+dress\25338_301163.jpg,dress,"top, t-shirt, sweatshirt",41.87934697000672,False
+skirt\46983_61944.jpg,skirt,shorts,51.77191211072457,False
+shirt_blouse\4667_156425.jpg,"shirt, blouse","top, t-shirt, sweatshirt",54.64079119356813,False
+sweater\39938_96412.jpg,sweater,"top, t-shirt, sweatshirt",86.2999976228587,False
+shirt_blouse\39762_89563.jpg,"shirt, blouse",jacket,60.339782958279784,False
+skirt\16252_15805.jpg,skirt,dress,60.31006521332605,False
+coat\37289_318874.jpg,coat,jacket,67.1827923830943,False
+jumpsuit\26306_332232.jpg,jumpsuit,dress,45.76336178132173,False
+dress\43587_196543.jpg,dress,jacket,32.97966864359548,False
+coat\43587_196547.jpg,coat,dress,83.57435707171166,False
+shirt_blouse\27427_237006.jpg,"shirt, blouse",jacket,54.78903180134766,False
+jacket\42654_107069.jpg,jacket,"shirt, blouse",55.06109150269815,False
+top_t_shirt_sweatshirt\22254_281307.jpg,"top, t-shirt, sweatshirt",jacket,59.118386989349524,False
+jacket\22254_281322.jpg,jacket,coat,74.33005012297129,False
+sweater\10993_42579.jpg,sweater,"top, t-shirt, sweatshirt",94.66437366379388,False
+shirt_blouse\50056_80032.jpg,"shirt, blouse","top, t-shirt, sweatshirt",81.80746715902593,False
+skirt\27896_250780.jpg,skirt,dress,59.95515286021126,False
+top_t_shirt_sweatshirt\33344_271334.jpg,"top, t-shirt, sweatshirt",dress,49.23021517127689,False
+jacket\6266_125110.jpg,jacket,"top, t-shirt, sweatshirt",54.29320743276169,False
+jacket\44686_203002.jpg,jacket,coat,45.61839615320194,False
+dress\5771_128523.jpg,dress,coat,32.10899351828035,False
+dress\6466_126206.jpg,dress,skirt,80.85088272730242,False
+skirt\37770_231382.jpg,skirt,dress,49.77347076711804,False
+pants\42133_193590.jpg,pants,"top, t-shirt, sweatshirt",73.68761277816574,False
+jumpsuit\12441_44400.jpg,jumpsuit,skirt,45.94874193032427,False
+dress\35853_219827.jpg,dress,skirt,70.77062661910898,False
+top_t_shirt_sweatshirt\23776_290597.jpg,"top, t-shirt, sweatshirt",jacket,93.62743838640908,False
+skirt\48713_72297.jpg,skirt,dress,95.69599690288037,False
