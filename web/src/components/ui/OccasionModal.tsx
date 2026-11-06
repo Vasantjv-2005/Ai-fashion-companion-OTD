@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { X, Check, Sparkles } from 'lucide-react';
+import { useFocusTrap } from '../../utils/focusTrap';
 
 export interface OccasionItem {
   id: string;
@@ -90,25 +91,8 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
   selectedOccasion,
   onSelectOccasion,
 }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  // Close on Escape key & restore focus
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 

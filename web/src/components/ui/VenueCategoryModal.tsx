@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Search, Check, Sparkles, Building2 } from 'lucide-react';
+import { useFocusTrap } from '../../utils/focusTrap';
 
 export interface VenueCategoryItem {
   id: string;
@@ -126,23 +127,14 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const previousActiveElement = useRef<HTMLElement | null>(null);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
-  // Focus input on open, handle Escape & restore focus
   useEffect(() => {
     if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-    setTimeout(() => searchInputRef.current?.focus(), 100);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+    const timer = setTimeout(() => searchInputRef.current?.focus(), 80);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   const filteredCategories = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -168,6 +160,7 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
       }}
     >
       <div
+        ref={modalRef}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl text-[var(--text-body)] overflow-hidden"
       >

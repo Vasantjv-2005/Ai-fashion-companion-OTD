@@ -165,6 +165,10 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
           return (
             <div
               key={slot.slot}
+              role="button"
+              tabIndex={0}
+              aria-label={`Select slot ${slotNum}: ${slot.slotLabel}, ${slot.name}`}
+              aria-pressed={isSelected}
               onClick={() => {
                 if (onSlotChangeClick) {
                   onSlotChangeClick(slot);
@@ -172,7 +176,17 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
                   onSlotClick(slot);
                 }
               }}
-              className={`p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col gap-2.5 ${
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  if (onSlotChangeClick) {
+                    onSlotChangeClick(slot);
+                  } else if (onSlotClick) {
+                    onSlotClick(slot);
+                  }
+                }
+              }}
+              className={`p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                 isSelected
                   ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/50 shadow-sm'
                   : isVerifiedOwned

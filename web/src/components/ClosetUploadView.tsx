@@ -1219,9 +1219,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           {/* Three Primary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Choice 1: Take Photo */}
-            <div
+            <button
+              type="button"
               onClick={handleStartCamera}
-              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden"
+              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden text-left w-full"
             >
               <div className="space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] group-hover:scale-110 transition-transform">
@@ -1244,12 +1245,13 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 <span>Launch Camera</span>
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
-            </div>
+            </button>
 
             {/* Choice 2: Upload from Library */}
-            <div
+            <button
+              type="button"
               onClick={handleOpenLibrary}
-              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden"
+              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden text-left w-full"
             >
               <div className="space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] group-hover:scale-110 transition-transform">
@@ -1272,12 +1274,13 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 <span>Select Photos</span>
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
-            </div>
+            </button>
 
             {/* Choice 3: Manual Entry */}
-            <div
+            <button
+              type="button"
               onClick={handleStartManualEntry}
-              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden"
+              className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] hover:border-[var(--gold-primary)] transition-all cursor-pointer group flex flex-col justify-between hover:shadow-xl relative overflow-hidden text-left w-full"
             >
               <div className="space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] group-hover:scale-110 transition-transform">
@@ -1300,7 +1303,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 <span>Direct Form</span>
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Quick Curated Editorial Presets */}

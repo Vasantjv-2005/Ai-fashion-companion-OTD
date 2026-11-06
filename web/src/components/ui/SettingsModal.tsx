@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { X, Moon, Sun, Ruler, Bell, RotateCcw, LogOut, Check, Sliders, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { clearDraftSession } from '../../utils/draftStorage';
+import { useFocusTrap } from '../../utils/focusTrap';
 
 export interface UserSettings {
   measurementUnit: 'metric' | 'imperial';
@@ -57,27 +58,18 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
-  // Keyboard accessibility (Escape key dismissal with confirmation shield)
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isResetting) return;
-        if (isResetConfirmOpen) {
-          setIsResetConfirmOpen(false);
-        } else {
-          onClose();
-        }
+  // Focus trap, restoration & Escape key dismissal with confirmation shield
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onClose: () => {
+      if (isResetting) return;
+      if (isResetConfirmOpen) {
+        setIsResetConfirmOpen(false);
+      } else {
+        onClose();
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isResetConfirmOpen, isResetting, onClose]);
+    },
+  });
 
   const handleExecuteReset = async () => {
     if (isResetting) return;
@@ -173,7 +165,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Studio Settings"
+      aria-labelledby="settings-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -187,7 +179,8 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
       }}
     >
       <div
-        className="relative w-full max-w-lg rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)]"
+        ref={modalRef}
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -197,7 +190,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
               <Sliders className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-playfair text-xl font-bold text-[var(--text-heading)]">
+              <h3 id="settings-modal-title" className="font-playfair text-xl font-bold text-[var(--text-heading)]">
                 Studio Settings
               </h3>
               <p className="text-xs text-[var(--text-muted)]">

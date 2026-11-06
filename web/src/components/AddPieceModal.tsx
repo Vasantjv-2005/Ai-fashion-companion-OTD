@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { X, Camera, Upload, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
 import { compressImageFile } from '../utils/imageCompressor';
+import { useFocusTrap } from '../utils/focusTrap';
 
 interface AddPieceModalProps {
   isOpen: boolean;
@@ -78,24 +79,8 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
     onClose();
   }, [resetState, onClose]);
 
-  // Handle ESC key to dismiss modal and restore focus
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, handleClose]);
+  // Focus trap, restoration & ESC key handling
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose: handleClose });
 
   if (!isOpen) return null;
 
@@ -201,6 +186,7 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
       onClick={handleClose}
     >
       <div
+        ref={modalRef}
         className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >

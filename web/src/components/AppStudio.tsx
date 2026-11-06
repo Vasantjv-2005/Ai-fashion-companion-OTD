@@ -62,6 +62,7 @@ import { GarmentSwapModal } from './ui/GarmentSwapModal';
 import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
 import { ClosetUploadView } from './ClosetUploadView';
 import { ShoppingListView } from './ShoppingListView';
+import { useFocusTrap } from '../utils/focusTrap';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
@@ -259,6 +260,57 @@ const loadStoredLikedLooks = (): string[] => {
   return ['smart-casual-1', 'date-night-1'];
 };
 
+export interface WeekScheduleDay {
+  name: string;
+  occasion: string;
+  planned: boolean;
+  img?: string;
+  key: string;
+  day: string;
+  month: string;
+  isToday: boolean;
+}
+
+function computeWeekScheduleDays(): WeekScheduleDay[] {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const distToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + distToMon);
+
+  const templateOccasions = [
+    { name: 'Mon', occasion: "Dinner at Bistro", planned: true, img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=300&q=80' },
+    { name: 'Tue', occasion: 'Office Presentation', planned: true, img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=300&q=80' },
+    { name: 'Wed', occasion: 'Client Lunch', planned: false },
+    { name: 'Thu', occasion: 'Art Gallery Opening', planned: true, img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=300&q=80' },
+    { name: 'Fri', occasion: 'Casual Friday & Drinks', planned: false },
+    { name: 'Sat', occasion: 'Rooftop Lounge Gathering', planned: true, img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=300&q=80' },
+    { name: 'Sun', occasion: 'Weekend Brunch', planned: false },
+  ];
+
+  return templateOccasions.map((template, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const isToday = d.toDateString() === now.toDateString();
+    const dayNum = d.getDate();
+    const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+    return {
+      ...template,
+      key: `week-day-${idx}-${dayNum}-${monthShort}`,
+      day: dayNum.toString(),
+      month: monthShort,
+      isToday,
+    };
+  });
+}
+
+function getTodayFormattedSaveDate(): string {
+  return new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
@@ -296,39 +348,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     return shoppingList.filter((item) => !checkItemOwnership(item).isOwned).length;
   }, [shoppingList, checkItemOwnership]);
 
-  // Dynamic week calendar calculation (Task 9B)
-  const weekScheduleDays = useMemo(() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const distToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + distToMon);
-
-    const templateOccasions = [
-      { name: 'Mon', occasion: "Dinner at Bistro", planned: true, img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=300&q=80' },
-      { name: 'Tue', occasion: 'Office Presentation', planned: true, img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=300&q=80' },
-      { name: 'Wed', occasion: 'Client Lunch', planned: false },
-      { name: 'Thu', occasion: 'Art Gallery Opening', planned: true, img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=300&q=80' },
-      { name: 'Fri', occasion: 'Casual Friday & Drinks', planned: false },
-      { name: 'Sat', occasion: 'Rooftop Lounge Gathering', planned: true, img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=300&q=80' },
-      { name: 'Sun', occasion: 'Weekend Brunch', planned: false },
-    ];
-
-    return templateOccasions.map((template, idx) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + idx);
-      const isToday = d.toDateString() === now.toDateString();
-      const dayNum = d.getDate();
-      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-      return {
-        ...template,
-        key: `week-day-${idx}-${dayNum}-${monthShort}`,
-        day: dayNum.toString(),
-        month: monthShort,
-        isToday,
-      };
-    });
-  }, []);
+  // Dynamic week calendar calculation (Task 9B, DEF-07 pure initialization)
+  const [weekScheduleDays] = useState<WeekScheduleDay[]>(computeWeekScheduleDays);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<WeekScheduleDay | null>(null);
+  const calendarModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: selectedCalendarDay !== null,
+    onClose: () => setSelectedCalendarDay(null),
+  });
 
   // Navigation tab state
   const [internalTab, setInternalTab] = useState<StudioTab>(controlledActiveTab || 'home');
@@ -381,26 +407,26 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     }
   }, [likedLooks]);
 
-  // Keyboard Escape dismissal for local Studio modals & drawers
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (itemToDelete) {
-          setItemToDelete(null);
-        } else if (itemToEdit) {
-          setItemToEdit(null);
-        } else if (selectedClosetItem) {
-          setSelectedClosetItem(null);
-        } else if (isHelpOpen) {
-          setIsHelpOpen(false);
-        } else if (mobileMenuOpen) {
-          setMobileMenuOpen(false);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [itemToDelete, itemToEdit, selectedClosetItem, isHelpOpen, mobileMenuOpen]);
+  // Focus traps & keyboard accessibility for Studio internal modals
+  const inspectionModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: Boolean(selectedClosetItem),
+    onClose: () => setSelectedClosetItem(null),
+  });
+
+  const deleteDialogRef = useFocusTrap<HTMLDivElement>({
+    isOpen: Boolean(itemToDelete),
+    onClose: () => setItemToDelete(null),
+  });
+
+  const helpModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: isHelpOpen,
+    onClose: () => setIsHelpOpen(false),
+  });
+
+  const mobileDrawerRef = useFocusTrap<HTMLDivElement>({
+    isOpen: mobileMenuOpen,
+    onClose: () => setMobileMenuOpen(false),
+  });
 
   // Plan Your Look Wizard State (Screenshots 1 & 2)
   const [plannerStep, setPlannerStep] = useState<1 | 2 | 3>(1);
@@ -640,10 +666,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     const lookId = `curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`;
     toggleLike(lookId);
     if (!savedLooksList.some((look) => look.id === lookId)) {
-      const todayFormatted = new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
+      const todayFormatted = getTodayFormattedSaveDate();
       setSavedLooksList((prev) => [
         {
           id: lookId,
@@ -865,6 +888,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   return (
     <div className="h-screen h-dvh bg-[var(--bg-canvas)] text-[var(--text-body)] flex overflow-hidden font-sans transition-colors duration-300">
+      {/* Skip to Main Content Link for Keyboard & Screen Reader Users */}
+      <a href="#studio-main" className="sr-only skip-to-content">
+        Skip to Studio Content
+      </a>
+
       <div className="flex-1 flex h-full overflow-hidden">
         
         {/* ========================================================================= */}
@@ -874,9 +902,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* Top: Logo */}
           <div className="shrink-0 pb-3">
             {/* OTD Official Logo & Subtitle */}
-            <div
+            <button
+              type="button"
               onClick={onBackToLanding}
-              className="flex items-center gap-3 px-2 cursor-pointer group"
+              aria-label="Return to OTD Home Landing"
+              className="flex items-center gap-3 px-2 cursor-pointer group bg-transparent border-0 text-left p-0"
               title="Return to Home Landing"
             >
               <div className="w-10 h-12 rounded-lg bg-[#FAF5ED] p-1 border border-[#D5C29D] shadow-sm flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -894,7 +924,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   OUTFIT OF THE DAY
                 </p>
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Middle: Scrollable Navigation Menu */}
@@ -912,7 +942,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 },
                 { id: 'ideas', label: 'Create Look', icon: Shirt },
                 { id: 'destinations', label: 'Destination Mode', icon: Compass },
-                { id: 'tryon', label: 'Virtual Try-On', icon: Camera },
+                { id: 'tryon', label: 'Virtual Try-On', icon: Camera, tag: 'Beta' },
                 { id: 'calendar', label: 'Calendar', icon: Calendar },
                 { id: 'saved', label: 'Favorites', icon: Bookmark, badge: likedLooks.length },
                 { id: 'profile', label: 'Profile', icon: User },
@@ -957,6 +987,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         {item.badge}
                       </span>
                     )}
+                    {item.tag !== undefined && (
+                      <span
+                        className={`text-[9px] uppercase tracking-wider font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                          isActive
+                            ? 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
+                            : 'bg-[var(--gold-primary)]/15 text-[var(--gold-primary)] border border-[var(--gold-primary)]/30'
+                        }`}
+                      >
+                        {item.tag}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -983,7 +1024,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             </div>
 
             {/* Bottom Promotional Card: "Build a Smarter Wardrobe." */}
-            <div
+            <button
+              type="button"
               onClick={() => {
                 if (onNavigateToUpload) {
                   onNavigateToUpload();
@@ -992,11 +1034,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   onOpenAddPiece();
                 }
               }}
-              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block"
+              aria-label="Build a Smarter Wardrobe, digitize closet"
+              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
             >
               <img
                 src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80"
-                alt="Build a Smarter Wardrobe"
+                alt=""
+                aria-hidden="true"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-75"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3.5 flex flex-col justify-end text-white">
@@ -1008,14 +1052,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         </aside>
 
         {/* ========================================================================= */}
         {/* MAIN VIEWPORT (Independently Scrolling, Sticky Header) */}
         {/* ========================================================================= */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
+        <main id="studio-main" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
           
           {/* Top Bar (Matching Screenshot 3) */}
           <header className="h-16 px-6 border-b border-[var(--border-card)] bg-[var(--bg-header)] backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
@@ -1025,6 +1069,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <input
                 type="text"
                 placeholder="Search for outfits, occasions, or ask anything..."
+                aria-label="Search outfits, occasions, or ask stylist"
                 value={homeSearchQuery}
                 onChange={(e) => setHomeSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -1041,9 +1086,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             {/* Right Header Actions: Theme Toggle, Notifications, User Profile (Screenshot 3) */}
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={toggleTheme}
                 className="p-2 rounded-full hover:bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors cursor-pointer"
                 title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Theme`}
+                aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Theme`}
               >
                 {theme === 'dark' ? (
                   <Sun className="w-4 h-4 text-amber-400" />
@@ -1054,6 +1101,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
               {/* Notification Bell with Badge */}
               <button
+                type="button"
                 onClick={() => setIsNotificationsOpen(true)}
                 className="relative p-2 rounded-full hover:bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors cursor-pointer"
                 aria-label="View notifications"
@@ -1063,9 +1111,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               </button>
 
               {/* User Avatar & Name Dropdown */}
-              <div
+              <button
+                type="button"
                 onClick={onOpenProfile}
-                className="flex items-center gap-2.5 pl-2 border-l border-[var(--border-card)] cursor-pointer group"
+                aria-label={`Open profile for ${userDisplayName}`}
+                className="flex items-center gap-2.5 pl-2 border-l border-[var(--border-card)] cursor-pointer group bg-transparent border-t-0 border-r-0 border-b-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
               >
                 <img
                   src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80"
@@ -1076,7 +1126,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   {userDisplayName}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-heading)] transition-colors" />
-              </div>
+              </button>
             </div>
           </header>
 
@@ -1238,8 +1288,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         return (
                           <div
                             key={i}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${item.title} — ${item.subtitle}`}
                             onClick={item.action}
-                            className="group rounded-2xl overflow-hidden border border-[var(--border-card)] bg-[var(--bg-card)] p-2.5 flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md hover:scale-[1.02]"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                item.action();
+                              }
+                            }}
+                            className="group rounded-2xl overflow-hidden border border-[var(--border-card)] bg-[var(--bg-card)] p-2.5 flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                           >
                             <div className="h-20 w-full rounded-xl overflow-hidden relative mb-2 bg-neutral-900">
                               <img
@@ -1272,6 +1331,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         Outfit Suggestions For You
                       </h3>
                       <button
+                        type="button"
                         onClick={() => setActiveTab('ideas')}
                         className="text-xs font-semibold text-[var(--gold-primary)] hover:underline flex items-center gap-1 cursor-pointer"
                       >
@@ -1309,12 +1369,23 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       ].map((look) => (
                         <div
                           key={look.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View outfit suggestion: ${look.title}, ${look.subtitle}`}
                           onClick={() => {
                             setActiveTab('stylist');
                             setPlannerStep(3);
                             setCurrentOutfitTitle(look.title);
                           }}
-                          className="group rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setActiveTab('stylist');
+                              setPlannerStep(3);
+                              setCurrentOutfitTitle(look.title);
+                            }
+                          }}
+                          className="group rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                         >
                           <div className="h-44 bg-neutral-900 relative overflow-hidden">
                             <img
@@ -1324,10 +1395,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             />
                             {/* Favorite Heart Button */}
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleLike(look.id);
                               }}
+                              aria-label={likedLooks.includes(look.id) ? `Remove ${look.title} from favorites` : `Save ${look.title} to favorites`}
                               className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
                             >
                               <Heart
@@ -1381,16 +1454,18 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </div>
                     </div>
 
-                    <div
+                    <button
+                      type="button"
                       onClick={() => {
                         setActiveTab('stylist');
                         setPlannerStep(2);
                       }}
-                      className="pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-body)] hover:text-[var(--gold-primary)] cursor-pointer"
+                      aria-label="View stylist recommendations for today's weather"
+                      className="w-full pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-body)] hover:text-[var(--gold-primary)] cursor-pointer bg-transparent text-left border-x-0 border-b-0 focus:outline-none focus-visible:underline"
                     >
                       <span>Perfect weather for a light, breathable outfit.</span>
                       <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-                    </div>
+                    </button>
                   </div>
 
                   {/* 2. YOUR STYLE PROFILE CARD (Screenshot 3) */}
@@ -1479,7 +1554,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           img: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?auto=format&fit=crop&w=200&q=80',
                         },
                       ].map((cat, i) => (
-                        <div
+                        <button
+                          type="button"
                           key={i}
                           onClick={() => {
                             setActiveTab('closet');
@@ -1487,12 +1563,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               cat.category === 'Shoes' ? 'footwear' : (cat.category.toLowerCase() as any)
                             );
                           }}
-                          className="p-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]/40 hover:border-[var(--gold-primary)] transition-all cursor-pointer group"
+                          aria-label={`View ${cat.category} in Digital Closet (${cat.count} items)`}
+                          className="p-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]/40 hover:border-[var(--gold-primary)] transition-all cursor-pointer group text-left w-full focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--gold-primary)]"
                         >
                           <div className="h-12 w-full rounded-lg overflow-hidden bg-neutral-900 mb-1">
                             <img
                               src={cat.img}
-                              alt={cat.category}
+                              alt=""
+                              aria-hidden="true"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />
                           </div>
@@ -1502,7 +1580,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <span className="text-[10px] text-[var(--text-muted)]">
                             {cat.count} items
                           </span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2524,10 +2602,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             onNavigateToShopping={() => setActiveTab('shopping')}
                           />
 
-                          {/* Preserved Stylist Concierge Chat Box with 7 Refinement Preferences */}
+                          {/* Preserved Stylist Concierge Chat Box with Responsive Height (DEF-05) */}
                           <div
                             id="stylist-concierge-chat"
-                            className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-sm flex flex-col h-[490px]"
+                            className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-sm flex flex-col h-[360px] sm:h-[440px] md:h-[490px] max-h-[60vh] sm:max-h-[70vh]"
                           >
                             {/* Stylist Concierge Header */}
                             <div className="p-4 border-b border-[var(--border-card)] flex items-center justify-between bg-[var(--bg-header)]">
@@ -2920,8 +2998,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   {filteredAndSortedClosetItems.map((piece) => (
                     <div
                       key={piece.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Inspect ${piece.name}, ${piece.brand || ''} ${piece.category}`}
                       onClick={() => setSelectedClosetItem(piece)}
-                      className={`rounded-2xl border bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedClosetItem(piece);
+                        }
+                      }}
+                      className={`rounded-2xl border bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                         piece.isArchived
                           ? 'border-amber-500/40 opacity-85 hover:opacity-100 hover:border-amber-500'
                           : 'border-[var(--border-card)] hover:border-[var(--gold-primary)]'
@@ -3069,7 +3156,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </button>
               </div>
 
-              {/* Weekly Schedule Row */}
+              {/* Weekly Schedule Row with Interactive Day Inspection (DEF-10) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 {weekScheduleDays.map((item) => (
                   <div
@@ -3095,31 +3182,73 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     {item.planned ? (
-                      <div className="space-y-1.5">
-                        <div className="h-28 rounded-xl overflow-hidden bg-neutral-900">
-                          <img src={item.img} alt={item.occasion} className="w-full h-full object-cover" />
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedCalendarDay(item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedCalendarDay(item);
+                          }
+                        }}
+                        aria-label={`View planned look for ${item.name}, ${item.occasion}`}
+                        className="space-y-1.5 cursor-pointer group text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--gold-primary)] rounded-xl"
+                      >
+                        <div className="h-28 rounded-xl overflow-hidden bg-neutral-900 relative">
+                          <img src={item.img} alt={item.occasion} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <span className="px-2.5 py-1 rounded-full bg-black/80 text-white text-[10px] font-bold">
+                              Inspect Look
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-[11px] font-bold text-[var(--text-heading)] block line-clamp-1">
+                        <span className="text-[11px] font-bold text-[var(--text-heading)] block line-clamp-1 group-hover:text-[var(--gold-primary)] transition-colors">
                           {item.occasion}
                         </span>
-                        <span className="text-[10px] text-emerald-600 font-semibold block">✓ Outfit Planned</span>
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-emerald-600 font-semibold">✓ Planned</span>
+                          <span className="text-[var(--gold-primary)] font-medium underline">Preview</span>
+                        </div>
                       </div>
                     ) : (
-                      <div className="py-8 text-center space-y-1">
+                      <div className="py-7 text-center space-y-1.5 flex flex-col items-center justify-center">
                         <span className="text-xs text-[var(--text-muted)] block">No plan yet</span>
                         <button
+                          type="button"
                           onClick={() => {
+                            setSelectedOccasion(item.occasion || 'Smart Casual');
                             setActiveTab('stylist');
                             setPlannerStep(1);
                           }}
-                          className="text-[10px] text-[var(--gold-primary)] font-bold hover:underline cursor-pointer"
+                          className="px-3 py-1.5 rounded-full border border-[var(--border-gold)] text-[10px] text-[var(--gold-primary)] font-bold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
                         >
-                          + Add Look
+                          + Plan Ensemble
                         </button>
                       </div>
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Calendar Informational Guidance */}
+              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
+                  <span>
+                    Ensembles are calibrated locally to prevent event duplicates and keep your wardrobe organized.
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] shrink-0 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Outfit Planned</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" />
+                    <span>Open Day</span>
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -3294,11 +3423,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {activeTab === 'tryon' && (
             <div className="p-5 lg:p-7 max-w-4xl mx-auto w-full text-center space-y-6">
               <div>
-                <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
-                  Virtual Try-On Studio
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Drape your active digital wardrobe onto your calibrated 3D Style Avatar
+                <div className="flex items-center justify-center gap-2">
+                  <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
+                    Virtual Try-On Studio
+                  </h2>
+                  <span className="text-[10px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    Preview / Beta
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 max-w-md mx-auto">
+                  Drape your curated ensembles onto your calibrated biometric Style Avatar silhouette
                 </p>
               </div>
 
@@ -3317,11 +3451,28 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-[var(--pill-bg)] text-xs text-[var(--text-muted)] leading-relaxed">
-                  <strong>Notice:</strong> High-latency 3D mesh rendering is scheduled for Phase 2. Your Style Avatar biometrics are calibrated and ready.
+                {/* Capability & Architecture Status Grid */}
+                <div className="grid grid-cols-3 gap-2 text-[10px] font-mono py-1">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <span>✓ 2D Drape</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <span>✓ Biometrics</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold">
+                    <span>⏳ 3D (Phase 2)</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] text-xs text-[var(--text-muted)] leading-relaxed text-left space-y-1">
+                  <p className="font-semibold text-[var(--text-heading)]">Preview Architecture Notice</p>
+                  <p>
+                    This preview generates instant 2D editorial silhouettes based on your biometric profile. Full WebGL 3D cloth physics and multi-angle mesh rendering are in active development for Cloud Phase 2.
+                  </p>
                 </div>
 
                 <button
+                  type="button"
                   onClick={onOpenProfile}
                   className="px-6 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer mx-auto shadow-md"
                 >
@@ -3349,7 +3500,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             />
           )}
 
-        </div>
+        </main>
 
       </div>
 
@@ -3358,35 +3509,53 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       {/* ========================================================================= */}
       <MobileBottomNav
         activeTab={activeTab}
-        onSelectTab={(tab) => setActiveTab(tab)}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          setMobileMenuOpen(false);
+        }}
         onOpenMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
         closetCount={closet.length}
         savedCount={likedLooks.length}
+        isMenuOpen={mobileMenuOpen}
       />
 
-      {/* Mobile Drawer Menu */}
+      {/* Mobile Drawer Menu (DEF-06 improved feedback & active highlighting) */}
       {mobileMenuOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="More Navigation Menu"
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <div
-            className="bg-[var(--bg-card)] rounded-t-3xl border-t border-[var(--border-card)] p-6 space-y-4 shadow-2xl"
+            ref={mobileDrawerRef}
+            className="bg-[var(--bg-card)] rounded-t-3xl border-t border-[var(--border-card)] p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)]">
               <span className="font-playfair text-base font-bold text-[var(--text-heading)]">More Navigation</span>
-              <button onClick={() => setMobileMenuOpen(false)} className="p-1">
-                <X className="w-5 h-5 text-[var(--text-muted)]" />
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close mobile navigation menu"
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('shopping');
                   setMobileMenuOpen(false);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center justify-between font-semibold col-span-2 bg-[var(--pill-bg)]/50"
+                className={`p-3 rounded-xl border text-left flex items-center justify-between font-semibold col-span-2 active:scale-[0.98] transition-all cursor-pointer ${
+                  activeTab === 'shopping'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/40 text-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)] bg-[var(--pill-bg)]/50'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-[var(--gold-primary)]" />
@@ -3399,61 +3568,83 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('destinations');
                   setMobileMenuOpen(false);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className={`p-3 rounded-xl border text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer ${
+                  activeTab === 'destinations'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/40 text-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)]'
+                }`}
               >
                 <Compass className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Destinations</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('calendar');
                   setMobileMenuOpen(false);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className={`p-3 rounded-xl border text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer ${
+                  activeTab === 'calendar'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/40 text-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)]'
+                }`}
               >
                 <Calendar className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Calendar</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('ideas');
                   setMobileMenuOpen(false);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className={`p-3 rounded-xl border text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer ${
+                  activeTab === 'ideas'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/40 text-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)]'
+                }`}
               >
                 <Shirt className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Outfit Ideas</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('tryon');
                   setMobileMenuOpen(false);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className={`p-3 rounded-xl border text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer ${
+                  activeTab === 'tryon'
+                    ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]/40 text-[var(--gold-primary)]'
+                    : 'border-[var(--border-card)]'
+                }`}
               >
                 <Camera className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Virtual Try-On</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   setIsSettingsOpen(true);
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer"
               >
                 <Settings className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Settings</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onOpenProfile();
                 }}
-                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold"
+                className="p-3 rounded-xl border border-[var(--border-card)] text-left flex items-center gap-2 font-semibold active:scale-[0.98] transition-all cursor-pointer"
               >
                 <User className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>My Profile</span>
@@ -3473,7 +3664,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           onClick={() => setSelectedClosetItem(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-[var(--border-gold)] p-6 space-y-4 shadow-2xl text-xs"
+            ref={inspectionModalRef}
+            className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-gold)] p-6 space-y-4 shadow-2xl text-xs"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -3624,7 +3816,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           onClick={() => setItemToDelete(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-rose-200 dark:border-rose-950 p-6 space-y-4 shadow-2xl text-xs text-center"
+            ref={deleteDialogRef}
+            className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-rose-200 dark:border-rose-950 p-6 space-y-4 shadow-2xl text-xs text-center"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center mx-auto">
@@ -3707,20 +3900,28 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       {isHelpOpen && (
         <div
           role="dialog"
+          aria-modal="true"
+          aria-labelledby="help-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in"
           onClick={() => setIsHelpOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] p-6 space-y-4 shadow-2xl text-xs"
+            ref={helpModalRef}
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] p-6 space-y-4 shadow-2xl text-xs"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)]">
-              <h4 className="font-playfair text-base font-bold text-[var(--text-heading)] flex items-center gap-2">
+              <h4 id="help-modal-title" className="font-playfair text-base font-bold text-[var(--text-heading)] flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>OTD Concierge & Help</span>
               </h4>
-              <button onClick={() => setIsHelpOpen(false)} className="p-1">
-                <X className="w-4 h-4 text-[var(--text-muted)]" />
+              <button
+                type="button"
+                onClick={() => setIsHelpOpen(false)}
+                aria-label="Close help and concierge modal"
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-[11px] text-[var(--text-body)] leading-relaxed">
@@ -3732,6 +3933,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <p className="text-[10px] text-emerald-600 font-medium">Response within 2 hours • 24/7 coverage</p>
             </div>
             <button
+              type="button"
               onClick={() => setIsHelpOpen(false)}
               className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black font-semibold cursor-pointer"
             >
@@ -3756,6 +3958,87 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         selectedCategory={selectedVenueCategory}
         onSelectCategory={(catName) => setSelectedVenueCategory(catName)}
       />
+
+      {/* Calendar Day Outfit Inspection Dialog (DEF-10) */}
+      {selectedCalendarDay && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-inspection-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
+          onClick={() => setSelectedCalendarDay(null)}
+        >
+          <div
+            ref={calendarModalRef}
+            className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-gold)] p-6 space-y-4 shadow-2xl text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase font-bold text-[var(--gold-primary)]">
+                  {selectedCalendarDay.name} ({selectedCalendarDay.day} {selectedCalendarDay.month})
+                </span>
+                {selectedCalendarDay.isToday && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-[var(--gold-primary)]/20 text-[var(--gold-primary)]">
+                    Today
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCalendarDay(null)}
+                aria-label="Close scheduled look preview"
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="h-56 rounded-2xl overflow-hidden bg-neutral-900 border border-[var(--border-card)] shadow-inner">
+              <img
+                src={selectedCalendarDay.img}
+                alt={selectedCalendarDay.occasion}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <h4 id="calendar-inspection-title" className="font-playfair text-base font-bold text-[var(--text-heading)]">
+                {selectedCalendarDay.occasion}
+              </h4>
+              <p className="text-[11px] text-emerald-600 font-semibold">
+                ✓ Curated for {selectedCalendarDay.name}, {selectedCalendarDay.day} {selectedCalendarDay.month}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed pt-1">
+                This ensemble is reserved on your personal calendar. You can adapt the pieces or open AI Stylist to generate an alternative variation.
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedOccasion(selectedCalendarDay.occasion);
+                  setSelectedCalendarDay(null);
+                  setActiveTab('stylist');
+                  setPlannerStep(1);
+                }}
+                className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:scale-[1.02] transition-all"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                <span>Recreate in AI Stylist</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCalendarDay(null)}
+                className="w-full py-2 rounded-xl border border-[var(--border-card)] text-[var(--text-muted)] hover:text-[var(--text-heading)] font-semibold cursor-pointer"
+              >
+                Dismiss Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

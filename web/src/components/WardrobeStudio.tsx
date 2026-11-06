@@ -93,10 +93,13 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
           {/* Items Grid (8 columns) */}
           <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
             {filteredItems.map((item) => (
-              <div
+              <button
+                type="button"
                 key={item.id}
                 onClick={() => setSelectedItem(item)}
-                className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer group flex flex-col justify-between ${
+                aria-pressed={selectedItem?.id === item.id}
+                aria-label={`Inspect ${item.name}, ${item.brand} ${item.subType}`}
+                className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer group flex flex-col justify-between text-left ${
                   selectedItem?.id === item.id
                     ? 'border-[var(--gold-primary)] bg-[var(--bg-card-elevated)] shadow-lg ring-1 ring-[var(--gold-primary)]/30'
                     : 'border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] hover:bg-[var(--bg-card-elevated)]'
@@ -133,7 +136,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                     Ready to Style
                   </span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 

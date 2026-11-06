@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { X, Shield, FileText, AlertCircle, Check } from 'lucide-react';
+import { useFocusTrap } from '../../utils/focusTrap';
 
 export interface LegalModalProps {
   isOpen: boolean;
@@ -8,23 +9,8 @@ export interface LegalModalProps {
 }
 
 export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose }) => {
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen: Boolean(isOpen && type), onClose });
 
   if (!isOpen || !type) return null;
 
@@ -43,6 +29,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose })
       }}
     >
       <div
+        ref={modalRef}
         className="relative w-full max-w-2xl max-h-[85vh] rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-8 text-[var(--text-body)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >

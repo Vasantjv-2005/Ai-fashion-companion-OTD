@@ -106,7 +106,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <button
                   type="button"
                   onClick={onOpenOnboarding}
-                  className="px-8 py-4 rounded-full bg-black text-white text-xs sm:text-sm font-bold hover:bg-neutral-800 flex items-center gap-2.5 cursor-pointer shadow-xl hover:scale-105 transition-all"
+                  className="px-8 py-4 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs sm:text-sm font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-2.5 cursor-pointer shadow-xl hover:scale-105 transition-all"
                 >
                   <span>Get Started</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
@@ -209,7 +209,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <button
                   type="button"
                   onClick={handleCurate}
-                  className="w-full py-2 rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-neutral-800 transition-colors"
+                  className="w-full py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
                 >
                   <span>View Look</span>
                   <ArrowRight className="w-3 h-3 stroke-[2.5]" />
@@ -224,13 +224,15 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                   { name: 'Travel', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=300&q=80' },
                   { name: 'Party', img: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=300&q=80' },
                 ].map(dest => (
-                  <div
+                  <button
+                    type="button"
                     key={dest.name}
                     onClick={() => {
                       setVenue(dest.name);
                       handleCurate();
                     }}
-                    className="group relative rounded-xl overflow-hidden aspect-[4/3] border border-[var(--border-card)] shadow-md cursor-pointer"
+                    aria-label={`Curate outfit for ${dest.name}`}
+                    className="group relative rounded-xl overflow-hidden aspect-[4/3] border border-[var(--border-card)] shadow-md cursor-pointer text-left p-0"
                   >
                     <img src={dest.img} alt={dest.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                     <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors flex items-end p-2">
@@ -238,7 +240,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                         {dest.name}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -372,7 +374,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                   <button
                     type="submit"
                     disabled={isGenerating}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center cursor-pointer hover:bg-neutral-800 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center cursor-pointer hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
                   >
                     {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4 stroke-[2.5]" />}
                   </button>
@@ -458,7 +460,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-black text-white text-xs font-bold hover:bg-neutral-800 flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:scale-105 transition-all"
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:scale-105 transition-all"
                 >
                   {isGenerating ? (
                     <>
@@ -598,7 +600,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                   <button
                     type="submit"
                     disabled={isGenerating || !chatInput.trim()}
-                    className="px-5 py-3 rounded-xl bg-black text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    className="px-5 py-3 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Modify</span>

@@ -118,7 +118,17 @@ export const GapIntelligence: React.FC = () => {
             {gaps.map((gap) => (
               <div
                 key={gap.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={gap.active}
+                aria-label={`Simulate impact of adding ${gap.title}. Category: ${gap.category}. Status: ${gap.active ? 'active' : 'inactive'}`}
                 onClick={() => toggleGap(gap.id)}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    toggleGap(gap.id);
+                  }
+                }}
                 className={`p-5 sm:p-6 rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                   gap.active
                     ? 'border-[var(--gold-primary)] bg-[var(--bg-card-elevated)] shadow-lg ring-1 ring-[var(--gold-primary)]/20'

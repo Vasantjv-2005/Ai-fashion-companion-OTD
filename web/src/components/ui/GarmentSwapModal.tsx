@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Check,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { ClosetItem } from '../../context/ClosetContext';
 import type { OutfitSlotItem } from './AvatarOutfitCanvas';
+import { useFocusTrap } from '../../utils/focusTrap';
 
 interface GarmentSwapModalProps {
   isOpen: boolean;
@@ -50,24 +51,8 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(slot?.closetItemId || null);
 
-  // Focus restoration & Escape key dismiss
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen || !slot) return null;
 
@@ -123,6 +108,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
       }}
     >
       <div
+        ref={modalRef}
         className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col my-auto max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -232,8 +218,19 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
                 return (
                   <div
                     key={item.id}
+                    role="button"
+                    tabIndex={isDuplicateWorn ? -1 : 0}
+                    aria-pressed={isSelected}
+                    aria-disabled={isDuplicateWorn}
+                    aria-label={`Select ${item.name}, ${item.brand || ''} ${item.subType}${isDuplicateWorn ? ' (Already worn in another slot)' : ''}`}
                     onClick={() => {
                       if (!isDuplicateWorn) {
+                        setSelectedItemId(item.id);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (!isDuplicateWorn && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
                         setSelectedItemId(item.id);
                       }
                     }}

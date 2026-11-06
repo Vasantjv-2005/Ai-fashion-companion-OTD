@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   X,
@@ -9,6 +9,7 @@ import {
   Info,
 } from 'lucide-react';
 import { authService } from '../services/auth.service';
+import { useFocusTrap } from '../utils/focusTrap';
 
 export type AuthMode = 'signin' | 'signup' | 'forgot';
 
@@ -19,6 +20,7 @@ interface AuthModalProps {
   onSuccess?: (user: unknown) => void;
   onSwitchToOnboarding?: () => void;
   onModeChange?: (mode: AuthMode) => void;
+  onExploreDemo?: () => void;
 }
 
 const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
@@ -26,6 +28,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
   onClose,
   onSuccess,
   onModeChange,
+  onExploreDemo,
 }) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [prevInitialMode, setPrevInitialMode] = useState(initialMode);
@@ -80,23 +83,8 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
     setForgotNotice(null);
   }
 
-  // Focus restoration & Escape key dismiss
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onClose });
 
   // Validation logic
   const validate = () => {
@@ -197,13 +185,6 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
     }
   };
 
-  const handleSocialClick = (provider: 'Google' | 'Apple') => {
-    setServerError(null);
-    setSocialNotice(
-      `${provider} OAuth is not yet configured on the backend server. Please use email and password to continue.`
-    );
-  };
-
   const handleBack = () => {
     if (mode === 'forgot') {
       switchMode('signin');
@@ -225,7 +206,8 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
       }}
     >
       <div
-        className="relative w-full max-w-[420px] rounded-[32px] overflow-hidden shadow-2xl bg-[#FAF5ED] text-[#1C1612] border border-[#E8DEC8] px-7 py-8 sm:px-8 sm:py-9 transition-all"
+        ref={modalRef}
+        className="relative w-full max-w-[420px] max-h-[92vh] overflow-y-auto rounded-[32px] shadow-2xl bg-[#FAF5ED] text-[#1C1612] border border-[#E8DEC8] px-7 py-8 sm:px-8 sm:py-9 transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Navigation Row: Back Arrow + Close */}
@@ -278,43 +260,57 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
         {/* Social Authentication (Google & Apple) */}
         {mode !== 'forgot' && (
           <div className="space-y-2.5 mb-5">
-            {/* Google Button */}
+            {/* Google OAuth Button - Coming Soon */}
             <button
               type="button"
-              onClick={() => handleSocialClick('Google')}
-              className="w-full py-2.5 sm:py-3 px-4 rounded-2xl border border-[#DECDB3] bg-[#FCF8F2] hover:bg-[#F3ECE0] text-xs sm:text-[13px] font-semibold text-[#1C1612] flex items-center justify-center gap-3 transition-colors cursor-pointer shadow-sm hover:border-[#C4B296]"
+              disabled
+              aria-disabled="true"
+              title="Google authentication will be enabled once backend OAuth endpoints are configured. Please use email and password."
+              className="w-full py-2.5 sm:py-3 px-4 rounded-2xl border border-[#DECDB3] bg-[#FCF8F2] text-xs sm:text-[13px] font-semibold text-[#665A4E] flex items-center justify-between transition-colors opacity-85 cursor-not-allowed shadow-xs"
             >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>Continue with Google</span>
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>Continue with Google</span>
+              </div>
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-[#EFE6D7] text-[#8C7456] border border-[#DFCBB2]">
+                Coming Soon
+              </span>
             </button>
 
-            {/* Apple Button */}
+            {/* Apple Button - Coming Soon */}
             <button
               type="button"
-              onClick={() => handleSocialClick('Apple')}
-              className="w-full py-2.5 sm:py-3 px-4 rounded-2xl border border-[#DECDB3] bg-[#FCF8F2] hover:bg-[#F3ECE0] text-xs sm:text-[13px] font-semibold text-[#1C1612] flex items-center justify-center gap-3 transition-colors cursor-pointer shadow-sm hover:border-[#C4B296]"
+              disabled
+              aria-disabled="true"
+              title="Apple authentication will be enabled once backend OAuth endpoints are configured. Please use email and password."
+              className="w-full py-2.5 sm:py-3 px-4 rounded-2xl border border-[#DECDB3] bg-[#FCF8F2] text-xs sm:text-[13px] font-semibold text-[#665A4E] flex items-center justify-between transition-colors opacity-85 cursor-not-allowed shadow-xs"
             >
-              <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.76 1.05-1.83.93-2.9-.9.04-2 .6-2.65 1.36-.58.67-1.09 1.76-.95 2.81 1.01.08 2.04-.51 2.67-1.27z" />
-              </svg>
-              <span>Continue with Apple</span>
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.76 1.05-1.83.93-2.9-.9.04-2 .6-2.65 1.36-.58.67-1.09 1.76-.95 2.81 1.01.08 2.04-.51 2.67-1.27z" />
+                </svg>
+                <span>Continue with Apple</span>
+              </div>
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-[#EFE6D7] text-[#8C7456] border border-[#DFCBB2]">
+                Coming Soon
+              </span>
             </button>
 
             {/* Horizontal "or" Divider */}
@@ -342,18 +338,39 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
           </div>
         )}
 
-        {/* Server / Network Error Message Banner */}
+        {/* Server / Network Error Message Banner with Safe Demo Option */}
         {serverError && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <div className="flex-1 leading-snug">{serverError}</div>
-            <button
-              type="button"
-              onClick={() => setServerError(null)}
-              className="text-rose-500 hover:text-rose-700 font-bold ml-1"
-            >
-              ×
-            </button>
+          <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs animate-in fade-in space-y-2">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-snug">
+                <p className="font-semibold text-rose-900 mb-0.5">Authentication Notice</p>
+                <p>{serverError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setServerError(null)}
+                className="text-rose-500 hover:text-rose-700 font-bold ml-1 cursor-pointer"
+                aria-label="Dismiss error notice"
+              >
+                ×
+              </button>
+            </div>
+            {onExploreDemo && (serverError.toLowerCase().includes('unreachable') || serverError.toLowerCase().includes('offline') || serverError.toLowerCase().includes('network')) && (
+              <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-rose-700">Explore studio in guest mode instead?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onExploreDemo();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 text-[11px] font-bold transition-colors cursor-pointer shrink-0 shadow-2xs"
+                >
+                  Explore Web Studio →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -592,6 +609,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   onSwitchToOnboarding,
   onModeChange,
+  onExploreDemo,
 }) => {
   if (!isOpen) return null;
 
@@ -602,6 +620,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onSuccess={onSuccess}
       onSwitchToOnboarding={onSwitchToOnboarding}
       onModeChange={onModeChange}
+      onExploreDemo={onExploreDemo}
     />
   );
 };

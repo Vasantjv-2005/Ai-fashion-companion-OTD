@@ -143,7 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {(onOpenAuth || onOpenOnboarding) && (
               <button
                 onClick={onOpenAuth || onOpenOnboarding}
-                className="px-5 py-2.5 rounded-full bg-black text-white text-xs font-bold hover:bg-neutral-800 flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
+                className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
               >
                 <span>Sign In</span>
                 <span className="text-sm">→</span>
@@ -259,7 +259,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (onOpenAuth) onOpenAuth();
                   else if (onOpenOnboarding) onOpenOnboarding();
                 }}
-                className="w-full py-3 rounded-full bg-black text-white text-xs font-bold hover:bg-neutral-800 flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                className="w-full py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
               >
                 <span>Sign In to OTD</span>
                 <span className="text-sm">→</span>

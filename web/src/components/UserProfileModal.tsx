@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { X, User, Check, Sparkles } from 'lucide-react';
 import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useFocusTrap } from '../utils/focusTrap';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -16,23 +17,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const [selectedStyles, setSelectedStyles] = useState<string[]>(profile.stylePersonas);
   const [fit, setFit] = useState(profile.preferredFit);
   const [saved, setSaved] = useState(false);
-  const previousActiveElement = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -64,7 +51,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Edit Profile & Style Preferences"
+      aria-labelledby="user-profile-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -73,6 +60,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
       }}
     >
       <div
+        ref={modalRef}
         className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
@@ -92,7 +80,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             <User className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
+            <h3 id="user-profile-title" className="font-serif-luxury text-2xl font-bold text-[var(--text-heading)]">
               Your Style DNA & Profile
             </h3>
             <p className="text-xs text-[var(--text-muted)] font-medium">Calibrate your personal styling rules for OTD</p>

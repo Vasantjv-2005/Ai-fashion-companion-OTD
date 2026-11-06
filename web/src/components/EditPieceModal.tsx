@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { X, Edit, Upload, Trash2, Check, AlertCircle } from 'lucide-react';
 import type { ClosetItem } from '../context/ClosetContext';
 import { compressImageFile } from '../utils/imageCompressor';
+import { useFocusTrap } from '../utils/focusTrap';
 
 export interface EditPieceModalProps {
   isOpen: boolean;
@@ -89,27 +90,17 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
     }
   }, [isDirty, onClose]);
 
-  // Keyboard accessibility: ESC key to attempt close & focus restoration
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showDiscardConfirm) {
-          setShowDiscardConfirm(false);
-        } else {
-          handleAttemptClose();
-        }
+  // Focus trap, restoration & ESC key handling
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onClose: () => {
+      if (showDiscardConfirm) {
+        setShowDiscardConfirm(false);
+      } else {
+        handleAttemptClose();
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [showDiscardConfirm, handleAttemptClose]);
+    },
+  });
 
   const handleFile = async (file: File) => {
     setFileError(null);
@@ -230,6 +221,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
       }}
     >
       <div
+        ref={modalRef}
         className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] max-h-[92vh] overflow-y-auto transition-all"
         onClick={(e) => e.stopPropagation()}
       >

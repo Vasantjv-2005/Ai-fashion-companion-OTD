@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Check,
@@ -15,6 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useFocusTrap } from '../utils/focusTrap';
 
 export interface OnboardingModalProps {
   isOpen: boolean;
@@ -72,24 +73,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   );
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Handle ESC key to dismiss modal and restore focus
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+  // Focus trap, restoration & Escape key dismiss
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -230,7 +215,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         }
       }}
     >
-      <div className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col lg:flex-row my-auto max-h-[94vh]">
+      <div ref={modalRef} className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col lg:flex-row my-auto max-h-[94vh]">
         
         {/* Top-Right Modal Close Button */}
         <button

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ShoppingBag,
   CheckCircle2,
@@ -26,6 +26,7 @@ import {
   findOwnedAlternatives,
   type OwnedAlternative,
 } from '../context/ClosetContext';
+import { useFocusTrap } from '../utils/focusTrap';
 
 interface ShoppingListViewProps {
   onNavigateToStylist: () => void;
@@ -39,7 +40,7 @@ type CategoryFilter = 'all' | 'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'a
 /**
  * Format numbers into standard Indian Rupee currency representation (e.g. ₹4,500).
  */
-export function formatINR(amount: number): string {
+function formatINR(amount: number): string {
   try {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -86,17 +87,11 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   // Task 10: Wear-instead confirmation feedback
   const [wearInsteadNote, setWearInsteadNote] = useState<{ itemId: string; altName: string } | null>(null);
 
-  // Keyboard Escape listener for clear confirmation modal
-  useEffect(() => {
-    if (!confirmClearOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setConfirmClearOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [confirmClearOpen]);
+  // Focus trap for clear confirmation dialog
+  const confirmClearModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: confirmClearOpen,
+    onClose: () => setConfirmClearOpen(false),
+  });
 
   // Compute live ownership status and owned alternatives for every wishlist item
   const evaluatedItems = useMemo(() => {
@@ -368,7 +363,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-gold)]/40 shadow-2xs flex items-center justify-between relative overflow-hidden">
           <div className="space-y-0.5 min-w-0 pr-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--gold-primary)] block font-semibold truncate">
-              Estimated Wishlist Budget
+              Estimated Wishlist Budget (INR ₹)
             </span>
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="font-playfair text-xl sm:text-2xl font-bold text-[var(--text-heading)]">
@@ -708,7 +703,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           {formatINR(item.estimatedBudget)}
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                          INR Estimate
+                          INR (₹)
                         </span>
                       </div>
                     ) : (
@@ -894,26 +889,28 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
       {/* ========================================================================= */}
       {confirmClearOpen && (
         <div
-          role="dialog"
+          role="alertdialog"
           aria-modal="true"
-          aria-label="Clear Wishlist"
+          aria-labelledby="clear-dialog-title"
+          aria-describedby="clear-dialog-desc"
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={(e) => {
             if (e.target === e.currentTarget) setConfirmClearOpen(false);
           }}
         >
           <div
-            className="bg-[var(--bg-card)] rounded-3xl border border-[var(--border-card)] p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in zoom-in-95"
+            ref={confirmClearModalRef}
+            className="bg-[var(--bg-card)] rounded-3xl border border-[var(--border-card)] p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
             <div className="text-center space-y-1">
-              <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+              <h4 id="clear-dialog-title" className="font-playfair text-lg font-bold text-[var(--text-heading)]">
                 Clear Wardrobe Wishlist?
               </h4>
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              <p id="clear-dialog-desc" className="text-xs text-[var(--text-muted)] leading-relaxed">
                 This will remove all {totalCount} saved garment entries and their estimated budgets from your local wishlist.
               </p>
             </div>
@@ -978,19 +975,10 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
   const [stylingNote, setStylingNote] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [onClose]);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onClose,
+  });
 
   if (!isOpen) return null;
 
@@ -1051,7 +1039,8 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
       }}
     >
       <div
-        className="relative w-full max-w-lg rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)] space-y-5 animate-in zoom-in-95 duration-150"
+        ref={modalRef}
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)] space-y-5 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -1257,19 +1246,10 @@ const OwnedAlternativesModal: React.FC<OwnedAlternativesModalProps> = ({
   onWearInstead,
   onOpenAddPiece,
 }) => {
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [onClose]);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onClose,
+  });
 
   return (
     <div
@@ -1282,7 +1262,8 @@ const OwnedAlternativesModal: React.FC<OwnedAlternativesModalProps> = ({
       }}
     >
       <div
-        className="relative w-full max-w-2xl max-h-[85vh] rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)] flex flex-col space-y-4 animate-in zoom-in-95 duration-150"
+        ref={modalRef}
+        className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-6 sm:p-7 text-[var(--text-body)] flex flex-col space-y-4 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

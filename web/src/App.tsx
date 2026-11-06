@@ -13,7 +13,6 @@ import { AppDownload } from './components/AppDownload';
 import { Footer } from './components/Footer';
 import { ApkModal } from './components/ApkModal';
 import { UserProfileModal } from './components/UserProfileModal';
-import { AddPieceModal } from './components/AddPieceModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AuthModal } from './components/AuthModal';
 import { AppStudio, type StudioTab } from './components/AppStudio';
@@ -21,15 +20,7 @@ import { LegalModal } from './components/ui/LegalModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotFoundView } from './components/NotFoundView';
 
-interface StudioLayoutProps {
-  isAddPieceModalOpen: boolean;
-  setIsAddPieceModalOpen: (open: boolean) => void;
-}
-
-function StudioLayout({
-  isAddPieceModalOpen,
-  setIsAddPieceModalOpen,
-}: StudioLayoutProps) {
+function StudioLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -74,12 +65,6 @@ function StudioLayout({
       />
 
       <Outlet />
-
-      {/* Global Modals in Studio */}
-      <AddPieceModal
-        isOpen={isAddPieceModalOpen}
-        onClose={() => setIsAddPieceModalOpen(false)}
-      />
     </>
   );
 }
@@ -89,7 +74,6 @@ function AppContent() {
   const location = useLocation();
 
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
-  const [isAddPieceModalOpen, setIsAddPieceModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
 
   // Modal route identification
@@ -146,6 +130,11 @@ function AppContent() {
 
   const landingElement = (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-body)] flex flex-col selection:bg-[var(--gold-primary)]/30 selection:text-[var(--text-heading)] transition-colors duration-300">
+      {/* Skip to Main Content Link for Keyboard & Screen Reader Users */}
+      <a href="#main-content" className="sr-only skip-to-content">
+        Skip to main content
+      </a>
+
       {/* Navigation Header matching Screenshot 1 */}
       <Navbar
         onOpenDownload={handleOpenDownload}
@@ -164,7 +153,7 @@ function AppContent() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero Section matching Screenshot 1 + Context Engine matching Screenshot 2 */}
         <Hero
           onOpenProfile={() =>
@@ -208,12 +197,6 @@ function AppContent() {
         isOpen={isApkModalOpen}
         onClose={handleCloseDownload}
       />
-
-      {/* Add Garment / Photo Upload & AI Scan Modal (Screenshot 2: Screen 12) */}
-      <AddPieceModal
-        isOpen={isAddPieceModalOpen}
-        onClose={() => setIsAddPieceModalOpen(false)}
-      />
     </div>
   );
 
@@ -222,12 +205,7 @@ function AppContent() {
       <Routes location={backgroundLocation || location}>
         <Route path="/" element={landingElement} />
         <Route
-          element={
-            <StudioLayout
-              isAddPieceModalOpen={isAddPieceModalOpen}
-              setIsAddPieceModalOpen={setIsAddPieceModalOpen}
-            />
-          }
+          element={<StudioLayout />}
         >
           <Route path="/home" element={null} />
           <Route path="/closet" element={null} />
@@ -249,6 +227,7 @@ function AppContent() {
           isOpen={true}
           initialMode={isRegister ? 'signup' : 'signin'}
           onClose={() => handleCloseModal('/')}
+          onExploreDemo={() => navigate('/home')}
           onSuccess={() => {
             navigate('/home');
           }}
