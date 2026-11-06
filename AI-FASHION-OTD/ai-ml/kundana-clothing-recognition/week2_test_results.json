@@ -1,0 +1,442 @@
+[
+    {
+        "image": "black_tshirt.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "T-Shirt",
+                "color": "Black",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Polyester",
+                    "pattern": "Plain",
+                    "style": "Sportswear",
+                    "sleeve": "A Short Sleeve T-Shirt",
+                    "neckline": "A Round Neckline"
+                },
+                "confidenceScores": {
+                    "category": 68.08,
+                    "pattern": 98.65,
+                    "style": 49.82,
+                    "material": 92.32
+                },
+                "materialMatches": [
+                    {
+                        "material": "Polyester",
+                        "match_score": 92.32
+                    },
+                    {
+                        "material": "Cotton",
+                        "match_score": 4.68
+                    },
+                    {
+                        "material": "Unknown",
+                        "match_score": 1.79
+                    }
+                ],
+                "colorRGB": [
+                    25,
+                    22,
+                    25
+                ]
+            }
+        }
+    },
+    {
+        "image": "blue_jeans.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Jeans",
+                "color": "Blue",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Denim",
+                    "pattern": "Plain",
+                    "style": "Casual",
+                    "sleeve": "Not applicable",
+                    "neckline": "Not applicable"
+                },
+                "confidenceScores": {
+                    "category": 99.94,
+                    "pattern": 96.14,
+                    "style": 96.97,
+                    "material": 99.97
+                },
+                "materialMatches": [
+                    {
+                        "material": "Denim",
+                        "match_score": 99.97
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 0.02
+                    },
+                    {
+                        "material": "Unknown",
+                        "match_score": 0.01
+                    }
+                ],
+                "colorRGB": [
+                    90,
+                    116,
+                    152
+                ]
+            }
+        }
+    },
+    {
+        "image": "floral_dress.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Dress",
+                "color": "Red",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Silk",
+                    "pattern": "Floral Patterned",
+                    "style": "Party Wear",
+                    "sleeve": "A Sleeveless Top",
+                    "neckline": "A Sweetheart Neckline"
+                },
+                "confidenceScores": {
+                    "category": 99.82,
+                    "pattern": 99.84,
+                    "style": 88.95,
+                    "material": 66.8
+                },
+                "materialMatches": [
+                    {
+                        "material": "Silk",
+                        "match_score": 66.8
+                    },
+                    {
+                        "material": "Cotton",
+                        "match_score": 11.7
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 11.25
+                    }
+                ],
+                "colorRGB": [
+                    221,
+                    142,
+                    134
+                ]
+            }
+        }
+    },
+    {
+        "image": "hoodie.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Hoodie",
+                "color": "Grey",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Fleece",
+                    "pattern": "Plain",
+                    "style": "Casual",
+                    "sleeve": "A Full Sleeve Shirt",
+                    "neckline": "A Crew Neckline"
+                },
+                "confidenceScores": {
+                    "category": 99.99,
+                    "pattern": 99.77,
+                    "style": 48.15,
+                    "material": 68.34
+                },
+                "materialMatches": [
+                    {
+                        "material": "Fleece",
+                        "match_score": 68.34
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 23.64
+                    },
+                    {
+                        "material": "Wool",
+                        "match_score": 5.48
+                    }
+                ],
+                "colorRGB": [
+                    148,
+                    148,
+                    148
+                ]
+            }
+        }
+    },
+    {
+        "image": "white_shirt.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Shirt",
+                "color": "White",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Cotton",
+                    "pattern": "Plain",
+                    "style": "Business Casual",
+                    "sleeve": "A Full Sleeve Shirt",
+                    "neckline": "A Collared Neckline"
+                },
+                "confidenceScores": {
+                    "category": 99.35,
+                    "pattern": 93.08,
+                    "style": 80.55,
+                    "material": 54.42
+                },
+                "materialMatches": [
+                    {
+                        "material": "Cotton",
+                        "match_score": 54.42
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 37.94
+                    },
+                    {
+                        "material": "Linen",
+                        "match_score": 3.89
+                    }
+                ],
+                "colorRGB": [
+                    230,
+                    231,
+                    235
+                ]
+            }
+        }
+    },
+    {
+        "image": "dress_neckline.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Dress",
+                "color": "Orange",
+                "secondaryColor": "Brown",
+                "attributes": {
+                    "material": "Silk",
+                    "pattern": "Plain",
+                    "style": "Party Wear",
+                    "sleeve": "A Three Quarter Sleeve Top",
+                    "neckline": "A V Neckline"
+                },
+                "confidenceScores": {
+                    "category": 97.49,
+                    "pattern": 98.23,
+                    "style": 78.12,
+                    "material": 78.08
+                },
+                "materialMatches": [
+                    {
+                        "material": "Silk",
+                        "match_score": 78.08
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 12.85
+                    },
+                    {
+                        "material": "Unknown",
+                        "match_score": 4.79
+                    }
+                ],
+                "colorRGB": [
+                    199,
+                    180,
+                    166
+                ]
+            }
+        }
+    },
+    {
+        "image": "half_sleeve.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Shirt",
+                "color": "White",
+                "secondaryColor": "Orange",
+                "attributes": {
+                    "material": "Cotton",
+                    "pattern": "Plain",
+                    "style": "Business Casual",
+                    "sleeve": "A Half Sleeve Shirt",
+                    "neckline": "A Collared Neckline"
+                },
+                "confidenceScores": {
+                    "category": 50.77,
+                    "pattern": 70.7,
+                    "style": 76.17,
+                    "material": 80.56
+                },
+                "materialMatches": [
+                    {
+                        "material": "Cotton",
+                        "match_score": 80.56
+                    },
+                    {
+                        "material": "Linen",
+                        "match_score": 10.8
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 7.97
+                    }
+                ],
+                "colorRGB": [
+                    241,
+                    241,
+                    242
+                ]
+            }
+        }
+    },
+    {
+        "image": "long_sleeve.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Blouse",
+                "color": "Blue",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Cotton",
+                    "pattern": "Plain",
+                    "style": "Business Casual",
+                    "sleeve": "A Full Sleeve Shirt",
+                    "neckline": "A Collared Neckline"
+                },
+                "confidenceScores": {
+                    "category": 78.35,
+                    "pattern": 65.39,
+                    "style": 94.45,
+                    "material": 74.32
+                },
+                "materialMatches": [
+                    {
+                        "material": "Cotton",
+                        "match_score": 74.32
+                    },
+                    {
+                        "material": "Polyester",
+                        "match_score": 22.06
+                    },
+                    {
+                        "material": "Linen",
+                        "match_score": 1.62
+                    }
+                ],
+                "colorRGB": [
+                    113,
+                    164,
+                    208
+                ]
+            }
+        }
+    },
+    {
+        "image": "short_sleeve.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "T-Shirt",
+                "color": "White",
+                "secondaryColor": "Orange",
+                "attributes": {
+                    "material": "Polyester",
+                    "pattern": "Plain",
+                    "style": "Casual",
+                    "sleeve": "A Short Sleeve T-Shirt",
+                    "neckline": "A Round Neckline"
+                },
+                "confidenceScores": {
+                    "category": 64.26,
+                    "pattern": 95.69,
+                    "style": 92.8,
+                    "material": 53.43
+                },
+                "materialMatches": [
+                    {
+                        "material": "Polyester",
+                        "match_score": 53.43
+                    },
+                    {
+                        "material": "Cotton",
+                        "match_score": 41.98
+                    },
+                    {
+                        "material": "Unknown",
+                        "match_score": 1.91
+                    }
+                ],
+                "colorRGB": [
+                    220,
+                    220,
+                    233
+                ]
+            }
+        }
+    },
+    {
+        "image": "sleeveless.png",
+        "status_code": 200,
+        "output": {
+            "status": "success",
+            "data": {
+                "category": "Shirt",
+                "color": "Orange",
+                "secondaryColor": null,
+                "attributes": {
+                    "material": "Polyester",
+                    "pattern": "Plain",
+                    "style": "Sportswear",
+                    "sleeve": "A Sleeveless Top",
+                    "neckline": "A Round Neckline"
+                },
+                "confidenceScores": {
+                    "category": 41.87,
+                    "pattern": 99.34,
+                    "style": 45.05,
+                    "material": 79.99
+                },
+                "materialMatches": [
+                    {
+                        "material": "Polyester",
+                        "match_score": 79.99
+                    },
+                    {
+                        "material": "Unknown",
+                        "match_score": 7.37
+                    },
+                    {
+                        "material": "Wool",
+                        "match_score": 3.73
+                    }
+                ],
+                "colorRGB": [
+                    226,
+                    204,
+                    186
+                ]
+            }
+        }
+    }
+]

@@ -1,0 +1,522 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #29242c;
+  background: #f8f6fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f8f6fa;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.app-container {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.app-header h1 {
+  margin: 0;
+  color: #30233a;
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.app-header p:not(.eyebrow) {
+  max-width: 620px;
+  margin: 14px auto 0;
+  color: #716b77;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #8764a8;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.upload-section,
+.recommendation-section,
+.closet-section {
+  padding: 28px;
+  margin-bottom: 28px;
+  border: 1px solid #ebe5ef;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(54, 35, 65, 0.05);
+}
+
+.upload-section h2,
+.recommendation-section h2,
+.closet-section h2 {
+  margin-top: 0;
+  color: #35273e;
+}
+
+.upload-section > p {
+  color: #716b77;
+  line-height: 1.6;
+}
+
+.upload-label {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: #765093;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.upload-label:hover {
+  background: #5f3d7b;
+}
+
+#clothing-upload {
+  display: block;
+  width: 100%;
+  margin-top: 15px;
+  padding: 12px;
+  border: 1px dashed #d7c6e5;
+  border-radius: 10px;
+  background: #fcfaff;
+}
+
+.analysis-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.preview-panel,
+.analysis-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #eee7f3;
+  border-radius: 14px;
+  background: #fcfaff;
+}
+
+.preview-image {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.analysis-panel h3 {
+  margin-top: 0;
+  color: #49345a;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.form-field label {
+  color: #5e5367;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.form-field select,
+.form-field input,
+.closet-controls input,
+.closet-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  padding: 10px 12px;
+  border: 1px solid #ded5e5;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #30283a;
+  outline-offset: 2px;
+}
+
+.form-field select:focus,
+.form-field input:focus,
+.closet-controls input:focus,
+.closet-controls select:focus {
+  border-color: #8764a8;
+  outline-color: #8764a8;
+}
+
+.primary-button,
+.secondary-button,
+.delete-button,
+.generate-another-btn {
+  min-height: 42px;
+  padding: 11px 17px;
+  border-radius: 10px;
+  font-weight: 700;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.primary-button {
+  border: 0;
+  background: #765093;
+  color: #ffffff;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #5f3d7b;
+  transform: translateY(-1px);
+}
+
+.secondary-button {
+  border: 1px solid #ded5e5;
+  background: #ffffff;
+  color: #604d6d;
+}
+
+.secondary-button:hover {
+  background: #f6f0fa;
+}
+
+.delete-button {
+  border: 0;
+  background: #fff0f0;
+  color: #a12d35;
+}
+
+.delete-button:hover {
+  background: #ffe0e0;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+.status-message {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.error-message {
+  background: #fff0f0;
+  color: #a12d35;
+}
+
+.success-message {
+  background: #eef9f0;
+  color: #246b36;
+}
+
+.muted-text,
+.confidence-text {
+  color: #807887;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Outfit recommendations */
+
+.recommendation-section {
+  margin-top: 35px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.section-heading h2 {
+  margin-bottom: 8px;
+}
+
+.section-heading p:not(.eyebrow) {
+  color: #716b77;
+  line-height: 1.6;
+}
+
+.recommendation-controls {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 22px 0;
+}
+
+.recommendation-controls .form-field {
+  flex: 1;
+  min-width: 220px;
+  margin-bottom: 0;
+}
+
+.recommendation-controls input {
+  width: 100%;
+}
+
+.recommendation-result {
+  margin-top: 25px;
+}
+
+.recommendation-result > h3 {
+  margin-bottom: 10px;
+  color: #49345a;
+}
+
+.recommendation-message {
+  margin: 10px 0 18px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.outfit-option {
+  margin: 22px 0;
+  padding: 20px;
+  border: 1px solid #e8e1ed;
+  border-radius: 16px;
+  background: #fcfaff;
+}
+
+.outfit-option h3 {
+  margin: 0 0 12px;
+  color: #49345a;
+}
+
+.recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.recommendation-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+  border-radius: 13px;
+  background: #ffffff;
+}
+
+.recommendation-image {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+}
+
+.recommendation-card-content {
+  padding: 14px;
+}
+
+.recommendation-card-content h4 {
+  margin: 0 0 10px;
+  color: #49345a;
+}
+
+.recommendation-card-content p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.generate-another-btn {
+  margin-top: 18px;
+  border: 0;
+  background: #765093;
+  color: #ffffff;
+}
+
+.generate-another-btn:hover:not(:disabled) {
+  background: #5f3d7b;
+}
+
+/* Closet */
+
+.closet-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.closet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.closet-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #ebe5ef;
+  border-radius: 16px;
+  background: #ffffff;
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+
+.closet-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(54, 35, 65, 0.09);
+}
+
+.closet-image {
+  display: block;
+  width: 100%;
+  height: 230px;
+  background: #f5f1f7;
+  object-fit: contain;
+}
+
+.closet-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 16px;
+}
+
+.closet-card-content h3 {
+  margin: 0;
+  color: #3d2e47;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.closet-card-content p {
+  margin: 0;
+  color: #746b7c;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.empty-closet {
+  padding: 38px 16px;
+  border: 1px dashed #ddd0e7;
+  border-radius: 14px;
+  color: #766b80;
+  text-align: center;
+}
+
+.empty-closet h3 {
+  margin-bottom: 8px;
+  color: #44334f;
+}
+
+.empty-closet p {
+  margin-bottom: 0;
+  line-height: 1.6;
+}
+
+.image-placeholder {
+  min-height: 200px;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #f3f4f6;
+  color: #666;
+  text-align: center;
+}
+
+/* Responsive design */
+
+@media (max-width: 950px) {
+  .closet-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .app-container {
+    padding: 24px 14px 40px;
+  }
+
+  .upload-section,
+  .recommendation-section,
+  .closet-section {
+    padding: 19px;
+    border-radius: 16px;
+  }
+
+  .closet-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .closet-image {
+    height: 170px;
+  }
+
+  .closet-card-content {
+    padding: 12px;
+  }
+
+  .recommendation-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recommendation-controls .primary-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .closet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .closet-image {
+    height: 240px;
+  }
+
+  .button-row {
+    flex-direction: column;
+  }
+
+  .button-row button {
+    width: 100%;
+  }
+}

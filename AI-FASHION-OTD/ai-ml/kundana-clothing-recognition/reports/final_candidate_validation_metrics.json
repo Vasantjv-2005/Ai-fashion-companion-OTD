@@ -1,0 +1,25 @@
+{
+    "model": "FashionCLIP Logistic Regression",
+    "C": 10.0,
+    "class_weight": null,
+    "accuracy": 79.13482709493589,
+    "balanced_accuracy": 63.42115611283267,
+    "macro_f1": 66.6237373742515,
+    "weighted_f1": 78.75280089219017,
+    "iterations": 282,
+    "classes": {
+        "cape": 0,
+        "cardigan": 1,
+        "coat": 2,
+        "dress": 3,
+        "jacket": 4,
+        "jumpsuit": 5,
+        "pants": 6,
+        "shirt, blouse": 7,
+        "shorts": 8,
+        "skirt": 9,
+        "sweater": 10,
+        "top, t-shirt, sweatshirt": 11,
+        "vest": 12
+    }
+}

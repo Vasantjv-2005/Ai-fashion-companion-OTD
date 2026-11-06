@@ -1,0 +1,113 @@
+actual_category,predicted_category,mistakes
+dress,"top, t-shirt, sweatshirt",113
+"shirt, blouse","top, t-shirt, sweatshirt",105
+skirt,dress,95
+"top, t-shirt, sweatshirt",dress,94
+"shirt, blouse",jacket,69
+dress,skirt,69
+jacket,"top, t-shirt, sweatshirt",59
+"top, t-shirt, sweatshirt","shirt, blouse",53
+coat,jacket,48
+sweater,"top, t-shirt, sweatshirt",47
+"top, t-shirt, sweatshirt",jacket,38
+pants,"top, t-shirt, sweatshirt",37
+jacket,coat,37
+skirt,"top, t-shirt, sweatshirt",37
+coat,dress,35
+skirt,pants,31
+jumpsuit,dress,30
+"top, t-shirt, sweatshirt",pants,29
+jacket,"shirt, blouse",28
+dress,coat,25
+skirt,shorts,25
+pants,dress,24
+shorts,pants,22
+"top, t-shirt, sweatshirt",sweater,21
+shorts,"top, t-shirt, sweatshirt",18
+jacket,dress,17
+jumpsuit,pants,17
+shorts,skirt,17
+vest,"top, t-shirt, sweatshirt",16
+vest,"shirt, blouse",15
+dress,pants,15
+"top, t-shirt, sweatshirt",skirt,14
+dress,jacket,13
+cardigan,dress,13
+pants,skirt,13
+cardigan,"top, t-shirt, sweatshirt",12
+jacket,cardigan,11
+"shirt, blouse",dress,11
+dress,"shirt, blouse",10
+dress,jumpsuit,10
+jacket,pants,10
+"top, t-shirt, sweatshirt",coat,9
+coat,"top, t-shirt, sweatshirt",9
+cardigan,jacket,9
+cardigan,coat,9
+pants,shorts,9
+"top, t-shirt, sweatshirt",cardigan,8
+dress,sweater,8
+jumpsuit,"top, t-shirt, sweatshirt",7
+"top, t-shirt, sweatshirt",shorts,7
+pants,jumpsuit,6
+"shirt, blouse",pants,6
+"shirt, blouse",vest,5
+cardigan,"shirt, blouse",5
+"shirt, blouse",coat,5
+"shirt, blouse",skirt,5
+vest,jacket,4
+sweater,jacket,4
+"shirt, blouse",cardigan,3
+sweater,coat,3
+"shirt, blouse",sweater,3
+jumpsuit,shorts,3
+sweater,cardigan,3
+"top, t-shirt, sweatshirt",vest,3
+dress,shorts,3
+jumpsuit,skirt,3
+coat,skirt,3
+coat,"shirt, blouse",3
+coat,pants,3
+cardigan,pants,2
+cape,coat,2
+cape,"top, t-shirt, sweatshirt",2
+coat,cardigan,2
+cardigan,sweater,2
+pants,coat,2
+pants,jacket,2
+dress,cardigan,2
+coat,vest,2
+jacket,vest,2
+jacket,skirt,2
+sweater,dress,2
+vest,dress,2
+shorts,dress,2
+skirt,coat,2
+"top, t-shirt, sweatshirt",jumpsuit,2
+pants,"shirt, blouse",2
+dress,vest,1
+jacket,cape,1
+cape,sweater,1
+cape,dress,1
+cape,jacket,1
+cape,skirt,1
+coat,shorts,1
+dress,cape,1
+cardigan,jumpsuit,1
+coat,cape,1
+jacket,jumpsuit,1
+jacket,shorts,1
+shorts,sweater,1
+pants,sweater,1
+jumpsuit,"shirt, blouse",1
+shorts,"shirt, blouse",1
+jumpsuit,jacket,1
+skirt,jacket,1
+sweater,vest,1
+sweater,"shirt, blouse",1
+sweater,pants,1
+sweater,cape,1
+skirt,"shirt, blouse",1
+skirt,jumpsuit,1
+vest,cardigan,1
+vest,pants,1
