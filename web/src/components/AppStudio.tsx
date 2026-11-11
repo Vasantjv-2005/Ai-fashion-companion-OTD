@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Home,
   Shirt,
@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
 import { NotificationPopover } from './ui/NotificationPopover';
 import { SettingsModal } from './ui/SettingsModal';
 import { MobileBottomNav } from './ui/MobileBottomNav';
@@ -63,10 +64,34 @@ import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
 import { ClosetUploadView } from './ClosetUploadView';
 import { ShoppingListView } from './ShoppingListView';
 import { useFocusTrap } from '../utils/focusTrap';
+import type { SavedLook } from '../types/domain';
+import { resolveSavedLookIdentifier } from '../adapters';
+import { deleteBackendOutfitForLook } from '../services/outfits.service';
+import {
+  HOME_SUGGESTION_TEMPLATES,
+  SAFE_LOOK_FALLBACK_IMAGE,
+  buildSavedLookFromEnsemble,
+  createSavedLookFromTemplate,
+  deleteSavedLookById,
+  deriveSyncedLikedLookIds,
+  extractOwnedSlotGarmentIds,
+  extractSlotAssignments,
+  findDuplicateSavedLook,
+  formatSavedLookDateLabel,
+  formatSavedLookPiecesSummary,
+  isTemplateFavorited,
+  loadStoredSavedLooks,
+  persistSavedLooks,
+  restoreSavedLookSlots,
+  toggleSavedLookFavorite,
+  toggleTemplateCardFavorite,
+  type HomeSuggestionTemplate,
+} from '../utils/savedLooksStorage';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
   onOpenProfile: () => void;
+  onOpenAuth?: () => void;
   onBackToLanding?: () => void;
   activeTab?: StudioTab;
   onTabChange?: (tab: StudioTab) => void;
@@ -181,85 +206,6 @@ function getDynamicDateOptions(): string[] {
   ];
 }
 
-export interface SavedLookItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  occasion: string;
-  venue: string;
-  weather: string;
-  img: string;
-  piecesSummary: string;
-  date: string;
-  isCustom?: boolean;
-}
-
-const DEFAULT_SAVED_LOOKS: SavedLookItem[] = [
-  {
-    id: 'smart-casual-1',
-    title: 'Smart Casual',
-    subtitle: "For Today's Weather",
-    occasion: 'Casual Evening',
-    venue: 'Olive Bistro',
-    weather: '28°C Breezy',
-    img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Linen Camp Shirt, Gurkha Chinos, Belgian Loafers',
-    date: 'Curated Ensemble',
-  },
-  {
-    id: 'date-night-1',
-    title: 'Date Night',
-    subtitle: 'Classy & Effortless',
-    occasion: 'Date Night',
-    venue: "L'amore, Banjara Hills",
-    weather: '27°C Partly Cloudy',
-    img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Silk-Cashmere Knit, Flannel Pleated Trousers, Suede Loafers',
-    date: 'Curated Ensemble',
-  },
-  {
-    id: 'office-ready-1',
-    title: 'Office Ready',
-    subtitle: 'Clean & Polished',
-    occasion: 'Executive Presentation',
-    venue: 'Executive Boardroom',
-    weather: '24°C Climate Controlled',
-    img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Sea Island Cotton Shirt, Navy Hopsack Blazer, Oxford Shoes',
-    date: 'Curated Ensemble',
-  },
-];
-
-const loadStoredSavedLooks = (): SavedLookItem[] => {
-  try {
-    const raw = localStorage.getItem('otd_saved_looks');
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to parse otd_saved_looks from localStorage:', err);
-  }
-  return DEFAULT_SAVED_LOOKS;
-};
-
-const loadStoredLikedLooks = (): string[] => {
-  try {
-    const raw = localStorage.getItem('otd_liked_looks');
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to parse otd_liked_looks from localStorage:', err);
-  }
-  return ['smart-casual-1', 'date-night-1'];
-};
-
 export interface WeekScheduleDay {
   name: string;
   occasion: string;
@@ -304,16 +250,10 @@ function computeWeekScheduleDays(): WeekScheduleDay[] {
   });
 }
 
-function getTodayFormattedSaveDate(): string {
-  return new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
+  onOpenAuth,
   onBackToLanding,
   activeTab: controlledActiveTab,
   onTabChange,
@@ -322,6 +262,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackFromUpload,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated, isGuest, user, logout, exitGuestMode } = useAuth();
   const {
     closet,
     profile,
@@ -333,15 +274,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     checkItemOwnership
   } = useCloset();
 
-  // Neutral name fallbacks eliminating hardcoded developer overrides
+  // Prefer authenticated account name over local demo profile fallback
   const userDisplayName =
-    profile.name && profile.name.trim() && profile.name !== 'Curator'
-      ? profile.name
-      : 'Guest Curator';
+    isAuthenticated && user?.name?.trim()
+      ? user.name
+      : profile.name && profile.name.trim() && profile.name !== 'Curator'
+        ? profile.name
+        : 'Guest Curator';
   const userGreetingName =
-    profile.name && profile.name.trim() && profile.name !== 'Curator'
-      ? profile.name.split(' ')[0]
-      : 'Curator';
+    isAuthenticated && user?.name?.trim()
+      ? user.name.split(' ')[0]
+      : profile.name && profile.name.trim() && profile.name !== 'Curator'
+        ? profile.name.split(' ')[0]
+        : 'Curator';
 
   // Live count of missing / unacquired shopping list items for badge indication
   const unacquiredShoppingCount = useMemo(() => {
@@ -386,26 +331,20 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Home search bar
   const [homeSearchQuery, setHomeSearchQuery] = useState('');
 
-  // Favorites / Saved Looks state (Task 9A Persistence)
-  const [likedLooks, setLikedLooks] = useState<string[]>(loadStoredLikedLooks);
-  const [savedLooksList, setSavedLooksList] = useState<SavedLookItem[]>(loadStoredSavedLooks);
+  // Favorites / Saved Looks state (Domain-normalized persistence with legacy migration)
+  const [savedLooksList, setSavedLooksList] = useState<SavedLook[]>(loadStoredSavedLooks);
+  const [restoredLook, setRestoredLook] = useState<SavedLook | null>(null);
 
-  // Synchronize saved looks and likes to localStorage
+  const likedLooks = useMemo(
+    () => deriveSyncedLikedLookIds(savedLooksList),
+    [savedLooksList],
+  );
+  const favoriteLooksCount = likedLooks.length;
+
+  // Synchronize normalized Saved Looks and synced Favorite IDs to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('otd_saved_looks', JSON.stringify(savedLooksList));
-    } catch (err) {
-      console.warn('Failed to persist otd_saved_looks:', err);
-    }
+    persistSavedLooks(savedLooksList);
   }, [savedLooksList]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('otd_liked_looks', JSON.stringify(likedLooks));
-    } catch (err) {
-      console.warn('Failed to persist otd_liked_looks:', err);
-    }
-  }, [likedLooks]);
 
   // Focus traps & keyboard accessibility for Studio internal modals
   const inspectionModalRef = useFocusTrap<HTMLDivElement>({
@@ -562,8 +501,45 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Individual Garment Swapping State (Task 4)
   const [slotOverrides, setSlotOverrides] = useState<Partial<Record<OutfitSlotItem['slot'], ClosetItem>>>({});
   const [isGarmentSwapOpen, setIsGarmentSwapOpen] = useState(false);
-  const [activeSwapSlot, setActiveSwapSlot] = useState<OutfitSlotItem | null>(null);
+  const [activeSwapSlotKey, setActiveSwapSlotKey] = useState<OutfitSlotItem['slot'] | null>(null);
+  const [selectedOutfitSlotKey, setSelectedOutfitSlotKey] = useState<OutfitSlotItem['slot']>('top');
   const [swapToast, setSwapToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const resetStylistSession = (
+    targetStep: 1 | 2 | 3 = 1,
+    options?: { keepVariation?: boolean },
+  ) => {
+    setRestoredLook(null);
+    setCurrentOutfitTitle(null);
+    setSlotOverrides({});
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    if (!options?.keepVariation) {
+      setOutfitVariationIndex(0);
+    }
+    setPlannerStep(targetStep);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerSwapToast = (message: string) => {
+    setSwapToast(message);
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setSwapToast(null);
+      toastTimerRef.current = null;
+    }, 3500);
+  };
 
   // Memoized deterministic ensemble synthesis from active closet & context
   const synthesizedOutfit = useMemo(() => {
@@ -601,28 +577,119 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     currentOutfitTitle,
   ]);
 
-  // Effective slots applying individual garment overrides while strictly preserving all other 4 slots
+  const restoredLookResolution = useMemo(() => {
+    if (!restoredLook) return null;
+    return restoreSavedLookSlots(restoredLook, closet);
+  }, [restoredLook, closet]);
+
+  const activeOutfitTitle = restoredLook ? restoredLook.title : synthesizedOutfit.title;
+  const activeOutfitSubtitle = restoredLook ? restoredLook.subtitle : synthesizedOutfit.subtitle;
+
+  // Effective slots applying individual garment overrides (resolved against live active closet) while preserving saved/restored slots
   const effectiveSlots: OutfitSlotItem[] = useMemo(() => {
-    return synthesizedOutfit.slots.map((baseSlot) => {
+    const baseSlots = restoredLookResolution
+      ? restoredLookResolution.restoredSlots
+      : synthesizedOutfit.slots;
+    const activeClosetById = new Map(
+      closet.filter((item) => !item.isArchived).map((item) => [item.id, item] as const),
+    );
+    const slotOrder: OutfitSlotItem['slot'][] = [
+      'top',
+      'outerwear',
+      'bottom',
+      'footwear',
+      'accessory',
+    ];
+    const slotLabels: Record<OutfitSlotItem['slot'], string> = {
+      top: 'Base Top',
+      outerwear: 'Outerwear / Layer',
+      bottom: 'Bottoms',
+      footwear: 'Footwear',
+      accessory: 'Accessories',
+    };
+
+    const mapped = baseSlots.map((baseSlot) => {
       const override = slotOverrides[baseSlot.slot];
-      if (!override) return baseSlot;
+      const liveOverride = override ? activeClosetById.get(override.id) : undefined;
+      if (!liveOverride) return baseSlot;
 
       return {
         ...baseSlot,
-        closetItemId: override.id,
-        name: override.name,
-        category: override.subType || override.category,
-        brand: override.brand,
-        color: override.color,
-        fit: override.fit,
-        formality: override.formality,
-        imageUrl: override.imageUrl,
-        icon: override.icon,
+        closetItemId: liveOverride.id,
+        name: liveOverride.name,
+        category: liveOverride.subType || liveOverride.category,
+        brand: liveOverride.brand,
+        color: liveOverride.color,
+        fit: liveOverride.fit,
+        formality: liveOverride.formality,
+        imageUrl: liveOverride.imageUrl,
+        icon: liveOverride.icon,
         status: 'owned' as const, // Strict verified owned status directly from closet
-        stylingNote: `Hand-selected substitution: ${override.brand || 'Bespoke'} ${override.name} in ${override.color}.`,
+        stylingNote: `Hand-selected substitution: ${liveOverride.brand || 'Bespoke'} ${liveOverride.name} in ${liveOverride.color}.`,
       };
     });
-  }, [synthesizedOutfit.slots, slotOverrides]);
+
+    const presentKeys = new Set(mapped.map((s) => s.slot));
+    for (const slotKey of slotOrder) {
+      const override = slotOverrides[slotKey];
+      const liveOverride = override ? activeClosetById.get(override.id) : undefined;
+      if (liveOverride && !presentKeys.has(slotKey)) {
+        mapped.push({
+          slot: slotKey,
+          slotLabel: slotLabels[slotKey],
+          closetItemId: liveOverride.id,
+          name: liveOverride.name,
+          category: liveOverride.subType || liveOverride.category,
+          brand: liveOverride.brand,
+          color: liveOverride.color,
+          fit: liveOverride.fit,
+          formality: liveOverride.formality,
+          imageUrl: liveOverride.imageUrl,
+          icon: liveOverride.icon,
+          status: 'owned',
+          stylingNote: `Hand-selected substitution: ${liveOverride.brand || 'Bespoke'} ${liveOverride.name} in ${liveOverride.color}.`,
+        });
+      }
+    }
+
+    return mapped.sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
+  }, [restoredLookResolution, synthesizedOutfit.slots, slotOverrides, closet]);
+
+  const activeSwapSlot = useMemo(() => {
+    if (!activeSwapSlotKey) return null;
+    return effectiveSlots.find((s) => s.slot === activeSwapSlotKey) ?? null;
+  }, [activeSwapSlotKey, effectiveSlots]);
+
+  const activeOverridesCount = useMemo(
+    () =>
+      Object.values(slotOverrides).filter(
+        (override) =>
+          Boolean(override && closet.some((item) => item.id === override.id && !item.isArchived)),
+      ).length,
+    [slotOverrides, closet],
+  );
+
+  const currentEnsembleCandidate = useMemo(
+    () => ({
+      title: activeOutfitTitle,
+      occasion: selectedOccasion,
+      slots: effectiveSlots,
+      garmentIds: extractOwnedSlotGarmentIds(effectiveSlots),
+      garments: effectiveSlots.map((s) => s.name),
+      slotAssignments: extractSlotAssignments(effectiveSlots),
+    }),
+    [activeOutfitTitle, selectedOccasion, effectiveSlots],
+  );
+
+  const matchingSavedLook = useMemo(() => {
+    if (restoredLook && activeOverridesCount === 0) {
+      const liveRestored = savedLooksList.find((l) => l.id === restoredLook.id);
+      if (liveRestored) return liveRestored;
+    }
+    return findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
+  }, [restoredLook, activeOverridesCount, savedLooksList, currentEnsembleCandidate]);
+
+  const isCurrentOutfitSaved = Boolean(matchingSavedLook?.isFavorite);
 
   // Transparently recomputed harmony score based on active slots
   const effectiveHarmonyScore = useMemo(() => {
@@ -648,41 +715,155 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   // Open garment swap modal for a specific slot
   const handleOpenSwapModal = (slot: OutfitSlotItem) => {
-    setActiveSwapSlot(slot);
+    setSelectedOutfitSlotKey(slot.slot);
+    setActiveSwapSlotKey(slot.slot);
     setIsGarmentSwapOpen(true);
+  };
+
+  const handleCloseSwapModal = () => {
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
   };
 
   // Apply a swapped garment to a single slot
   const handleApplySwap = (slotKey: OutfitSlotItem['slot'], newItem: ClosetItem) => {
+    setSelectedOutfitSlotKey(slotKey);
     setSlotOverrides((prev) => ({
       ...prev,
       [slotKey]: newItem,
     }));
-    setSwapToast(`Updated ${slotKey.toUpperCase()} with ${newItem.brand ? newItem.brand + ' ' : ''}${newItem.name}`);
-    setTimeout(() => setSwapToast(null), 3500);
+    triggerSwapToast(`Updated ${slotKey.toUpperCase()} with ${newItem.brand ? newItem.brand + ' ' : ''}${newItem.name}`);
   };
 
   const handleSaveCurrentLook = () => {
-    const lookId = `curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`;
-    toggleLike(lookId);
-    if (!savedLooksList.some((look) => look.id === lookId)) {
-      const todayFormatted = getTodayFormattedSaveDate();
-      setSavedLooksList((prev) => [
-        {
-          id: lookId,
-          title: synthesizedOutfit.title,
-          subtitle: synthesizedOutfit.subtitle,
-          occasion: selectedOccasion,
-          venue: selectedVenue.name || destinationSearch,
-          weather: isWeatherSkipped ? 'Climate-Agnostic' : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
-          img: effectiveSlots[0]?.imageUrl || 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
-          piecesSummary: effectiveSlots.map((s) => s.name).slice(0, 3).join(', '),
-          date: `Saved ${todayFormatted}`,
-          isCustom: true,
-        },
-        ...prev,
-      ]);
+    const existingDuplicate =
+      matchingSavedLook ??
+      findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
+    if (existingDuplicate) {
+      if (!existingDuplicate.isFavorite) {
+        setSavedLooksList((prev) => toggleSavedLookFavorite(prev, existingDuplicate.id));
+        triggerSwapToast(`Re-added "${existingDuplicate.title}" to Favorites.`);
+      } else {
+        triggerSwapToast(`"${existingDuplicate.title}" is already saved in your Favorites.`);
+      }
+      return;
     }
+
+    const preservedTemplateId =
+      restoredLook && activeOverridesCount === 0
+        ? restoredLook.sourceTemplateId
+        : undefined;
+
+    const newSavedLook = buildSavedLookFromEnsemble({
+      sourceTemplateId: preservedTemplateId,
+      title: activeOutfitTitle,
+      subtitle: activeOutfitSubtitle,
+      occasion: selectedOccasion,
+      venue: selectedVenue.name || destinationSearch,
+      weatherTag: isWeatherSkipped
+        ? 'Climate-Agnostic'
+        : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
+      vibe: selectedMoods[0] || profile.stylePersonas[0] || 'Refined',
+      preferences: selectedPreferences,
+      slots: effectiveSlots,
+      closet,
+      variationIndex: outfitVariationIndex,
+    });
+
+    setSavedLooksList((prev) => [newSavedLook, ...prev]);
+    triggerSwapToast(
+      `Saved "${newSavedLook.title}" (${newSavedLook.garmentIds.length} pieces) to Favorites.`,
+    );
+  };
+
+  const handleToggleFavoriteSavedLook = (lookId: string) => {
+    setSavedLooksList((prev) => toggleSavedLookFavorite(prev, lookId));
+  };
+
+  const handleDeleteSavedLook = (lookId: string) => {
+    const targetLook = savedLooksList.find((l) => l.id === lookId);
+    setSavedLooksList((prev) => deleteSavedLookById(prev, lookId));
+    if (restoredLook?.id === lookId) {
+      setRestoredLook(null);
+    }
+    if (
+      targetLook &&
+      isAuthenticated &&
+      !isGuest &&
+      resolveSavedLookIdentifier(targetLook).isPersistedOnBackend
+    ) {
+      void deleteBackendOutfitForLook(targetLook).catch(() => {
+        // Non-blocking remote cleanup; local state remains authoritative during WS3
+      });
+    }
+  };
+
+  const handleWearSavedLook = (look: SavedLook) => {
+    const resolution = restoreSavedLookSlots(look, closet);
+    setRestoredLook(look);
+    setSlotOverrides({});
+    setCurrentOutfitTitle(null);
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    setIsSynthesizingOutfit(false);
+    setSelectedOccasion(look.occasion || 'Casual');
+
+    if (look.venue) {
+      const venueLower = look.venue.toLowerCase();
+      const matchedVenue = CURATED_VENUES.find(
+        (v) =>
+          v.name.toLowerCase() === venueLower ||
+          `${v.name}, ${v.location}`.toLowerCase() === venueLower,
+      );
+      if (matchedVenue) {
+        setSelectedVenue(matchedVenue);
+        setSelectedVenueCategory(matchedVenue.category);
+      }
+      setDestinationSearch(look.venue);
+    }
+
+    if (look.weatherTag) {
+      if (look.weatherTag === 'Climate-Agnostic') {
+        setIsWeatherSkipped(true);
+      } else {
+        setIsWeatherSkipped(false);
+        setWeatherNote(look.weatherTag);
+      }
+    }
+
+    if (look.vibe?.trim()) {
+      setSelectedMoods([look.vibe.trim()]);
+    }
+
+    if (typeof look.variationIndex === 'number') {
+      setOutfitVariationIndex(look.variationIndex);
+    }
+
+    setActiveTab('stylist');
+    setPlannerStep(3);
+
+    if (resolution.missingGarmentNames.length > 0) {
+      const count = resolution.missingGarmentNames.length;
+      triggerSwapToast(
+        `Loaded "${look.title}". Notice: ${count} saved ${count === 1 ? 'piece is' : 'pieces are'} archived or removed from your active closet.`,
+      );
+    } else {
+      triggerSwapToast(
+        `Loaded "${look.title}" with ${resolution.matchedOwnedCount} wardrobe ${resolution.matchedOwnedCount === 1 ? 'piece' : 'pieces'} restored.`,
+      );
+    }
+  };
+
+  const handleToggleTemplateFavorite = (templateId: string) => {
+    setSavedLooksList((prev) => toggleTemplateCardFavorite(prev, templateId).nextLooks);
+  };
+
+  const handleOpenSuggestionTemplate = (template: HomeSuggestionTemplate) => {
+    const existingSaved = savedLooksList.find(
+      (look) => look.sourceTemplateId === template.id || look.id === template.defaultSavedId,
+    );
+    handleWearSavedLook(existingSaved ?? createSavedLookFromTemplate(template));
   };
 
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(() => [
@@ -735,13 +916,6 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [itemToDelete, selectedClosetItem, isHelpOpen, isNotificationsOpen, isSettingsOpen, mobileMenuOpen]);
 
-  // Toggle favorite
-  const toggleLike = (id: string) => {
-    setLikedLooks((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
   const handleSendChat = (textToSend?: string) => {
     const text = textToSend || chatInput;
     if (!text.trim()) return;
@@ -754,19 +928,20 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     setTimeout(() => {
       let reply = "I've recalibrated your silhouette. Updated garment selections to align with your styling preferences.";
       const lower = text.toLowerCase();
+      const activeCloset = closet.filter((c) => !c.isArchived);
 
       if (lower.includes('casual')) {
         // Find casual footwear & relaxed top
-        const casualShoe = closet.find((c) => c.category === 'footwear' && (c.subType.includes('Sneaker') || c.name.includes('Sneaker'))) ||
-                           closet.find((c) => c.category === 'footwear' && c.formality <= 2);
+        const casualShoe = activeCloset.find((c) => c.category === 'footwear' && (c.subType.includes('Sneaker') || c.name.includes('Sneaker'))) ||
+                           activeCloset.find((c) => c.category === 'footwear' && c.formality <= 2);
         if (casualShoe) {
           setSlotOverrides((prev) => ({ ...prev, footwear: casualShoe }));
         }
         reply = "Adapted for elevated casual ease: Swapped formal leather shoes for clean minimalist sneakers and softened overall structure.";
       } else if (lower.includes('formal')) {
         // Find formal shoes & formal blazer
-        const formalShoe = closet.find((c) => c.category === 'footwear' && c.formality >= 4);
-        const formalBlazer = closet.find((c) => c.category === 'outerwear' && c.formality >= 4);
+        const formalShoe = activeCloset.find((c) => c.category === 'footwear' && c.formality >= 4);
+        const formalBlazer = activeCloset.find((c) => c.category === 'outerwear' && c.formality >= 4);
         setSlotOverrides((prev) => ({
           ...prev,
           ...(formalShoe ? { footwear: formalShoe } : {}),
@@ -776,22 +951,24 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       } else if (lower.includes('colour') || lower.includes('color')) {
         setOutfitVariationIndex((prev) => prev + 1);
         setSlotOverrides({});
+        setIsGarmentSwapOpen(false);
+        setActiveSwapSlotKey(null);
         reply = "Explored a complementary chromatic palette: Re-balanced tones with earth and tonal neutral contrast.";
       } else if (lower.includes('comfort')) {
-        const relaxedBottom = closet.find((c) => c.category === 'bottoms' && (c.fit.includes('Relaxed') || c.name.includes('Linen') || c.name.includes('Gurkha')));
+        const relaxedBottom = activeCloset.find((c) => c.category === 'bottoms' && (c.fit.includes('Relaxed') || c.name.includes('Linen') || c.name.includes('Gurkha')));
         if (relaxedBottom) {
           setSlotOverrides((prev) => ({ ...prev, bottom: relaxedBottom }));
         }
         reply = "Prioritized ergonomic comfort: Swapped in relaxed-drape breathable trousers while keeping silhouettes clean.";
       } else if (lower.includes('minimal')) {
-        const minimalTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Crewneck') || c.name.includes('Pima')));
+        const minimalTop = activeCloset.find((c) => c.category === 'tops' && (c.name.includes('Crewneck') || c.name.includes('Pima')));
         if (minimalTop) {
           setSlotOverrides((prev) => ({ ...prev, top: minimalTop }));
         }
         reply = "Tuned to clean minimalism: Stripped back ornamentation in favor of monochrome lines and essential proportions.";
       } else if (lower.includes('elegant')) {
-        const elegantTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Silk') || c.name.includes('Rollneck')));
-        const watch = closet.find((c) => c.category === 'accessories' && c.subType.includes('Watch'));
+        const elegantTop = activeCloset.find((c) => c.category === 'tops' && (c.name.includes('Silk') || c.name.includes('Rollneck')));
+        const watch = activeCloset.find((c) => c.category === 'accessories' && c.subType.includes('Watch'));
         setSlotOverrides((prev) => ({
           ...prev,
           ...(elegantTop ? { top: elegantTop } : {}),
@@ -799,7 +976,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         }));
         reply = "Refined for timeless elegance: Accented with fine-gauge knitwear and rose gold horological detailing.";
       } else if (lower.includes('footwear') || lower.includes('shoes') || lower.includes('boot')) {
-        const shoes = closet.filter((c) => c.category === 'footwear');
+        const shoes = activeCloset.filter((c) => c.category === 'footwear');
         const currentShoeId = effectiveSlots.find((s) => s.slot === 'footwear')?.closetItemId;
         const currentIndex = shoes.findIndex((s) => s.id === currentShoeId);
         const nextShoe = shoes[(currentIndex + 1) % shoes.length] || shoes[0];
@@ -820,11 +997,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   // Switch to venue and launch wizard
   const handleSelectVenueForStyling = (venue: Venue) => {
+    resetStylistSession(1);
     setSelectedVenue(venue);
     setDestinationSearch(`${venue.name}, ${venue.location}`);
     setSelectedVenueCategory(venue.category);
     setActiveTab('stylist');
-    setPlannerStep(1);
   };
 
   // Partition active and archived closet items
@@ -957,7 +1134,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         onOpenProfile();
                       } else {
                         setActiveTab(item.id as StudioTab);
-                        if (item.id === 'stylist') setPlannerStep(1);
+                        if (item.id === 'stylist') {
+                          resetStylistSession(1);
+                        }
                       }
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 cursor-pointer ${
@@ -1074,17 +1253,35 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 onChange={(e) => setHomeSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && homeSearchQuery.trim()) {
+                    resetStylistSession(3);
                     handleSendChat(homeSearchQuery);
                     setActiveTab('stylist');
-                    setPlannerStep(3);
                   }
                 }}
                 className="w-full pl-10 pr-4 py-2 rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] text-xs placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
 
-            {/* Right Header Actions: Theme Toggle, Notifications, User Profile (Screenshot 3) */}
-            <div className="flex items-center gap-3">
+            {/* Right Header Actions: Guest Badge, Theme Toggle, Notifications, User Profile */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {isGuest && (
+                <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--pill-bg)] border border-[var(--border-gold)] text-[10px] font-mono uppercase tracking-wider text-[var(--gold-primary)] font-semibold">
+                  <span>Guest Demo</span>
+                  {onOpenAuth && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <button
+                        type="button"
+                        onClick={onOpenAuth}
+                        className="underline hover:text-[var(--text-heading)] cursor-pointer font-bold"
+                      >
+                        Sign In
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -1186,9 +1383,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             onChange={(e) => setHomeSearchQuery(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && homeSearchQuery.trim()) {
+                                resetStylistSession(3);
                                 handleSendChat(homeSearchQuery);
                                 setActiveTab('stylist');
-                                setPlannerStep(3);
                               }
                             }}
                             className="w-full bg-transparent text-xs sm:text-[13px] placeholder:text-[#84796C] text-[#1C1612] outline-none"
@@ -1196,9 +1393,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <button
                             onClick={() => {
                               if (homeSearchQuery.trim()) {
+                                resetStylistSession(3);
                                 handleSendChat(homeSearchQuery);
                                 setActiveTab('stylist');
-                                setPlannerStep(3);
                               }
                             }}
                             className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shrink-0 ml-2"
@@ -1220,9 +1417,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <button
                             key={chip}
                             onClick={() => {
+                              resetStylistSession(3);
                               handleSendChat(chip);
                               setActiveTab('stylist');
-                              setPlannerStep(3);
                             }}
                             className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-[11px] font-medium transition-colors cursor-pointer border border-white/20"
                           >
@@ -1341,87 +1538,68 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                      {[
-                        {
-                          id: 'sug-1',
-                          title: 'Smart Casual',
-                          subtitle: "For Today's Weather",
-                          img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-2',
-                          title: 'Date Night',
-                          subtitle: 'Classy & Effortless',
-                          img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-3',
-                          title: 'Office Ready',
-                          subtitle: 'Clean & Polished',
-                          img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-4',
-                          title: 'Travel Look',
-                          subtitle: 'Comfort Meets Style',
-                          img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80',
-                        },
-                      ].map((look) => (
-                        <div
-                          key={look.id}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`View outfit suggestion: ${look.title}, ${look.subtitle}`}
-                          onClick={() => {
-                            setActiveTab('stylist');
-                            setPlannerStep(3);
-                            setCurrentOutfitTitle(look.title);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setActiveTab('stylist');
-                              setPlannerStep(3);
-                              setCurrentOutfitTitle(look.title);
-                            }
-                          }}
-                          className="group rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
-                        >
-                          <div className="h-44 bg-neutral-900 relative overflow-hidden">
-                            <img
-                              src={look.img}
-                              alt={look.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                            {/* Favorite Heart Button */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleLike(look.id);
-                              }}
-                              aria-label={likedLooks.includes(look.id) ? `Remove ${look.title} from favorites` : `Save ${look.title} to favorites`}
-                              className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
-                            >
-                              <Heart
-                                className={`w-3.5 h-3.5 ${
-                                  likedLooks.includes(look.id)
-                                    ? 'fill-rose-500 text-rose-500'
-                                    : 'text-white'
-                                }`}
+                      {HOME_SUGGESTION_TEMPLATES.map((template) => {
+                        const isFavorited = isTemplateFavorited(template.id, savedLooksList);
+                        return (
+                          <div
+                            key={template.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`View outfit suggestion: ${template.title}, ${template.subtitle}`}
+                            onClick={() => handleOpenSuggestionTemplate(template)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleOpenSuggestionTemplate(template);
+                              }
+                            }}
+                            className="group rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+                          >
+                            <div className="h-44 bg-neutral-900 relative overflow-hidden">
+                              <img
+                                src={template.imageUrl || SAFE_LOOK_FALLBACK_IMAGE}
+                                alt={template.title}
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  if (target.dataset.fallbackApplied === 'true') return;
+                                  target.dataset.fallbackApplied = 'true';
+                                  target.src = SAFE_LOOK_FALLBACK_IMAGE;
+                                }}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
-                            </button>
+                              {/* Favorite Heart Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleTemplateFavorite(template.id);
+                                }}
+                                aria-label={
+                                  isFavorited
+                                    ? `Remove ${template.title} from favorites`
+                                    : `Save ${template.title} to favorites`
+                                }
+                                aria-pressed={isFavorited}
+                                className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
+                              >
+                                <Heart
+                                  className={`w-3.5 h-3.5 ${
+                                    isFavorited ? 'fill-rose-500 text-rose-500' : 'text-white'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                            <div className="p-3">
+                              <h4 className="font-semibold text-xs sm:text-[13px] text-[var(--text-heading)]">
+                                {template.title}
+                              </h4>
+                              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                {template.subtitle}
+                              </p>
+                            </div>
                           </div>
-                          <div className="p-3">
-                            <h4 className="font-semibold text-xs sm:text-[13px] text-[var(--text-heading)]">
-                              {look.title}
-                            </h4>
-                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                              {look.subtitle}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1457,8 +1635,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        resetStylistSession(2);
                         setActiveTab('stylist');
-                        setPlannerStep(2);
                       }}
                       aria-label="View stylist recommendations for today's weather"
                       className="w-full pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-body)] hover:text-[var(--gold-primary)] cursor-pointer bg-transparent text-left border-x-0 border-b-0 focus:outline-none focus-visible:underline"
@@ -2449,7 +2627,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setPlannerStep(3)}
+                        onClick={() => {
+                          resetStylistSession(3);
+                          setIsSynthesizingOutfit(true);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
                         className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-md"
                       >
                         <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
@@ -2489,8 +2671,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         window.scrollTo({ top: 600, behavior: 'smooth' });
                       }}
                       onGenerate={() => {
+                        resetStylistSession(3);
                         setIsSynthesizingOutfit(true);
-                        setPlannerStep(3);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                     />
@@ -2521,8 +2703,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                       {/* SECTION A: Refined Outfit Header */}
                       <OutfitResultHeader
-                        title={synthesizedOutfit.title}
-                        subtitle={synthesizedOutfit.subtitle}
+                        title={activeOutfitTitle}
+                        subtitle={activeOutfitSubtitle}
                         occasion={selectedOccasion}
                         destination={selectedVenue.name || destinationSearch}
                         venueCategory={selectedVenueCategory}
@@ -2542,8 +2724,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             slots={effectiveSlots}
                             profile={profile}
                             occasion={selectedOccasion}
-                            outfitTitle={synthesizedOutfit.title}
+                            outfitTitle={activeOutfitTitle}
                             isLoading={isSynthesizingOutfit}
+                            selectedSlotKey={selectedOutfitSlotKey}
+                            onActiveSlotChange={setSelectedOutfitSlotKey}
                             onSlotSelect={handleOpenSwapModal}
                             onChangeSlotItem={handleOpenSwapModal}
                           />
@@ -2566,12 +2750,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         {/* Right Column (5 cols): Actions Toolbar, 5 Standardized Slots & Preserved Stylist Concierge */}
                         <div className="lg:col-span-5 space-y-6">
                           <OutfitActionToolbar
-                            isSaved={likedLooks.includes(`curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`)}
+                            isSaved={isCurrentOutfitSaved}
                             onSave={handleSaveCurrentLook}
                             onRegenerate={() => {
+                              resetStylistSession(3, { keepVariation: true });
                               setIsSynthesizingOutfit(true);
                               setOutfitVariationIndex((prev) => prev + 1);
-                              setSlotOverrides({});
                             }}
                             onRefineWithChat={() => {
                               const chatElem = document.getElementById('stylist-concierge-chat');
@@ -2580,24 +2764,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               }
                             }}
                             onAdjustPlan={() => setPlannerStep(2)}
-                            onNewPlan={() => {
-                              setPlannerStep(1);
-                              setSlotOverrides({});
-                            }}
+                            onNewPlan={() => resetStylistSession(1)}
                             isRegenerating={isSynthesizingOutfit}
-                            outfitTitle={synthesizedOutfit.title}
+                            outfitTitle={activeOutfitTitle}
                             occasion={selectedOccasion}
                           />
 
                           <OutfitSlotsList
                             slots={effectiveSlots}
                             closet={closet}
+                            selectedSlotKey={selectedOutfitSlotKey}
                             onSlotClick={handleOpenSwapModal}
                             onSlotChangeClick={handleOpenSwapModal}
                             outfitContext={{
                               occasion: selectedOccasion,
                               venue: selectedVenue.name || destinationSearch,
-                              outfitTitle: synthesizedOutfit.title,
+                              outfitTitle: activeOutfitTitle,
                             }}
                             onNavigateToShopping={() => setActiveTab('shopping')}
                           />
@@ -2708,15 +2890,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </div>
 
                       {/* Modal for Individual Garment Swapping */}
-                      <GarmentSwapModal
-                        key={activeSwapSlot ? activeSwapSlot.slot : 'none'}
-                        isOpen={isGarmentSwapOpen}
-                        onClose={() => setIsGarmentSwapOpen(false)}
-                        slot={activeSwapSlot}
-                        allSlots={effectiveSlots}
-                        closet={closet}
-                        onApplySwap={handleApplySwap}
-                      />
+                      {isGarmentSwapOpen && activeSwapSlot && (
+                        <GarmentSwapModal
+                          key={`${activeSwapSlot.slot}:${activeSwapSlot.closetItemId ?? 'empty'}`}
+                          isOpen={isGarmentSwapOpen}
+                          onClose={handleCloseSwapModal}
+                          slot={activeSwapSlot}
+                          allSlots={effectiveSlots}
+                          closet={closet}
+                          onApplySwap={handleApplySwap}
+                        />
+                      )}
                     </>
                   )}
                 </div>
@@ -3146,8 +3330,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </div>
                 <button
                   onClick={() => {
+                    resetStylistSession(1);
                     setActiveTab('stylist');
-                    setPlannerStep(1);
                   }}
                   className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
                 >
@@ -3217,9 +3401,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         <button
                           type="button"
                           onClick={() => {
+                            resetStylistSession(1);
                             setSelectedOccasion(item.occasion || 'Smart Casual');
                             setActiveTab('stylist');
-                            setPlannerStep(1);
                           }}
                           className="px-3 py-1.5 rounded-full border border-[var(--border-gold)] text-[10px] text-[var(--gold-primary)] font-bold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
                         >
@@ -3311,8 +3495,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </p>
                       <button
                         onClick={() => {
+                          resetStylistSession(3);
                           setActiveTab('stylist');
-                          setPlannerStep(3);
                           setCurrentOutfitTitle(idea.title);
                         }}
                         className="w-full py-2.5 rounded-xl border border-[var(--border-gold)] bg-[var(--pill-bg)] hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
@@ -3338,7 +3522,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     Saved Looks & Favorites
                   </h2>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    {savedLooksList.length} curated ensembles bookmarked for fast instant reuse
+                    {savedLooksList.length} curated {savedLooksList.length === 1 ? 'ensemble' : 'ensembles'} bookmarked • {favoriteLooksCount} favorited
                   </p>
                 </div>
               </div>
@@ -3353,7 +3537,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     When you find an outfit you love in the AI Stylist or Lookbook, tap the heart icon to save it here.
                   </p>
                   <button
-                    onClick={() => setActiveTab('stylist')}
+                    type="button"
+                    onClick={() => {
+                      resetStylistSession(1);
+                      setActiveTab('stylist');
+                    }}
                     className="px-5 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold cursor-pointer"
                   >
                     Go to AI Stylist
@@ -3368,42 +3556,78 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     >
                       <div>
                         <div className="h-52 bg-neutral-900 relative">
-                          <img src={look.img} alt={look.title} className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => {
-                              setSavedLooksList((prev) => prev.filter((l) => l.id !== look.id));
-                              setLikedLooks((prev) => prev.filter((id) => id !== look.id));
+                          <img
+                            src={look.imageUrl || SAFE_LOOK_FALLBACK_IMAGE}
+                            alt={look.title}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (target.dataset.fallbackApplied === 'true') return;
+                              target.dataset.fallbackApplied = 'true';
+                              target.src = SAFE_LOOK_FALLBACK_IMAGE;
                             }}
-                            className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-rose-400 hover:text-rose-600 transition-colors cursor-pointer"
-                            title="Remove from saved"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFavoriteSavedLook(look.id)}
+                              aria-label={look.isFavorite ? `Unfavorite ${look.title}` : `Favorite ${look.title}`}
+                              aria-pressed={look.isFavorite}
+                              className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
+                              title={look.isFavorite ? 'Remove from Favorites' : 'Mark as Favorite'}
+                            >
+                              <Heart
+                                className={`w-3.5 h-3.5 ${
+                                  look.isFavorite ? 'fill-rose-500 text-rose-500' : 'text-white'
+                                }`}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSavedLook(look.id)}
+                              aria-label={`Delete ${look.title} from saved looks`}
+                              className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-rose-400 hover:text-rose-500 transition-colors cursor-pointer"
+                              title="Remove from saved"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-bold">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-bold truncate">
                               {look.occasion}
                             </span>
-                            <span className="text-[10px] text-[var(--text-muted)]">{look.date}</span>
+                            <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                              {formatSavedLookDateLabel(look)}
+                            </span>
                           </div>
                           <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">
                             {look.title}
                           </h4>
                           <p className="text-xs text-[var(--text-body)] line-clamp-2">
-                            {look.piecesSummary}
+                            {formatSavedLookPiecesSummary(look)}
                           </p>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] text-[var(--text-muted)]">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] font-mono">
+                              {look.garmentIds.length > 0
+                                ? `${look.garmentIds.length} closet ${look.garmentIds.length === 1 ? 'piece' : 'pieces'}`
+                                : 'Editorial look'}
+                            </span>
+                            {look.venue && (
+                              <span className="px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] truncate max-w-[160px]">
+                                {look.venue}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div className="p-4 pt-0">
                         <button
-                          onClick={() => {
-                            setActiveTab('stylist');
-                            setPlannerStep(3);
-                            setCurrentOutfitTitle(look.title);
-                          }}
+                          type="button"
+                          onClick={() => handleWearSavedLook(look)}
                           className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -3447,7 +3671,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <p className="font-playfair text-base sm:text-lg font-bold">
                       {userDisplayName} ({profile.height || '178 cm'} • {profile.bodyShape || 'Athletic'})
                     </p>
-                    <p className="text-xs text-amber-300 font-mono">Draped: {synthesizedOutfit.title} (Size M)</p>
+                    <p className="text-xs text-amber-300 font-mono">Draped: {activeOutfitTitle} (Size M)</p>
                   </div>
                 </div>
 
@@ -3489,8 +3713,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {activeTab === 'shopping' && (
             <ShoppingListView
               onNavigateToStylist={() => {
+                resetStylistSession(1);
                 setActiveTab('stylist');
-                setPlannerStep(1);
               }}
               onNavigateToCloset={(searchTerm) => {
                 if (searchTerm) setClosetSearch(searchTerm);
@@ -3512,6 +3736,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         onSelectTab={(tab) => {
           setActiveTab(tab);
           setMobileMenuOpen(false);
+          if (tab === 'stylist') {
+            resetStylistSession(1);
+          }
         }}
         onOpenMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
         closetCount={closet.length}
@@ -3649,6 +3876,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <User className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>My Profile</span>
               </button>
+              {isGuest && onOpenAuth ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAuth();
+                  }}
+                  className="p-3 rounded-xl border border-[var(--border-gold)] bg-[var(--pill-bg)] text-left flex items-center justify-between font-semibold col-span-2 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <span className="text-[var(--text-heading)]">Guest Demo Mode — Sign In</span>
+                  <ArrowRight className="w-4 h-4 text-[var(--gold-primary)]" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -3890,7 +4130,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onSignOut={() => {
+        signOutLabel={isAuthenticated ? 'Sign Out' : 'Exit Guest Mode'}
+        onSignOut={async () => {
+          if (isAuthenticated) {
+            await logout();
+          } else if (isGuest) {
+            exitGuestMode();
+          }
           setIsSettingsOpen(false);
           if (onBackToLanding) onBackToLanding();
         }}
@@ -4018,10 +4264,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  resetStylistSession(1);
                   setSelectedOccasion(selectedCalendarDay.occasion);
                   setSelectedCalendarDay(null);
                   setActiveTab('stylist');
-                  setPlannerStep(1);
                 }}
                 className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:scale-[1.02] transition-all"
               >

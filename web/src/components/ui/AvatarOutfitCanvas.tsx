@@ -25,6 +25,8 @@ interface AvatarOutfitCanvasProps {
   occasion: string;
   outfitTitle: string;
   isLoading?: boolean;
+  selectedSlotKey?: OutfitSlotItem['slot'];
+  onActiveSlotChange?: (slotKey: OutfitSlotItem['slot']) => void;
   onSlotSelect?: (slot: OutfitSlotItem) => void;
   onChangeSlotItem?: (slot: OutfitSlotItem) => void;
 }
@@ -33,13 +35,24 @@ interface AvatarOutfitCanvasProps {
 function getGarmentHex(colorName?: string, defaultHex: string = '#27272a'): string {
   if (!colorName) return defaultHex;
   const c = colorName.toLowerCase();
-  if (c.includes('ivory') || c.includes('cream') || c.includes('white') || c.includes('sand')) return '#FAF7F2';
-  if (c.includes('navy') || c.includes('french blue') || c.includes('indigo') || c.includes('blue')) return '#1e293b';
-  if (c.includes('charcoal') || c.includes('flint') || c.includes('black') || c.includes('noir') || c.includes('jet')) return '#18181b';
-  if (c.includes('camel') || c.includes('caramel') || c.includes('hazelnut') || c.includes('brown') || c.includes('tobacco') || c.includes('espresso')) return '#451a03';
-  if (c.includes('oatmeal') || c.includes('beige')) return '#d4c5b2';
+  if (c.includes('sand')) return '#EFE7DA';
+  if (c.includes('ivory') || c.includes('cream') || c.includes('chalk') || c.includes('white') || c.includes('ecru')) return '#FAF7F2';
+  if (c.includes('burgundy') || c.includes('oxblood') || c.includes('wine') || c.includes('maroon') || c.includes('crimson')) return '#5c1d24';
+  if (c.includes('terracotta') || c.includes('rust') || c.includes('cognac')) return '#8c3b20';
+  if (c.includes('midnight navy') || c.includes('navy')) return '#172554';
+  if (c.includes('indigo') || c.includes('denim')) return '#1e3a5f';
+  if (c.includes('french blue') || c.includes('blue')) return '#2b4c7e';
+  if (c.includes('olive') || c.includes('sage') || c.includes('forest') || c.includes('green')) return '#3f523a';
+  if (c.includes('khaki')) return '#9c8a66';
+  if (c.includes('camel') || c.includes('vicuna') || c.includes('tan') || c.includes('taupe')) return '#b0895c';
+  if (c.includes('tobacco')) return '#8c522b';
+  if (c.includes('caramel') || c.includes('hazelnut')) return '#7c4a26';
+  if (c.includes('chocolate') || c.includes('espresso') || c.includes('brown')) return '#3b2219';
+  if (c.includes('oatmeal') || c.includes('beige') || c.includes('linen')) return '#d4c5b2';
   if (c.includes('gold') || c.includes('amber')) return '#B88E2D';
-  if (c.includes('grey') || c.includes('gray')) return '#52525b';
+  if (c.includes('charcoal') || c.includes('flint') || c.includes('slate')) return '#36363c';
+  if (c.includes('black') || c.includes('noir') || c.includes('jet')) return '#18181b';
+  if (c.includes('grey') || c.includes('gray') || c.includes('silver')) return '#6b7280';
   return defaultHex;
 }
 
@@ -49,12 +62,15 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
   occasion,
   outfitTitle,
   isLoading = false,
+  selectedSlotKey,
+  onActiveSlotChange,
   onSlotSelect,
   onChangeSlotItem,
 }) => {
   const initialMode = profile.avatarOption === 'skipped' ? 'flatlay' : 'avatar';
   const [viewMode, setViewMode] = useState<'avatar' | 'flatlay'>(initialMode);
-  const [activeSlotKey, setActiveSlotKey] = useState<string>('top');
+  const [internalActiveSlotKey, setInternalActiveSlotKey] = useState<OutfitSlotItem['slot']>('top');
+  const [failedImageUrls, setFailedImageUrls] = useState<Record<string, true>>({});
 
   const topPiece = slots.find((s) => s.slot === 'top');
   const outerwearPiece = slots.find((s) => s.slot === 'outerwear');
@@ -62,8 +78,15 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
   const footwearPiece = slots.find((s) => s.slot === 'footwear');
   const accessoryPiece = slots.find((s) => s.slot === 'accessory');
 
-  // Currently inspected slot for the detailed callout
-  const activePiece = slots.find((s) => s.slot === activeSlotKey) || topPiece || slots[0];
+  // Currently inspected slot for the detailed callout (synced with optional parent selection)
+  const requestedSlotKey = selectedSlotKey ?? internalActiveSlotKey;
+  const activePiece = slots.find((s) => s.slot === requestedSlotKey) || topPiece || slots[0];
+  const activeSlotKey = activePiece?.slot ?? requestedSlotKey;
+
+  const handleActivateSlot = (slotKey: OutfitSlotItem['slot']) => {
+    setInternalActiveSlotKey(slotKey);
+    onActiveSlotChange?.(slotKey);
+  };
 
   const archetype = profile.avatarArchetype || 'classic_tailored';
   const archetypeTitle =
@@ -255,8 +278,9 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
 
                 {/* --- 3. TROUSERS / BOTTOMS (Drawn beneath jacket) --- */}
                 <g
+                  data-slot="bottom"
                   onClick={() => {
-                    setActiveSlotKey('bottom');
+                    handleActivateSlot('bottom');
                     if (onSlotSelect && bottomPiece) onSlotSelect(bottomPiece);
                   }}
                   className="cursor-pointer transition-all duration-300"
@@ -284,8 +308,9 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
 
                 {/* --- 4. BASE TOP (Torso & Neckline) --- */}
                 <g
+                  data-slot="top"
                   onClick={() => {
-                    setActiveSlotKey('top');
+                    handleActivateSlot('top');
                     if (onSlotSelect && topPiece) onSlotSelect(topPiece);
                   }}
                   className="cursor-pointer transition-all duration-300"
@@ -314,39 +339,42 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
                 {/* --- 5. OUTERWEAR / LAYER (When Present) --- */}
                 {outerwearPiece && (
                   <g
+                    data-slot="outerwear"
                     onClick={() => {
-                      setActiveSlotKey('outerwear');
+                      handleActivateSlot('outerwear');
                       if (onSlotSelect && outerwearPiece) onSlotSelect(outerwearPiece);
                     }}
                     className="cursor-pointer transition-all duration-300"
                   >
-                    {/* Left Jacket Body & Shoulder */}
+                    {/* Left Jacket Body & Shoulder (tailored open V-neck reveals Base Top underneath) */}
                     <path
-                      d="M188 114 
+                      d="M174 110 
                          L140 108 
                          C128 114 116 130 114 158 
                          C112 195 116 235 120 282 
                          L176 288 
-                         L188 196 Z"
+                         L188 196 
+                         L188 186 Z"
                       fill="url(#outerGrad)"
                       stroke={activeSlotKey === 'outerwear' ? '#D4AF37' : '#2A2926'}
                       strokeWidth={activeSlotKey === 'outerwear' ? '2.5' : '1.5'}
                     />
                     {/* Right Jacket Body & Shoulder */}
                     <path
-                      d="M192 114 
+                      d="M206 110 
                          L240 108 
                          C252 114 264 130 266 158 
                          C268 195 264 235 260 282 
                          L204 288 
-                         L192 196 Z"
+                         L192 196 
+                         L192 186 Z"
                       fill="url(#outerGrad)"
                       stroke={activeSlotKey === 'outerwear' ? '#D4AF37' : '#2A2926'}
                       strokeWidth={activeSlotKey === 'outerwear' ? '2.5' : '1.5'}
                     />
-                    {/* Lapels */}
-                    <path d="M174 110 L190 178 L162 136 Z" fill={outerHex} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
-                    <path d="M206 110 L190 178 L218 136 Z" fill={outerHex} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                    {/* Lapels draped cleanly outside the chest V-opening */}
+                    <path d="M174 110 L188 186 L160 154 L164 132 Z" fill={outerHex} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                    <path d="M206 110 L192 186 L220 154 L216 132 Z" fill={outerHex} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
                     {/* Welt Breast Pocket & Hand Pockets */}
                     <line x1="138" y1="162" x2="154" y2="162" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
                     <line x1="128" y1="242" x2="152" y2="242" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
@@ -359,8 +387,9 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
 
                 {/* --- 6. ACCESSORIES (Waistband & Wristwatch) --- */}
                 <g
+                  data-slot="accessory"
                   onClick={() => {
-                    setActiveSlotKey('accessory');
+                    handleActivateSlot('accessory');
                     if (onSlotSelect && accessoryPiece) onSlotSelect(accessoryPiece);
                   }}
                   className="cursor-pointer"
@@ -375,8 +404,9 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
 
                 {/* --- 7. FOOTWEAR (Loafers / Shoes / Boots at Base) --- */}
                 <g
+                  data-slot="footwear"
                   onClick={() => {
-                    setActiveSlotKey('footwear');
+                    handleActivateSlot('footwear');
                     if (onSlotSelect && footwearPiece) onSlotSelect(footwearPiece);
                   }}
                   className="cursor-pointer transition-all duration-300"
@@ -413,34 +443,34 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
 
                 {/* --- 8. EDITORIAL ANATOMICAL HOTSPOT CALLOUT PINS --- */}
                 {/* Pin 01: Top */}
-                <g onClick={() => setActiveSlotKey('top')} className="cursor-pointer">
+                <g data-slot-pin="top" onClick={() => handleActivateSlot('top')} className="cursor-pointer">
                   <circle cx="190" cy="136" r="6" fill={activeSlotKey === 'top' ? '#D4AF37' : '#1C1917'} stroke="#D4AF37" strokeWidth="1.5" />
                   <text x="190" y="139" textAnchor="middle" fill={activeSlotKey === 'top' ? '#000' : '#D4AF37'} fontSize="7" fontWeight="bold">1</text>
                 </g>
 
                 {/* Pin 02: Outerwear (If exists) */}
                 {outerwearPiece && (
-                  <g onClick={() => setActiveSlotKey('outerwear')} className="cursor-pointer">
+                  <g data-slot-pin="outerwear" onClick={() => handleActivateSlot('outerwear')} className="cursor-pointer">
                     <circle cx="132" cy="180" r="6" fill={activeSlotKey === 'outerwear' ? '#D4AF37' : '#1C1917'} stroke="#D4AF37" strokeWidth="1.5" />
                     <text x="132" y="183" textAnchor="middle" fill={activeSlotKey === 'outerwear' ? '#000' : '#D4AF37'} fontSize="7" fontWeight="bold">2</text>
                   </g>
                 )}
 
                 {/* Pin 03: Bottoms */}
-                <g onClick={() => setActiveSlotKey('bottom')} className="cursor-pointer">
+                <g data-slot-pin="bottom" onClick={() => handleActivateSlot('bottom')} className="cursor-pointer">
                   <circle cx="190" cy="380" r="6" fill={activeSlotKey === 'bottom' ? '#D4AF37' : '#1C1917'} stroke="#D4AF37" strokeWidth="1.5" />
                   <text x="190" y="383" textAnchor="middle" fill={activeSlotKey === 'bottom' ? '#000' : '#D4AF37'} fontSize="7" fontWeight="bold">3</text>
                 </g>
 
                 {/* Pin 04: Footwear */}
-                <g onClick={() => setActiveSlotKey('footwear')} className="cursor-pointer">
+                <g data-slot-pin="footwear" onClick={() => handleActivateSlot('footwear')} className="cursor-pointer">
                   <circle cx="190" cy="535" r="6" fill={activeSlotKey === 'footwear' ? '#D4AF37' : '#1C1917'} stroke="#D4AF37" strokeWidth="1.5" />
                   <text x="190" y="538" textAnchor="middle" fill={activeSlotKey === 'footwear' ? '#000' : '#D4AF37'} fontSize="7" fontWeight="bold">4</text>
                 </g>
 
                 {/* Pin 05: Accessories */}
                 {accessoryPiece && (
-                  <g onClick={() => setActiveSlotKey('accessory')} className="cursor-pointer">
+                  <g data-slot-pin="accessory" onClick={() => handleActivateSlot('accessory')} className="cursor-pointer">
                     <circle cx="108" cy="267" r="6" fill={activeSlotKey === 'accessory' ? '#D4AF37' : '#1C1917'} stroke="#D4AF37" strokeWidth="1.5" />
                     <text x="108" y="270" textAnchor="middle" fill={activeSlotKey === 'accessory' ? '#000' : '#D4AF37'} fontSize="7" fontWeight="bold">5</text>
                   </g>
@@ -451,13 +481,24 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
             {/* Interactive Piece Inspector Banner (At bottom of canvas) */}
             {activePiece && (
               <div
+                data-active-slot={activePiece.slot}
                 onClick={() => onSlotSelect && onSlotSelect(activePiece)}
                 className="w-full max-w-sm mt-1 p-3 rounded-2xl bg-black/85 border border-white/10 hover:border-[var(--gold-primary)]/60 transition-all cursor-pointer shadow-lg backdrop-blur-md flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-700 overflow-hidden shrink-0 flex items-center justify-center text-xl">
-                    {activePiece.imageUrl ? (
-                      <img src={activePiece.imageUrl} alt={activePiece.name} className="w-full h-full object-cover" />
+                    {activePiece.imageUrl && !failedImageUrls[activePiece.imageUrl] ? (
+                      <img
+                        src={activePiece.imageUrl}
+                        alt={activePiece.name}
+                        className="w-full h-full object-cover"
+                        onError={() => {
+                          const failedSrc = activePiece.imageUrl;
+                          if (failedSrc) {
+                            setFailedImageUrls((prev) => ({ ...prev, [failedSrc]: true }));
+                          }
+                        }}
+                      />
                     ) : (
                       <span>{activePiece.icon || '👕'}</span>
                     )}
@@ -528,8 +569,9 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
               {slots.map((item) => (
                 <div
                   key={item.slot}
+                  data-flatlay-slot={item.slot}
                   onClick={() => {
-                    setActiveSlotKey(item.slot);
+                    handleActivateSlot(item.slot);
                     if (onSlotSelect) onSlotSelect(item);
                   }}
                   className={`rounded-2xl border p-3 flex flex-col justify-between transition-all duration-300 cursor-pointer ${
@@ -539,8 +581,18 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
                   }`}
                 >
                   <div className="h-28 sm:h-32 rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden mb-2 flex items-center justify-center text-3xl relative">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    {item.imageUrl && !failedImageUrls[item.imageUrl] ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                        onError={() => {
+                          const failedSrc = item.imageUrl;
+                          if (failedSrc) {
+                            setFailedImageUrls((prev) => ({ ...prev, [failedSrc]: true }));
+                          }
+                        }}
+                      />
                     ) : (
                       <span>{item.icon || '👕'}</span>
                     )}

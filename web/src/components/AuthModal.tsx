@@ -8,7 +8,8 @@ import {
   AlertCircle,
   Info,
 } from 'lucide-react';
-import { authService } from '../services/auth.service';
+import { useAuth } from '../hooks/useAuth';
+import type { AuthSession } from '../types/domain/auth';
 import { useFocusTrap } from '../utils/focusTrap';
 
 export type AuthMode = 'signin' | 'signup' | 'forgot';
@@ -17,7 +18,7 @@ interface AuthModalProps {
   isOpen: boolean;
   initialMode?: AuthMode;
   onClose: () => void;
-  onSuccess?: (user: unknown) => void;
+  onSuccess?: (session: AuthSession) => void;
   onSwitchToOnboarding?: () => void;
   onModeChange?: (mode: AuthMode) => void;
   onExploreDemo?: () => void;
@@ -30,12 +31,13 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
   onModeChange,
   onExploreDemo,
 }) => {
+  const { login, register, enterGuestMode } = useAuth();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [prevInitialMode, setPrevInitialMode] = useState(initialMode);
 
-  // Form fields
+  // Form fields (email-only aligned with backend schema)
   const [name, setName] = useState('');
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -46,20 +48,18 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
   // Status & messages
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [socialNotice, setSocialNotice] = useState<string | null>(null);
-  const [forgotNotice, setForgotNotice] = useState<string | null>(null);
+  const [isNetworkFailure, setIsNetworkFailure] = useState(false);
 
   // Reset helper
   const resetForm = () => {
     setName('');
-    setIdentifier('');
+    setEmail('');
     setPassword('');
     setShowPassword(false);
     setTouched({});
     setFieldErrors({});
     setServerError(null);
-    setSocialNotice(null);
-    setForgotNotice(null);
+    setIsNetworkFailure(false);
   };
 
   const switchMode = (newMode: AuthMode) => {
@@ -73,50 +73,62 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
     setPrevInitialMode(initialMode);
     setMode(initialMode);
     setName('');
-    setIdentifier('');
+    setEmail('');
     setPassword('');
     setShowPassword(false);
     setTouched({});
     setFieldErrors({});
     setServerError(null);
-    setSocialNotice(null);
-    setForgotNotice(null);
+    setIsNetworkFailure(false);
   }
 
   // Focus trap, restoration & Escape key dismiss
   const modalRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onClose });
 
-  // Validation logic
+  const handleEnterGuestDemo = () => {
+    enterGuestMode();
+    if (onExploreDemo) {
+      onExploreDemo();
+    } else {
+      onClose();
+    }
+  };
+
+  // Email-only client validation matching backend Zod limits
   const validate = () => {
+    if (mode === 'forgot') {
+      setFieldErrors({});
+      return true;
+    }
+
     const errors: Record<string, string> = {};
 
     if (mode === 'signup') {
-      if (!name.trim()) {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
         errors.name = 'Please enter your full name.';
-      } else if (name.trim().length < 2) {
-        errors.name = 'Name must be at least 2 characters.';
+      } else if (trimmedName.length < 2) {
+        errors.name = 'Name must contain at least 2 characters.';
+      } else if (trimmedName.length > 100) {
+        errors.name = 'Name cannot exceed 100 characters.';
       }
     }
 
-    if (!identifier.trim()) {
-      errors.identifier = 'Please enter your email or phone number.';
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const phoneRegex = /^(\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}$/;
-      const isEmail = emailRegex.test(identifier.trim());
-      const isPhone = phoneRegex.test(identifier.trim()) && identifier.replace(/\D/g, '').length >= 7;
-
-      if (!isEmail && !isPhone) {
-        errors.identifier = 'Please enter a valid email address or phone number.';
-      }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      errors.email = 'Please enter your email address.';
+    } else if (trimmedEmail.length > 254) {
+      errors.email = 'Email address is too long.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address.';
     }
 
-    if (mode !== 'forgot') {
-      if (!password) {
-        errors.password = 'Password is required.';
-      } else if (mode === 'signup' && password.length < 8) {
-        errors.password = 'Password must be at least 8 characters long.';
-      }
+    if (!password) {
+      errors.password = 'Password is required.';
+    } else if (mode === 'signup' && password.length < 8) {
+      errors.password = 'Password must contain at least 8 characters.';
+    } else if (password.length > 128) {
+      errors.password = 'Password cannot exceed 128 characters.';
     }
 
     setFieldErrors(errors);
@@ -131,9 +143,13 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
   // Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ name: true, identifier: true, password: true });
+    if (mode === 'forgot') {
+      return;
+    }
+
+    setTouched({ name: true, email: true, password: true });
     setServerError(null);
-    setSocialNotice(null);
+    setIsNetworkFailure(false);
 
     if (!validate()) return;
 
@@ -141,43 +157,41 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
 
     try {
       if (mode === 'signin') {
-        const result = await authService.login({
-          email: identifier,
+        const result = await login({
+          email,
           password,
         });
 
         if (result.success && result.data) {
-          if (onSuccess) onSuccess(result.data);
-          onClose();
+          if (onSuccess) {
+            onSuccess(result.data);
+          } else {
+            onClose();
+          }
         } else {
           setServerError(
             result.error || 'Invalid credentials or authentication failed.'
           );
+          setIsNetworkFailure(Boolean(result.isNetworkError));
         }
       } else if (mode === 'signup') {
-        const result = await authService.register({
+        const result = await register({
           name,
-          email: identifier,
+          email,
           password,
         });
 
         if (result.success && result.data) {
-          if (onSuccess) onSuccess(result.data);
-          onClose();
+          if (onSuccess) {
+            onSuccess(result.data);
+          } else {
+            onClose();
+          }
         } else {
           setServerError(
             result.error || 'Registration failed. The server rejected the request.'
           );
-        }
-      } else if (mode === 'forgot') {
-        const result = await authService.requestPasswordReset(identifier);
-        if (result.success) {
-          setForgotNotice('Reset instructions sent to your email.');
-        } else {
-          setServerError(
-            result.error ||
-              'Password recovery is pending backend configuration (POST /api/v1/auth/forgot-password).'
-          );
+          setIsNetworkFailure(Boolean(result.isNetworkError));
         }
       }
     } finally {
@@ -252,7 +266,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
           </h2>
           <p className="text-xs text-[#6B5E51] mt-1 font-normal tracking-wide">
             {mode === 'forgot'
-              ? 'Enter your email or phone to reset your password'
+              ? 'Password recovery status'
               : 'Your style. Every place.'}
           </p>
         </div>
@@ -323,24 +337,13 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
           </div>
         )}
 
-        {/* Social Provider Notice Banner */}
-        {socialNotice && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
-            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1 leading-snug">{socialNotice}</div>
-            <button
-              type="button"
-              onClick={() => setSocialNotice(null)}
-              className="text-amber-600 hover:text-amber-800 font-bold ml-1"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
         {/* Server / Network Error Message Banner with Safe Demo Option */}
         {serverError && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs animate-in fade-in space-y-2">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs animate-in fade-in space-y-2"
+          >
             <div className="flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div className="flex-1 leading-snug">
@@ -349,22 +352,25 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setServerError(null)}
+                onClick={() => {
+                  setServerError(null);
+                  setIsNetworkFailure(false);
+                }}
                 className="text-rose-500 hover:text-rose-700 font-bold ml-1 cursor-pointer"
                 aria-label="Dismiss error notice"
               >
                 ×
               </button>
             </div>
-            {onExploreDemo && (serverError.toLowerCase().includes('unreachable') || serverError.toLowerCase().includes('offline') || serverError.toLowerCase().includes('network')) && (
+            {(isNetworkFailure ||
+              serverError.toLowerCase().includes('unreachable') ||
+              serverError.toLowerCase().includes('offline') ||
+              serverError.toLowerCase().includes('network')) && (
               <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-rose-700">Explore studio in guest mode instead?</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    onExploreDemo();
-                  }}
+                  onClick={handleEnterGuestDemo}
                   className="px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 text-[11px] font-bold transition-colors cursor-pointer shrink-0 shadow-2xs"
                 >
                   Explore Web Studio →
@@ -374,93 +380,102 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
           </div>
         )}
 
-        {/* Informative Notice for Forgot Password */}
-        {mode === 'forgot' && !serverError && (
-          <div className="mb-4 p-3 rounded-xl bg-[#F0E6D5] border border-[#DFCBB2] text-[#544A40] text-xs flex items-start gap-2.5">
-            <Info className="w-4 h-4 text-[#A67C1E] shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Pending Backend Integration:</strong> Password reset requests will connect to <code>POST /api/v1/auth/forgot-password</code> once email and SMS dispatch services are configured.
-            </p>
-          </div>
-        )}
+        {/* Honest Forgot Password Status Panel (no invented backend endpoint) */}
+        {mode === 'forgot' ? (
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-[#F0E6D5] border border-[#DFCBB2] text-[#544A40] text-xs flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-[#A67C1E] shrink-0 mt-0.5" />
+              <div className="space-y-1.5 leading-relaxed">
+                <p className="font-semibold text-[#1C1612]">
+                  Password recovery is not yet configured
+                </p>
+                <p>
+                  Self-service password reset is unavailable until email reset delivery endpoints are added on the backend server. Please sign in with your registered email and password, or explore in Guest Demo Mode.
+                </p>
+              </div>
+            </div>
 
-        {forgotNotice && (
-          <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs leading-snug">
-            {forgotNotice}
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className="w-full py-3 rounded-2xl bg-[#121214] hover:bg-black text-white text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md cursor-pointer"
+            >
+              Back to Sign In
+            </button>
           </div>
-        )}
+        ) : (
+          /* Main Authentication Form */
+          <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
+            {/* Sign Up: Full Name Field */}
+            {mode === 'signup' && (
+              <div>
+                <label
+                  htmlFor="auth-name"
+                  className="block text-[11px] font-semibold text-[#544A40] mb-1 text-left"
+                >
+                  Full Name
+                </label>
+                <input
+                  id="auth-name"
+                  type="text"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (fieldErrors.name) validate();
+                  }}
+                  onBlur={() => handleBlur('name')}
+                  placeholder="e.g. Eleanor Vance"
+                  disabled={isLoading}
+                  className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all ${
+                    touched.name && fieldErrors.name
+                      ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
+                      : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'
+                  }`}
+                />
+                {touched.name && fieldErrors.name && (
+                  <p className="text-[11px] text-rose-600 mt-1 text-left font-medium">
+                    {fieldErrors.name}
+                  </p>
+                )}
+              </div>
+            )}
 
-        {/* Main Authentication Form */}
-        <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
-          {/* Sign Up: Full Name Field */}
-          {mode === 'signup' && (
+            {/* Email Address Field (email-only aligned with backend validator) */}
             <div>
               <label
-                htmlFor="auth-name"
+                htmlFor="auth-email"
                 className="block text-[11px] font-semibold text-[#544A40] mb-1 text-left"
               >
-                Full Name
+                Email Address
               </label>
               <input
-                id="auth-name"
-                type="text"
-                value={name}
+                id="auth-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
                 onChange={(e) => {
-                  setName(e.target.value);
-                  if (fieldErrors.name) validate();
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) validate();
                 }}
-                onBlur={() => handleBlur('name')}
-                placeholder="e.g. Eleanor Vance"
+                onBlur={() => handleBlur('email')}
+                placeholder="you@example.com"
                 disabled={isLoading}
                 className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all ${
-                  touched.name && fieldErrors.name
+                  touched.email && fieldErrors.email
                     ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
                     : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'
                 }`}
               />
-              {touched.name && fieldErrors.name && (
+              {touched.email && fieldErrors.email && (
                 <p className="text-[11px] text-rose-600 mt-1 text-left font-medium">
-                  {fieldErrors.name}
+                  {fieldErrors.email}
                 </p>
               )}
             </div>
-          )}
 
-          {/* Email or Phone Field */}
-          <div>
-            <label
-              htmlFor="auth-identifier"
-              className="block text-[11px] font-semibold text-[#544A40] mb-1 text-left"
-            >
-              Email or Phone
-            </label>
-            <input
-              id="auth-identifier"
-              type="text"
-              autoComplete="username"
-              value={identifier}
-              onChange={(e) => {
-                setIdentifier(e.target.value);
-                if (fieldErrors.identifier) validate();
-              }}
-              onBlur={() => handleBlur('identifier')}
-              placeholder="you@example.com"
-              disabled={isLoading}
-              className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all ${
-                touched.identifier && fieldErrors.identifier
-                  ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
-                  : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'
-              }`}
-            />
-            {touched.identifier && fieldErrors.identifier && (
-              <p className="text-[11px] text-rose-600 mt-1 text-left font-medium">
-                {fieldErrors.identifier}
-              </p>
-            )}
-          </div>
-
-          {/* Password Field (only for Sign In / Sign Up) */}
-          {mode !== 'forgot' && (
+            {/* Password Field */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label
@@ -521,37 +536,33 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
                 </p>
               )}
             </div>
-          )}
 
-          {/* Submit CTA Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 rounded-2xl bg-[#121214] hover:bg-black text-white text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
-            >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+            {/* Submit CTA Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 rounded-2xl bg-[#121214] hover:bg-black text-white text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+              >
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>
+                      {mode === 'signin' ? 'Signing In...' : 'Creating Account...'}
+                    </span>
+                  </>
+                ) : (
                   <span>
-                    {mode === 'signin' && 'Signing In...'}
-                    {mode === 'signup' && 'Creating Account...'}
-                    {mode === 'forgot' && 'Submitting...'}
+                    {mode === 'signin' ? 'Sign In' : 'Create Account'}
                   </span>
-                </>
-              ) : (
-                <span>
-                  {mode === 'signin' && 'Sign In'}
-                  {mode === 'signup' && 'Create Account'}
-                  {mode === 'forgot' && 'Submit Request'}
-                </span>
-              )}
-            </button>
-          </div>
-        </form>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
 
-        {/* Bottom Mode Switcher */}
-        <div className="text-center mt-5 pt-3 border-t border-[#E8DEC8]/60 text-xs text-[#6B5E51]">
+        {/* Bottom Mode Switcher & Explicit Guest Entry */}
+        <div className="text-center mt-5 pt-3 border-t border-[#E8DEC8]/60 text-xs text-[#6B5E51] space-y-2">
           {mode === 'signin' && (
             <p>
               Don't have an account?{' '}
@@ -596,6 +607,17 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
               </button>
             </p>
           )}
+
+          <p className="text-[11px] text-[#84796C]">
+            Want to preview first?{' '}
+            <button
+              type="button"
+              onClick={handleEnterGuestDemo}
+              className="font-semibold text-[#544A40] hover:text-[#1C1612] underline cursor-pointer"
+            >
+              Explore Web Studio as Guest →
+            </button>
+          </p>
         </div>
       </div>
     </div>

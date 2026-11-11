@@ -48,8 +48,19 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
   closet,
   onApplySwap,
 }) => {
+  const sessionKey = isOpen ? `${slot?.slot ?? 'none'}:${slot?.closetItemId ?? 'empty'}` : 'closed';
+  const [prevSessionKey, setPrevSessionKey] = useState(sessionKey);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(slot?.closetItemId || null);
+  const [failedImageUrls, setFailedImageUrls] = useState<Record<string, true>>({});
+
+  // Synchronize search and initial selection whenever the modal opens or target slot changes
+  if (sessionKey !== prevSessionKey) {
+    setPrevSessionKey(sessionKey);
+    setSearchQuery('');
+    setSelectedItemId(isOpen ? slot?.closetItemId || null : null);
+    setFailedImageUrls({});
+  }
 
   // Focus trap, restoration & Escape key dismiss
   const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
@@ -80,11 +91,14 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
     );
   });
 
-  const selectedItem = closet.find((item) => item.id === selectedItemId);
-  const isCurrentItem = selectedItemId === slot.closetItemId;
+  const selectedItem = closet.find(
+    (item) => !item.isArchived && item.category === targetCategory && item.id === selectedItemId
+  );
+  const isCurrentItem = Boolean(slot.closetItemId && selectedItemId === slot.closetItemId);
+  const isSelectedDuplicate = Boolean(selectedItemId && wornInOtherSlots.includes(selectedItemId));
 
   const handleApply = () => {
-    if (selectedItem) {
+    if (selectedItem && !isCurrentItem && !isSelectedDuplicate) {
       onApplySwap(slot.slot, selectedItem);
       onClose();
     }
@@ -116,7 +130,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
         {/* ======================================================================= */}
         {/* MODAL HEADER */}
         {/* ======================================================================= */}
-        <div className="p-5 sm:p-6 border-b border-[var(--border-card)] flex items-start justify-between gap-4 bg-[var(--bg-card)]/95 backdrop-blur-md sticky top-0 z-10">
+        <div className="p-4 sm:p-6 border-b border-[var(--border-card)] flex items-start justify-between gap-4 bg-[var(--bg-card)]/95 backdrop-blur-md sticky top-0 z-10 shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2 py-0.5 rounded-full text-[9px] font-mono tracking-wider uppercase bg-[var(--pill-bg)] text-[var(--gold-primary)] font-bold border border-[var(--border-card)]">
@@ -161,7 +175,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
         {/* ======================================================================= */}
         {/* SEARCH & INLINE FILTERS */}
         {/* ======================================================================= */}
-        <div className="p-4 sm:p-5 border-b border-[var(--border-hairline)]">
+        <div className="p-3.5 sm:p-5 border-b border-[var(--border-hairline)] shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -186,7 +200,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
         {/* ======================================================================= */}
         {/* CLOSET ITEMS LIST / SELECTION GRID */}
         {/* ======================================================================= */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-3 flex-1 min-h-[260px] max-h-[50vh]">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1 min-h-[120px]">
           {compatibleItems.length === 0 ? (
             /* Empty State */
             <div className="py-12 px-4 text-center space-y-3 max-w-md mx-auto">
@@ -246,12 +260,18 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
                     <div className="flex items-center gap-3.5 min-w-0">
                       {/* Image / Icon Thumbnail */}
                       <div className="w-14 h-14 rounded-xl bg-neutral-900 border border-[var(--border-card)] overflow-hidden shrink-0 flex items-center justify-center text-2xl relative shadow-xs">
-                        {item.imageUrl ? (
+                        {item.imageUrl && !failedImageUrls[item.imageUrl] ? (
                           <img
                             src={item.imageUrl}
                             alt={item.name}
                             className="w-full h-full object-cover"
                             loading="lazy"
+                            onError={() => {
+                              const failedSrc = item.imageUrl;
+                              if (failedSrc) {
+                                setFailedImageUrls((prev) => ({ ...prev, [failedSrc]: true }));
+                              }
+                            }}
                           />
                         ) : (
                           <span>{item.icon || '👕'}</span>
@@ -314,15 +334,28 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
         {/* ======================================================================= */}
         {/* MODAL FOOTER */}
         {/* ======================================================================= */}
-        <div className="p-4 sm:p-5 border-t border-[var(--border-card)] bg-[var(--bg-card)]/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 sticky bottom-0 z-10">
+        <div className="p-4 sm:p-5 border-t border-[var(--border-card)] bg-[var(--bg-card)]/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 sticky bottom-0 z-10 shrink-0">
           <div className="text-xs text-[var(--text-muted)]">
             {selectedItem ? (
-              <span className="flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                <span className="truncate max-w-xs">
-                  Ready to substitute with <strong className="text-[var(--text-heading)]">{selectedItem.name}</strong>
+              isCurrentItem ? (
+                <span className="flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                  <span className="truncate max-w-xs">
+                    Currently wearing <strong className="text-[var(--text-heading)]">{selectedItem.name}</strong>
+                  </span>
                 </span>
-              </span>
+              ) : isSelectedDuplicate ? (
+                <span className="text-amber-500 font-medium">
+                  Selected piece is already worn in another slot
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                  <span className="truncate max-w-xs">
+                    Ready to substitute with <strong className="text-[var(--text-heading)]">{selectedItem.name}</strong>
+                  </span>
+                </span>
+              )
             ) : (
               <span>Select an item to apply change</span>
             )}
@@ -340,7 +373,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
             <button
               type="button"
               onClick={handleApply}
-              disabled={!selectedItem || isCurrentItem}
+              disabled={!selectedItem || isCurrentItem || isSelectedDuplicate}
               className="py-2 px-5 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-101 hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ArrowLeftRight className="w-3.5 h-3.5 text-[var(--gold-primary)]" />

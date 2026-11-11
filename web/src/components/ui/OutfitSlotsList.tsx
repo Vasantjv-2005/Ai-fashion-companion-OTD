@@ -56,6 +56,7 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
 }) => {
   const { shoppingList, addToShoppingList, removeFromShoppingList, isItemInShoppingList } = useCloset();
   const [feedback, setFeedback] = useState<{ slot: string; message: string; type: 'success' | 'info' } | null>(null);
+  const [failedImageUrls, setFailedImageUrls] = useState<Record<string, true>>({});
 
   // Strict frontend verification function:
   // An item can only receive an 'owned' status if its closetItemId strictly matches an ID in the user's active closet.
@@ -166,6 +167,7 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
             <div
               key={slot.slot}
               role="button"
+              data-slot={slot.slot}
               tabIndex={0}
               aria-label={`Select slot ${slotNum}: ${slot.slotLabel}, ${slot.name}`}
               aria-pressed={isSelected}
@@ -235,12 +237,17 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
               <div className="flex items-start gap-3.5">
                 {/* Garment Image / Icon Thumbnail */}
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-neutral-900 border border-[var(--border-card)] overflow-hidden shrink-0 flex items-center justify-center text-2xl relative shadow-2xs">
-                  {slot.imageUrl ? (
+                  {slot.imageUrl && !failedImageUrls[slot.imageUrl] ? (
                     <img
                       src={slot.imageUrl}
                       alt={slot.name}
                       className="w-full h-full object-cover"
-                      loading="lazy"
+                      onError={() => {
+                        const failedSrc = slot.imageUrl;
+                        if (failedSrc) {
+                          setFailedImageUrls((prev) => ({ ...prev, [failedSrc]: true }));
+                        }
+                      }}
                     />
                   ) : (
                     <span>{slot.icon || '👕'}</span>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Download, Menu, X, Sun, Moon, User, Plus } from 'lucide-react';
+import { Download, Menu, X, Sun, Moon, User, Plus, LogOut } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../hooks/useAuth';
 
 interface NavbarProps {
   onOpenDownload: () => void;
@@ -22,7 +23,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLaunchStudio,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated, isGuest, user, logout } = useAuth();
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-[var(--bg-header)] border-b border-[var(--border-card)] transition-colors duration-300">
@@ -133,21 +146,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onLaunchStudio}
                 className="whitespace-nowrap text-[11px] uppercase tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-3.5 py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1.5 shadow-sm"
-                title="Launch Web Studio & AI Stylist"
+                title={
+                  isAuthenticated && user
+                    ? `Open Web Studio (${user.name})`
+                    : isGuest
+                      ? 'Open Web Studio (Guest Demo Active)'
+                      : 'Open Web Studio & AI Stylist'
+                }
               >
                 <span>✦ Web Studio</span>
               </button>
             )}
 
-            {/* Official Sign In Button (Matching Image 1) */}
-            {(onOpenAuth || onOpenOnboarding) && (
+            {/* Auth Action: Sign In or Signed-In Sign Out */}
+            {isAuthenticated ? (
               <button
-                onClick={onOpenAuth || onOpenOnboarding}
-                className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
+                type="button"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="whitespace-nowrap px-4 py-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] hover:border-rose-400 hover:text-rose-600 text-[var(--text-heading)] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                title={user ? `Signed in as ${user.email}` : 'Sign out'}
+                aria-label="Sign out of OTD"
               >
-                <span>Sign In</span>
-                <span className="text-sm">→</span>
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{isSigningOut ? 'Signing Out...' : 'Sign Out'}</span>
               </button>
+            ) : (
+              (onOpenAuth || onOpenOnboarding) && (
+                <button
+                  onClick={onOpenAuth || onOpenOnboarding}
+                  className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
+                >
+                  <span>Sign In</span>
+                  <span className="text-sm">→</span>
+                </button>
+              )
             )}
 
             <button
@@ -252,18 +285,58 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
           <div className="pt-3 border-t border-[var(--border-card)] space-y-2.5">
-            {(onOpenAuth || onOpenOnboarding) && (
+            {isAuthenticated && user && (
+              <div className="px-3.5 py-2 rounded-xl bg-[var(--pill-bg)] border border-[var(--border-gold)] text-xs flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[var(--text-heading)] truncate">{user.name}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
+                </div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold shrink-0 ml-2">
+                  Signed In
+                </span>
+              </div>
+            )}
+
+            {onLaunchStudio && (
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  if (onOpenAuth) onOpenAuth();
-                  else if (onOpenOnboarding) onOpenOnboarding();
+                  onLaunchStudio();
                 }}
-                className="w-full py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                className="w-full py-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] text-[var(--gold-primary)] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <span>Sign In to OTD</span>
-                <span className="text-sm">→</span>
+                <span>✦ {isAuthenticated ? 'Open Web Studio' : 'Web Studio'}</span>
               </button>
+            )}
+
+            {isAuthenticated ? (
+              <button
+                type="button"
+                disabled={isSigningOut}
+                onClick={async () => {
+                  setMobileMenuOpen(false);
+                  await handleSignOut();
+                }}
+                className="w-full py-3 rounded-full border border-rose-300 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{isSigningOut ? 'Signing Out...' : 'Sign Out'}</span>
+              </button>
+            ) : (
+              (onOpenAuth || onOpenOnboarding) && (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    if (onOpenAuth) onOpenAuth();
+                    else if (onOpenOnboarding) onOpenOnboarding();
+                  }}
+                  className="w-full py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                >
+                  <span>Sign In to OTD</span>
+                  <span className="text-sm">→</span>
+                </button>
+              )
             )}
             <button
               onClick={() => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Moon, Sun, Ruler, Bell, RotateCcw, LogOut, Check, Sliders, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { clearAllOtdWorkspaceStorage } from '../../utils/authStorage';
 import { clearDraftSession } from '../../utils/draftStorage';
 import { useFocusTrap } from '../../utils/focusTrap';
 
@@ -41,12 +42,14 @@ function loadStoredSettings(): UserSettings {
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSignOut?: () => void;
+  onSignOut?: () => Promise<void> | void;
+  signOutLabel?: string;
 }
 
 const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
   onClose,
   onSignOut,
+  signOutLabel = 'Sign Out',
 }) => {
   const { theme, toggleTheme } = useTheme();
   const initialSettings = loadStoredSettings();
@@ -57,6 +60,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Focus trap, restoration & Escape key dismissal with confirmation shield
   const modalRef = useFocusTrap<HTMLDivElement>({
@@ -76,22 +80,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
     setIsResetting(true);
     try {
       // 1. Purge all OTD-owned client-side storage keys explicitly (preserve otd_theme and unrelated storage)
-      const otdKeys = [
-        'otd_closet_items',
-        'otd_user_profile',
-        'otd_shopping_list',
-        'otd_saved_looks',
-        'otd_liked_looks',
-        SETTINGS_STORAGE_KEY,
-        'otd_intake_draft_fallback',
-      ];
-      for (const key of otdKeys) {
-        try {
-          localStorage.removeItem(key);
-        } catch (e) {
-          console.warn(`Failed to remove localStorage key ${key}:`, e);
-        }
-      }
+      clearAllOtdWorkspaceStorage({ includeSettings: true });
 
       // 2. Clear IndexedDB wardrobe drafts via draftStorage
       await clearDraftSession();
@@ -380,11 +369,20 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
           {onSignOut ? (
             <button
               type="button"
-              onClick={onSignOut}
-              className="text-xs font-bold text-[var(--text-muted)] hover:text-rose-600 flex items-center gap-1.5 cursor-pointer transition-colors"
+              disabled={isSigningOut}
+              onClick={async () => {
+                if (isSigningOut) return;
+                setIsSigningOut(true);
+                try {
+                  await onSignOut();
+                } finally {
+                  setIsSigningOut(false);
+                }
+              }}
+              className="text-xs font-bold text-[var(--text-muted)] hover:text-rose-600 flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <span>{isSigningOut ? 'Signing Out...' : signOutLabel}</span>
             </button>
           ) : (
             <div />
@@ -416,7 +414,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   onSignOut,
+  signOutLabel,
 }) => {
   if (!isOpen) return null;
-  return <SettingsModalDialog onClose={onClose} onSignOut={onSignOut} />;
+  return (
+    <SettingsModalDialog
+      onClose={onClose}
+      onSignOut={onSignOut}
+      signOutLabel={signOutLabel}
+    />
+  );
 };

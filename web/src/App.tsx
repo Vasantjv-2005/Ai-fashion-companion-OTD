@@ -1,7 +1,18 @@
 import { useState } from 'react';
-import { Routes, Route, useNavigate, useLocation, Outlet, type Location } from 'react-router-dom';
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+  Outlet,
+  type Location,
+} from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
 import { ClosetProvider } from './context/ClosetContext';
+import { useAuth } from './hooks/useAuth';
+import { StudioRouteGuard } from './components/auth/StudioRouteGuard';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { InteractiveStylist } from './components/InteractiveStylist';
@@ -61,6 +72,11 @@ function StudioLayout() {
         onBackFromUpload={() => navigate('/closet')}
         onOpenAddPiece={() => navigate('/closet/add')}
         onOpenProfile={() => navigate('/profile', { state: { backgroundLocation: location } })}
+        onOpenAuth={() =>
+          navigate('/login', {
+            state: { backgroundLocation: location, redirectTo: location.pathname },
+          })
+        }
         onBackToLanding={() => navigate('/')}
       />
 
@@ -72,6 +88,7 @@ function StudioLayout() {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, canAccessStudio } = useAuth();
 
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
@@ -88,9 +105,29 @@ function AppContent() {
   // Otherwise (direct URL entry, fresh tab, or refresh):
   // - /profile defaults to /home
   // - /login, /register, /onboarding default to /
-  const state = location.state as { backgroundLocation?: Location } | null;
+  const state = location.state as {
+    backgroundLocation?: Location;
+    redirectTo?: string;
+  } | null;
+  const rawRedirect = state?.redirectTo;
+  const safeRedirectTo =
+    rawRedirect &&
+    rawRedirect.startsWith('/') &&
+    rawRedirect !== '/login' &&
+    rawRedirect !== '/register'
+      ? rawRedirect
+      : '/home';
+  const bgPathname = state?.backgroundLocation?.pathname;
+  const sanitizedStateBg =
+    state?.backgroundLocation &&
+    bgPathname !== '/profile' &&
+    bgPathname !== '/login' &&
+    bgPathname !== '/register' &&
+    bgPathname !== '/onboarding'
+      ? state.backgroundLocation
+      : undefined;
   const backgroundLocation =
-    state?.backgroundLocation ||
+    sanitizedStateBg ||
     (isModalRoute
       ? ({
           pathname: isProfile ? '/home' : '/',
@@ -200,12 +237,20 @@ function AppContent() {
     </div>
   );
 
+  if (isProfile && !canAccessStudio) {
+    return <StudioRouteGuard />;
+  }
+
   return (
     <>
       <Routes location={backgroundLocation || location}>
         <Route path="/" element={landingElement} />
         <Route
-          element={<StudioLayout />}
+          element={
+            <StudioRouteGuard>
+              <StudioLayout />
+            </StudioRouteGuard>
+          }
         >
           <Route path="/home" element={null} />
           <Route path="/closet" element={null} />
@@ -222,24 +267,27 @@ function AppContent() {
       </Routes>
 
       {/* Route-driven Modals (mounted seamlessly over background screen) */}
-      {(isLogin || isRegister) && (
-        <AuthModal
-          isOpen={true}
-          initialMode={isRegister ? 'signup' : 'signin'}
-          onClose={() => handleCloseModal('/')}
-          onExploreDemo={() => navigate('/home')}
-          onSuccess={() => {
-            navigate('/home');
-          }}
-          onModeChange={(newMode) => {
-            if (newMode === 'signup' && isLogin) {
-              navigate('/register', { replace: true, state: location.state });
-            } else if (newMode === 'signin' && isRegister) {
-              navigate('/login', { replace: true, state: location.state });
-            }
-          }}
-        />
-      )}
+      {(isLogin || isRegister) &&
+        (isAuthenticated ? (
+          <Navigate to={safeRedirectTo} replace />
+        ) : (
+          <AuthModal
+            isOpen={true}
+            initialMode={isRegister ? 'signup' : 'signin'}
+            onClose={() => handleCloseModal('/')}
+            onExploreDemo={() => navigate(safeRedirectTo, { replace: true })}
+            onSuccess={() => {
+              navigate(safeRedirectTo, { replace: true });
+            }}
+            onModeChange={(newMode) => {
+              if (newMode === 'signup' && isLogin) {
+                navigate('/register', { replace: true, state: location.state });
+              } else if (newMode === 'signin' && isRegister) {
+                navigate('/login', { replace: true, state: location.state });
+              }
+            }}
+          />
+        ))}
 
       {isOnboarding && (
         <OnboardingModal
@@ -251,7 +299,7 @@ function AppContent() {
         />
       )}
 
-      {isProfile && (
+      {isProfile && canAccessStudio && (
         <UserProfileModal
           isOpen={true}
           onClose={() =>
@@ -279,9 +327,11 @@ export function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <ClosetProvider>
-          <AppContent />
-        </ClosetProvider>
+        <AuthProvider>
+          <ClosetProvider>
+            <AppContent />
+          </ClosetProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
