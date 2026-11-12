@@ -24,8 +24,9 @@ import {
 } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
 import { useAuth } from '../hooks/useAuth';
+import { useFocusTrap } from '../utils/focusTrap';
 import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
-import { compressImageFile } from '../utils/imageCompressor';
+import { compressImageFileWithMeta } from '../utils/imageCompressor';
 import {
   saveDraftSession,
   loadDraftSession,
@@ -251,8 +252,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   // Development-only QA flag
   const isDev = import.meta.env.DEV;
 
-  // Global Storage Quota Alert State
+  // Global Storage Quota & Draft Auto-Save Alert State
   const [quotaExceededNotice, setQuotaExceededNotice] = useState<string | null>(null);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'fallback' | 'error'>('idle');
+  const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
 
   // IndexedDB availability status
   const [isIndexedDBRestricted, setIsIndexedDBRestricted] = useState(() => !isIndexedDBAvailable());
@@ -286,6 +289,8 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     setIsSaving(false);
     setSuccessMessage(null);
     setQuotaExceededNotice(null);
+    setDraftSaveStatus('idle');
+    setDraftSaveError(null);
     setShowTestingControls(false);
   }
 
@@ -385,6 +390,45 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     };
   }, [workspaceScope, workspaceScopeId, isScopeAttemptActive]);
 
+  const persistActiveDrafts = useCallback(
+    async (
+      targetDrafts: GarmentDraft[],
+      targetStage: 'select' | 'camera' | 'library' | 'form',
+      targetActiveIndex: number,
+      targetScope: typeof workspaceScope,
+      dispatchedScopeId = workspaceScopeId,
+      dispatchedScopeGen = scopeGenerationRef.current
+    ) => {
+      if (targetDrafts.length === 0 || targetStage === 'select' || targetScope.kind === 'none') {
+        return;
+      }
+
+      setDraftSaveStatus('saving');
+      setDraftSaveError(null);
+
+      try {
+        const result = await saveDraftSession(targetDrafts, targetStage, targetActiveIndex, targetScope);
+        if (!isScopeAttemptActive(dispatchedScopeId, dispatchedScopeGen)) return;
+
+        const usedFallbackStorage = result.storageEngine !== 'indexeddb' || !result.imagesPreserved;
+        setIsIndexedDBRestricted(usedFallbackStorage);
+        setDraftSaveError(null);
+        setDraftSaveStatus(usedFallbackStorage ? 'fallback' : 'saved');
+      } catch (err) {
+        if (!isScopeAttemptActive(dispatchedScopeId, dispatchedScopeGen)) return;
+        const rawMessage = err instanceof Error ? err.message : '';
+        const friendlyMessage =
+          rawMessage === 'STORAGE_QUOTA_EXCEEDED'
+            ? 'Browser storage quota prevented saving your garment draft. Your current edits remain active in memory — retry saving or convert photos to manual entries.'
+            : rawMessage ||
+              'Unable to auto-save local draft. Your current edits remain active in memory.';
+        setDraftSaveStatus('error');
+        setDraftSaveError(friendlyMessage);
+      }
+    },
+    [isScopeAttemptActive, workspaceScopeId]
+  );
+
   // Debounced auto-save of active drafts to scoped IndexedDB / fallback storage
   useEffect(() => {
     if (drafts.length === 0 || stage === 'select' || workspaceScope.kind === 'none') return;
@@ -398,13 +442,26 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     const dispatchedScopeGen = scopeGenerationRef.current;
     const timer = setTimeout(() => {
       if (!isScopeAttemptActive(dispatchedScopeId, dispatchedScopeGen)) return;
-      saveDraftSession(drafts, stage, activeDraftIndex, dispatchedScope).catch((err) => {
-        console.warn('Auto-save to IndexedDB encountered an issue:', err);
-      });
+      void persistActiveDrafts(
+        drafts,
+        stage,
+        activeDraftIndex,
+        dispatchedScope,
+        dispatchedScopeId,
+        dispatchedScopeGen
+      );
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [drafts, stage, activeDraftIndex, workspaceScope, workspaceScopeId, isScopeAttemptActive]);
+  }, [
+    drafts,
+    stage,
+    activeDraftIndex,
+    workspaceScope,
+    workspaceScopeId,
+    isScopeAttemptActive,
+    persistActiveDrafts,
+  ]);
 
   // Revoke any tracked blob: URLs that are no longer referenced by staged files, active drafts, or persisted recovery
   useEffect(() => {
@@ -788,9 +845,15 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       let compressedDataUrl = previewUrl;
       let hasError = false;
       let errorMsg: string | undefined;
+      let processingNote = 'Downsampled and optimized locally';
 
       try {
-        compressedDataUrl = await compressImageFile(file, 800, 0.82);
+        const result = await compressImageFileWithMeta(file, 800, 0.82);
+        compressedDataUrl = result.dataUrl;
+        if (result.usedFallback) {
+          processingNote =
+            result.fallbackReason || 'Used validated original photo (downscaling unavailable)';
+        }
       } catch (err) {
         if (
           !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
@@ -800,7 +863,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         }
         console.warn(`Local compression failed for ${file.name}:`, err);
         hasError = true;
-        errorMsg = 'Local image processing encountered an issue. You can retry or switch to manual entry.';
+        errorMsg =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Local image processing encountered an issue. You can retry or switch to manual entry.';
       }
 
       if (
@@ -855,7 +921,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         fileSize: file.size,
         status: hasError ? 'failed' : 'ready',
         progress: 100,
-        processingStep: hasError ? 'Processing failed' : 'Downsampled and optimized locally',
+        processingStep: hasError ? 'Processing failed' : processingNote,
         errorMessage: errorMsg,
         errorCode: hasError ? 'PROCESSING_FAILED' : undefined,
         rawFile: file,
@@ -913,8 +979,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
     try {
       let compressedUrl = targetDraft.imageUrl;
+      let retryStep = 'Successfully reprocessed locally';
       if (targetDraft.rawFile) {
-        compressedUrl = await compressImageFile(targetDraft.rawFile, 800, 0.82);
+        const result = await compressImageFileWithMeta(targetDraft.rawFile, 800, 0.82);
+        compressedUrl = result.dataUrl;
+        if (result.usedFallback) {
+          retryStep =
+            result.fallbackReason || 'Used validated original photo (downscaling unavailable)';
+        }
       }
 
       if (!isScopeAttemptActive(initiatingScopeId, initiatingScopeGen)) {
@@ -935,7 +1007,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             imageUrl: compressedUrl,
             status: 'ready',
             progress: 100,
-            processingStep: 'Successfully reprocessed locally',
+            processingStep: retryStep,
             errorMessage: undefined,
             errorCode: undefined,
           };
@@ -948,10 +1020,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           return updated;
         });
       });
-    } catch {
+    } catch (err) {
       if (!isScopeAttemptActive(initiatingScopeId, initiatingScopeGen)) {
         return;
       }
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Retry failed. You can proceed with manual entry or select another image.';
       setDrafts((prev) => {
         if (
           activeScopeIdRef.current !== initiatingScopeId ||
@@ -964,7 +1040,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             ? {
                 ...d,
                 status: 'failed',
-                errorMessage: 'Retry failed. You can proceed with manual entry or select another image.',
+                errorMessage: message,
               }
             : d
         );
@@ -1289,7 +1365,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-6 animate-in fade-in duration-200">
+    <div className="p-4 sm:p-6 lg:p-8 pb-24 md:pb-8 max-w-5xl mx-auto w-full space-y-6 animate-in fade-in duration-200">
       {/* Editorial Breadcrumb & Navigation Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
         <div className="flex items-center gap-3">
@@ -1320,7 +1396,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
           <div>
             <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold flex items-center gap-1.5">
-              <span>Wardrobe Acquisition • Task 7</span>
+              <span>Wardrobe Acquisition</span>
               {drafts.length > 0 && stage === 'form' && (
                 <span className="text-[9px] bg-[var(--pill-bg)] px-2 py-0.5 rounded-full border border-[var(--border-gold)]">
                   {draftCounters.ready}/{draftCounters.total} Ready
@@ -1433,6 +1509,39 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Resume Editing</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Draft Save Failure Banner with Non-Destructive Retry */}
+      {draftSaveError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-900 dark:text-rose-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Draft Auto-Save Failed</p>
+              <p className="text-[11px] opacity-90 leading-relaxed">{draftSaveError}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => void persistActiveDrafts(drafts, stage, activeDraftIndex, workspaceScope)}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry Save</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraftSaveError(null)}
+              className="px-3 py-1.5 rounded-xl border border-rose-500/30 text-[11px] font-semibold hover:bg-rose-500/10 transition-colors cursor-pointer"
+            >
+              Dismiss
             </button>
           </div>
         </div>
@@ -2003,8 +2112,22 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   {draftCounters.failed > 0 ? ` • ${draftCounters.failed} failed` : ''})
                 </span>
               </div>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                Local draft auto-saved to IndexedDB
+              <span
+                className={`text-[11px] ${
+                  draftSaveStatus === 'error'
+                    ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                    : draftSaveStatus === 'fallback' || isIndexedDBRestricted
+                    ? 'text-amber-700 dark:text-amber-300 font-medium'
+                    : 'text-[var(--text-muted)]'
+                }`}
+              >
+                {draftSaveStatus === 'saving'
+                  ? 'Saving draft locally...'
+                  : draftSaveStatus === 'error'
+                  ? 'Local draft auto-save failed'
+                  : draftSaveStatus === 'fallback' || isIndexedDBRestricted
+                  ? 'Saved in browser fallback (photos omitted)'
+                  : 'Local draft auto-saved to IndexedDB'}
               </span>
             </div>
 
@@ -2323,17 +2446,18 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               {/* Row 1: Name and Brand */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-name" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Garment Name <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="upload-garment-name"
                     type="text"
                     required
                     maxLength={GARMENT_NAME_MAX_LENGTH}
                     placeholder="e.g., Silk-Cashmere Knit Sweater"
                     value={activeDraft.name}
                     onChange={(e) => updateActiveDraft({ name: e.target.value })}
-                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none font-medium transition-colors ${
+                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] font-medium transition-colors ${
                       !activeDraft.name.trim()
                         ? 'border-amber-500/70 focus:border-amber-500'
                         : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
@@ -2347,16 +2471,17 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-brand" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Brand / Atelier <span className="text-[10px] text-[var(--text-muted)] font-normal">(Optional)</span>
                   </label>
                   <input
+                    id="upload-garment-brand"
                     type="text"
                     maxLength={GARMENT_BRAND_MAX_LENGTH}
                     placeholder="e.g., Loro Piana, Zegna"
                     value={activeDraft.brand}
                     onChange={(e) => updateActiveDraft({ brand: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium"
                   />
                 </div>
               </div>
@@ -2364,10 +2489,11 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               {/* Row 2: Category and Subcategory */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-category" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Category <span className="text-rose-500">*</span>
                   </label>
                   <select
+                    id="upload-garment-category"
                     value={activeDraft.category}
                     onChange={(e) => {
                       const newCat = e.target.value as ClosetItem['category'];
@@ -2377,7 +2503,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                         icon: CATEGORY_DEFAULT_ICONS[newCat],
                       });
                     }}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium cursor-pointer"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium cursor-pointer"
                   >
                     <option value="tops">👔 Tops / Shirts / Knits</option>
                     <option value="bottoms">👖 Bottoms / Trousers / Denim</option>
@@ -2388,13 +2514,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-subtype" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Subcategory Silhouette
                   </label>
                   <select
+                    id="upload-garment-subtype"
                     value={activeDraft.subType}
                     onChange={(e) => updateActiveDraft({ subType: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium cursor-pointer"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium cursor-pointer"
                   >
                     {CATEGORY_SUBTYPES[activeDraft.category].map((sub) => (
                       <option key={sub} value={sub}>
@@ -2408,17 +2535,18 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               {/* Row 3: Primary Color & Secondary Color */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-color" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Primary Color Tone <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="upload-garment-color"
                     type="text"
                     required
                     maxLength={GARMENT_COLOR_MAX_LENGTH}
                     placeholder="e.g., Vicuna Camel, Charcoal"
                     value={activeDraft.color}
                     onChange={(e) => updateActiveDraft({ color: e.target.value })}
-                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none font-medium transition-colors ${
+                    className={`w-full bg-[var(--pill-bg)] border rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] font-medium transition-colors ${
                       !activeDraft.color.trim()
                         ? 'border-amber-500/70 focus:border-amber-500'
                         : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
@@ -2432,16 +2560,17 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-secondary-color" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Secondary Accent Color <span className="text-[10px] text-[var(--text-muted)] font-normal">(Optional)</span>
                   </label>
                   <input
+                    id="upload-garment-secondary-color"
                     type="text"
                     maxLength={GARMENT_COLOR_MAX_LENGTH}
                     placeholder="e.g., Antique Brass, Sand"
                     value={activeDraft.secondaryColor || ''}
                     onChange={(e) => updateActiveDraft({ secondaryColor: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium"
                   />
                 </div>
               </div>
@@ -2449,13 +2578,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               {/* Row 4: Fit Profile & Formality Tier */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-fit" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Fit Profile
                   </label>
                   <select
+                    id="upload-garment-fit"
                     value={activeDraft.fit}
                     onChange={(e) => updateActiveDraft({ fit: e.target.value as ClosetItem['fit'] })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium cursor-pointer"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium cursor-pointer"
                   >
                     <option value="Slim">Slim / Architectural Tailored</option>
                     <option value="Regular">Regular Classic</option>
@@ -2464,13 +2594,14 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-formality" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Formality Tier (1-5)
                   </label>
                   <select
+                    id="upload-garment-formality"
                     value={activeDraft.formality}
                     onChange={(e) => updateActiveDraft({ formality: Number(e.target.value) as ClosetItem['formality'] })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium cursor-pointer"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium cursor-pointer"
                   >
                     <option value={1}>Tier 1: Casual Street / Lounge</option>
                     <option value={2}>Tier 2: Smart Casual</option>
@@ -2483,9 +2614,9 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
               {/* Row 5: Season Suitability */}
               <div>
-                <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                <span className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                   Season Calibration
-                </label>
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {(['all-season', 'spring', 'summer', 'autumn', 'winter'] as const).map((seasonKey) => {
                     const isSelected = activeDraft.season.includes(seasonKey);
@@ -2493,6 +2624,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                       <button
                         key={seasonKey}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() => {
                           if (seasonKey === 'all-season') {
                             updateActiveDraft({ season: ['all-season'] });
@@ -2520,30 +2652,32 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               {/* Row 6: Pattern & Description */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-pattern" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Pattern & Fabric Weave
                   </label>
                   <input
+                    id="upload-garment-pattern"
                     type="text"
                     maxLength={GARMENT_PATTERN_MAX_LENGTH}
                     placeholder="e.g., Solid, Chalkstripe, Houndstooth"
                     value={activeDraft.pattern}
                     onChange={(e) => updateActiveDraft({ pattern: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
+                  <label htmlFor="upload-garment-notes" className="block text-xs font-bold text-[var(--text-heading)] mb-1.5">
                     Styling Notes <span className="text-[10px] text-[var(--text-muted)] font-normal">(Optional)</span>
                   </label>
                   <input
+                    id="upload-garment-notes"
                     type="text"
                     maxLength={GARMENT_NOTES_MAX_LENGTH}
                     placeholder="e.g., Pair with flannel trousers"
                     value={activeDraft.description}
                     onChange={(e) => updateActiveDraft({ description: e.target.value })}
-                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
+                    className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium"
                   />
                 </div>
               </div>
@@ -2591,103 +2725,21 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       {/* MODAL 1: EXPLICIT REPLACEMENT CONFIRMATION                                */}
       {/* ========================================================================= */}
       {pendingReplacementMatch && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
-        >
-          <div className="bg-[var(--bg-card)] border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
-                  Confirm Wardrobe Replacement
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
-                  You are about to replace <strong>"{pendingReplacementMatch.existingItem.name}"</strong> with this new upload.
-                  The existing item will be updated upon saving.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs space-y-1">
-              <p className="font-semibold text-[var(--text-heading)]">
-                Target: {pendingReplacementMatch.existingItem.name}
-              </p>
-              <p className="text-[11px] text-[var(--text-muted)]">
-                {formatGarmentMetaParts([
-                  pendingReplacementMatch.existingItem.brand
-                    ? `Brand: ${pendingReplacementMatch.existingItem.brand}`
-                    : null,
-                  `Category: ${pendingReplacementMatch.existingItem.category}`,
-                ])}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setPendingReplacementMatch(null)}
-                className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReplace}
-                className="px-5 py-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
-              >
-                Confirm & Queue Replacement
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmReplacementDialog
+          existingItem={pendingReplacementMatch.existingItem}
+          onCancel={() => setPendingReplacementMatch(null)}
+          onConfirm={handleConfirmReplace}
+        />
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 2: DISCARD DRAFT CONFIRMATION                                      */}
       {/* ========================================================================= */}
       {showDiscardConfirmModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
-        >
-          <div className="bg-[var(--bg-card)] border border-rose-500/40 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-playfair text-lg font-bold text-[var(--text-heading)]">
-                  Discard Upload Draft?
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
-                  Are you sure you want to discard this draft session? All unsaved garment specifications and staged photos will be permanently deleted from local storage.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDiscardConfirmModal(false)}
-                className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
-              >
-                Keep Editing Draft
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDiscardDraft}
-                className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
-              >
-                Yes, Discard Draft
-              </button>
-            </div>
-          </div>
-        </div>
+        <DiscardDraftConfirmDialog
+          onCancel={() => setShowDiscardConfirmModal(false)}
+          onConfirm={handleConfirmDiscardDraft}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -2701,7 +2753,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             className="text-[11px] font-mono text-[var(--gold-primary)] hover:underline flex items-center gap-1.5 cursor-pointer"
           >
             <HelpCircle className="w-3.5 h-3.5" />
-            <span>{showTestingControls ? 'Hide QA Simulation Controls' : 'Show Task 7 QA Simulation Controls (Dev Only)'}</span>
+            <span>{showTestingControls ? 'Hide QA Simulation Controls' : 'Show QA Simulation Controls (Dev Only)'}</span>
           </button>
 
           {showTestingControls && (
@@ -2776,10 +2828,11 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   type="button"
                   onClick={() => {
                     const currentSim = getSimulateIndexedDBFailure();
-                    setSimulateIndexedDBFailure(!currentSim);
-                    setIsIndexedDBRestricted(!currentSim);
-                    if (!currentSim && drafts.length > 0 && workspaceScope.kind !== 'none') {
-                      void saveDraftSession(drafts, stage, activeDraftIndex, workspaceScope);
+                    const nextSim = !currentSim;
+                    setSimulateIndexedDBFailure(nextSim);
+                    setIsIndexedDBRestricted(nextSim);
+                    if (nextSim && drafts.length > 0 && workspaceScope.kind !== 'none') {
+                      void persistActiveDrafts(drafts, stage, activeDraftIndex, workspaceScope);
                     }
                   }}
                   className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-[10px] font-semibold text-[var(--text-heading)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"
@@ -2807,6 +2860,155 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+interface ConfirmReplacementDialogProps {
+  existingItem: ClosetItem;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+const ConfirmReplacementDialog: React.FC<ConfirmReplacementDialogProps> = ({
+  existingItem,
+  onCancel,
+  onConfirm,
+}) => {
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onClose: onCancel,
+  });
+
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-replacement-title"
+      aria-describedby="confirm-replacement-desc"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="bg-[var(--bg-card)] border-2 border-amber-500/50 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 id="confirm-replacement-title" className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+              Confirm Wardrobe Replacement
+            </h3>
+            <p id="confirm-replacement-desc" className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+              You are about to replace <strong>"{existingItem.name}"</strong> with this new upload.
+              The existing item will be updated upon saving.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs space-y-1">
+          <p className="font-semibold text-[var(--text-heading)]">
+            Target: {existingItem.name}
+          </p>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            {formatGarmentMetaParts([
+              existingItem.brand ? `Brand: ${existingItem.brand}` : null,
+              `Category: ${existingItem.category}`,
+            ])}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-5 py-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
+          >
+            Confirm & Queue Replacement
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface DiscardDraftConfirmDialogProps {
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+const DiscardDraftConfirmDialog: React.FC<DiscardDraftConfirmDialogProps> = ({
+  onCancel,
+  onConfirm,
+}) => {
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onClose: onCancel,
+  });
+
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="discard-draft-title"
+      aria-describedby="discard-draft-desc"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="bg-[var(--bg-card)] border border-rose-500/40 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 id="discard-draft-title" className="font-playfair text-lg font-bold text-[var(--text-heading)]">
+              Discard Upload Draft?
+            </h3>
+            <p id="discard-draft-desc" className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+              Are you sure you want to discard this draft session? All unsaved garment specifications and staged photos will be permanently deleted from local storage.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl border border-[var(--border-card)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
+          >
+            Keep Editing Draft
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
+          >
+            Yes, Discard Draft
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

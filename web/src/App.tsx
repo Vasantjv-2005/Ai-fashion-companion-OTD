@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   Routes,
   Route,
@@ -27,14 +27,60 @@ import { GapIntelligence } from './components/GapIntelligence';
 import { Lookbook } from './components/Lookbook';
 import { AppDownload } from './components/AppDownload';
 import { Footer } from './components/Footer';
-import { ApkModal } from './components/ApkModal';
-import { UserProfileModal } from './components/UserProfileModal';
-import { OnboardingModal } from './components/OnboardingModal';
-import { AuthModal } from './components/AuthModal';
-import { AppStudio, type StudioTab } from './components/AppStudio';
-import { LegalModal } from './components/ui/LegalModal';
+import type { StudioTab } from './components/AppStudio';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotFoundView } from './components/NotFoundView';
+
+const AppStudio = lazy(() =>
+  import('./components/AppStudio').then((module) => ({ default: module.AppStudio }))
+);
+const ApkModal = lazy(() =>
+  import('./components/ApkModal').then((module) => ({ default: module.ApkModal }))
+);
+const UserProfileModal = lazy(() =>
+  import('./components/UserProfileModal').then((module) => ({ default: module.UserProfileModal }))
+);
+const OnboardingModal = lazy(() =>
+  import('./components/OnboardingModal').then((module) => ({ default: module.OnboardingModal }))
+);
+const AuthModal = lazy(() =>
+  import('./components/AuthModal').then((module) => ({ default: module.AuthModal }))
+);
+const LegalModal = lazy(() =>
+  import('./components/ui/LegalModal').then((module) => ({ default: module.LegalModal }))
+);
+
+function StudioSuspenseFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-body)] flex items-center justify-center p-6"
+    >
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="w-9 h-9 rounded-full border-2 border-[var(--border-gold)] border-t-[var(--gold-primary)] animate-spin" />
+        <p className="font-playfair text-base font-bold text-[var(--text-heading)]">
+          Entering Atelier Studio
+        </p>
+        <p className="text-xs text-[var(--text-muted)]">
+          Preparing your workspace...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ModalSuspenseFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs"
+    >
+      <div className="w-9 h-9 rounded-full border-2 border-[var(--border-gold)] border-t-[var(--gold-primary)] animate-spin" />
+    </div>
+  );
+}
 
 function StudioLayout() {
   const navigate = useNavigate();
@@ -69,21 +115,23 @@ function StudioLayout() {
 
   return (
     <>
-      <AppStudio
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        isUploadRoute={isUploadRoute}
-        onNavigateToUpload={() => navigate('/closet/add')}
-        onBackFromUpload={() => navigate('/closet')}
-        onOpenAddPiece={() => navigate('/closet/add')}
-        onOpenProfile={() => navigate('/profile', { state: { backgroundLocation: location } })}
-        onOpenAuth={() =>
-          navigate('/login', {
-            state: { backgroundLocation: location, redirectTo: location.pathname },
-          })
-        }
-        onBackToLanding={() => navigate('/')}
-      />
+      <Suspense fallback={<StudioSuspenseFallback />}>
+        <AppStudio
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isUploadRoute={isUploadRoute}
+          onNavigateToUpload={() => navigate('/closet/add')}
+          onBackFromUpload={() => navigate('/closet')}
+          onOpenAddPiece={() => navigate('/closet/add')}
+          onOpenProfile={() => navigate('/profile', { state: { backgroundLocation: location } })}
+          onOpenAuth={() =>
+            navigate('/login', {
+              state: { backgroundLocation: location, redirectTo: location.pathname },
+            })
+          }
+          onBackToLanding={() => navigate('/')}
+        />
+      </Suspense>
 
       <Outlet />
     </>
@@ -103,10 +151,6 @@ function AppContent() {
     redirectTo: string;
     actionTitle?: string;
   } | null>(null);
-
-  if (isAuthenticated && guestPromptState !== null) {
-    setGuestPromptState(null);
-  }
 
   const requireAuthenticatedAction = (
     action: GuestRestrictedAction,
@@ -265,10 +309,14 @@ function AppContent() {
       />
 
       {/* Direct APK Download Modal */}
-      <ApkModal
-        isOpen={isApkModalOpen}
-        onClose={handleCloseDownload}
-      />
+      {isApkModalOpen && (
+        <Suspense fallback={<ModalSuspenseFallback />}>
+          <ApkModal
+            isOpen={isApkModalOpen}
+            onClose={handleCloseDownload}
+          />
+        </Suspense>
+      )}
     </div>
   );
 
@@ -306,56 +354,66 @@ function AppContent() {
         (isAuthenticated ? (
           <Navigate to={safeRedirectTo} replace />
         ) : (
-          <AuthModal
-            isOpen={true}
-            initialMode={isRegister ? 'signup' : 'signin'}
-            onClose={() => handleCloseModal('/')}
-            onExploreDemo={() => navigate(safeRedirectTo, { replace: true })}
-            onSuccess={() => {
-              navigate(safeRedirectTo, { replace: true });
-            }}
-            onModeChange={(newMode) => {
-              if (newMode === 'signup' && isLogin) {
-                navigate('/register', { replace: true, state: location.state });
-              } else if (newMode === 'signin' && isRegister) {
-                navigate('/login', { replace: true, state: location.state });
-              }
-            }}
-          />
+          <Suspense fallback={<ModalSuspenseFallback />}>
+            <AuthModal
+              isOpen={true}
+              initialMode={isRegister ? 'signup' : 'signin'}
+              onClose={() => handleCloseModal('/')}
+              onExploreDemo={() => navigate(safeRedirectTo, { replace: true })}
+              onSuccess={() => {
+                navigate(safeRedirectTo, { replace: true });
+              }}
+              onModeChange={(newMode) => {
+                if (newMode === 'signup' && isLogin) {
+                  navigate('/register', { replace: true, state: location.state });
+                } else if (newMode === 'signin' && isRegister) {
+                  navigate('/login', { replace: true, state: location.state });
+                }
+              }}
+            />
+          </Suspense>
         ))}
 
       {isOnboarding && (
-        <OnboardingModal
-          key={`onboarding:${workspaceScopeId}`}
-          isOpen={true}
-          onClose={() => handleCloseModal('/')}
-          onComplete={(destination?: string) => {
-            navigate(destination === 'home' ? '/home' : '/closet', { replace: true });
-          }}
-        />
+        <Suspense fallback={<ModalSuspenseFallback />}>
+          <OnboardingModal
+            key={`onboarding:${workspaceScopeId}`}
+            isOpen={true}
+            onClose={() => handleCloseModal('/')}
+            onComplete={(destination?: string) => {
+              navigate(destination === 'home' ? '/home' : '/closet', { replace: true });
+            }}
+          />
+        </Suspense>
       )}
 
       {isProfile && canAccessStudio && (
-        <UserProfileModal
-          key={`profile:${workspaceScopeId}`}
-          isOpen={true}
-          onClose={() =>
-            handleCloseModal(
-              state?.backgroundLocation?.pathname &&
-                state.backgroundLocation.pathname !== '/profile'
-                ? state.backgroundLocation.pathname
-                : '/home'
-            )
-          }
-        />
+        <Suspense fallback={<ModalSuspenseFallback />}>
+          <UserProfileModal
+            key={`profile:${workspaceScopeId}`}
+            isOpen={true}
+            onClose={() =>
+              handleCloseModal(
+                state?.backgroundLocation?.pathname &&
+                  state.backgroundLocation.pathname !== '/profile'
+                  ? state.backgroundLocation.pathname
+                  : '/home'
+              )
+            }
+          />
+        </Suspense>
       )}
 
       {/* Legal Information Modal */}
-      <LegalModal
-        isOpen={legalModalType !== null}
-        type={legalModalType}
-        onClose={() => setLegalModalType(null)}
-      />
+      {legalModalType !== null && (
+        <Suspense fallback={<ModalSuspenseFallback />}>
+          <LegalModal
+            isOpen={true}
+            type={legalModalType}
+            onClose={() => setLegalModalType(null)}
+          />
+        </Suspense>
+      )}
 
       {/* Registration Prompt Modal for Guest Personal-Data Actions */}
       <GuestRegistrationPromptModal

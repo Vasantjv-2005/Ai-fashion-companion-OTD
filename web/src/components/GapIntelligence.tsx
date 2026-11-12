@@ -20,10 +20,6 @@ export const GapIntelligence: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const { addToShoppingList, isItemInShoppingList } = useCloset();
   const [guestPromptTitle, setGuestPromptTitle] = useState<string | null>(null);
-
-  if (isAuthenticated && guestPromptTitle !== null) {
-    setGuestPromptTitle(null);
-  }
   const [gaps, setGaps] = useState<GapItem[]>([
     {
       id: 'gap-1',
@@ -97,8 +93,8 @@ export const GapIntelligence: React.FC = () => {
           {/* Header Stats Bar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-8 border-b border-[var(--border-card)] items-center">
             <div>
-              <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] block font-medium">Current Verified Wardrobe</span>
-              <span className="font-serif-luxury text-3xl text-[var(--text-heading)] font-medium">32 Base Pieces</span>
+              <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] block font-medium">Sample Wardrobe (Demo)</span>
+              <span className="font-serif-luxury text-3xl text-[var(--text-heading)] font-medium">32 Sample Pieces</span>
             </div>
             <div>
               <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] block font-medium">Simulated Combinations</span>
@@ -110,9 +106,9 @@ export const GapIntelligence: React.FC = () => {
               </div>
             </div>
             <div className="text-left md:text-right">
-              <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] block font-medium">Efficiency Index</span>
+              <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] block font-medium">Simulated Efficiency Index</span>
               <span className="text-sm font-semibold text-[#10B981] flex items-center md:justify-end gap-1">
-                <TrendingUp className="w-4 h-4" /> 94.6% Utility Optimization
+                <TrendingUp className="w-4 h-4" /> 94.6% Projected Utility (Demo)
               </span>
             </div>
           </div>
@@ -126,106 +122,103 @@ export const GapIntelligence: React.FC = () => {
             {gaps.map((gap) => (
               <div
                 key={gap.id}
-                role="button"
-                tabIndex={0}
-                aria-pressed={gap.active}
-                aria-label={`Simulate impact of adding ${gap.title}. Category: ${gap.category}. Status: ${gap.active ? 'active' : 'inactive'}`}
-                onClick={() => toggleGap(gap.id)}
-                onKeyDown={(e) => {
-                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                    e.preventDefault();
-                    toggleGap(gap.id);
-                  }
-                }}
-                className={`p-5 sm:p-6 rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                className={`p-5 sm:p-6 rounded-2xl border transition-all duration-300 space-y-3 ${
                   gap.active
                     ? 'border-[var(--gold-primary)] bg-[var(--bg-card-elevated)] shadow-lg ring-1 ring-[var(--gold-primary)]/20'
-                    : 'border-[var(--border-card)] bg-[var(--bg-card)] opacity-70 hover:opacity-100'
+                    : 'border-[var(--border-card)] bg-[var(--bg-card)] opacity-75 hover:opacity-100'
                 }`}
               >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] flex items-center justify-center text-2xl shrink-0 shadow-sm">
-                    {gap.icon}
+                <button
+                  type="button"
+                  aria-pressed={gap.active}
+                  aria-label={`Simulate impact of adding ${gap.title}. Category: ${gap.category}. Status: ${gap.active ? 'active' : 'inactive'}`}
+                  onClick={() => toggleGap(gap.id)}
+                  className="w-full text-left flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] flex items-center justify-center text-2xl shrink-0 shadow-sm">
+                      {gap.icon}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold">
+                          {gap.category}
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)]">·</span>
+                        <span className="text-[10px] font-mono text-[#10B981] font-semibold">{gap.multiplier}</span>
+                      </div>
+                      <h4 className="text-sm sm:text-base font-semibold text-[var(--text-heading)] mb-1">
+                        {gap.title}
+                      </h4>
+                      <p className="text-xs text-[var(--text-body)] max-w-xl leading-relaxed">
+                        {gap.rationale}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gold-primary)] font-semibold">
-                        {gap.category}
+
+                  <div className="flex items-center justify-between md:flex-col md:items-end shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[var(--border-card)]">
+                    <span className="font-serif-luxury text-xl font-bold text-[var(--gold-primary)]">
+                      {gap.synergyGain}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                        gap.active ? 'bg-[var(--gold-primary)] text-white dark:text-black font-bold' : 'border border-[var(--border-card)] text-[var(--text-muted)]'
+                      }`}>
+                        {gap.active ? <Check className="w-3 h-3 stroke-[3]" /> : <Plus className="w-3 h-3" />}
                       </span>
-                      <span className="text-xs text-[var(--text-muted)]">·</span>
-                      <span className="text-[10px] font-mono text-[#10B981] font-semibold">{gap.multiplier}</span>
-                    </div>
-                    <h4 className="text-sm sm:text-base font-semibold text-[var(--text-heading)] mb-1">
-                      {gap.title}
-                    </h4>
-                    <p className="text-xs text-[var(--text-body)] max-w-xl leading-relaxed">
-                      {gap.rationale}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--text-muted)]">
-                      <span>Curated by:</span>
-                      {gap.recommendedBrands.map((b, bIdx) => (
-                        <span key={bIdx} className="bg-[var(--bg-card-inner)] px-2 py-0.5 rounded text-[var(--text-heading)] border border-[var(--border-card)] font-medium">
-                          {b}
-                        </span>
-                      ))}
-
-                      {/* Shopping list synergy action */}
-                      {isItemInShoppingList(gap.title) ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] bg-[var(--gold-primary)]/15 px-2 py-0.5 rounded-full border border-[var(--gold-primary)]/40 ml-auto">
-                          <Check className="w-3 h-3 text-[var(--gold-primary)] stroke-[3]" />
-                          <span>In Shopping List</span>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!isAuthenticated) {
-                              setGuestPromptTitle(`Save "${gap.title}" to Wishlist`);
-                              return;
-                            }
-                            addToShoppingList({
-                              name: gap.title,
-                              category: gap.category.toLowerCase().includes('outerwear')
-                                ? 'outerwear'
-                                : gap.category.toLowerCase().includes('footwear')
-                                ? 'footwear'
-                                : 'tops',
-                              subType: gap.category,
-                              stylingNote: gap.rationale,
-                              icon: gap.icon,
-                              brand: gap.recommendedBrands[0],
-                              outfitContext: {
-                                occasion: 'Capsule Wardrobe Expansion',
-                                outfitTitle: 'OTD Strategic Wardrobe Gap',
-                              },
-                            });
-                          }}
-                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] hover:text-black hover:bg-[var(--gold-primary)] dark:hover:text-black border border-[var(--border-gold)] px-2 py-0.5 rounded-full transition-all cursor-pointer shadow-2xs ml-auto"
-                          title="Add this gap recommendation to your shopping ledger"
-                        >
-                          <ShoppingBag className="w-2.5 h-2.5" />
-                          <span>Add to Shopping List</span>
-                        </button>
-                      )}
+                      <span className="text-[11px] text-[var(--text-muted)] font-medium">
+                        {gap.active ? 'Active in Simulation' : 'Click to Include'}
+                      </span>
                     </div>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex items-center justify-between md:flex-col md:items-end shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[var(--border-card)]">
-                  <span className="font-serif-luxury text-xl font-bold text-[var(--gold-primary)]">
-                    {gap.synergyGain}
-                  </span>
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                      gap.active ? 'bg-[var(--gold-primary)] text-white dark:text-black font-bold' : 'border border-[var(--border-card)] text-[var(--text-muted)]'
-                    }`}>
-                      {gap.active ? <Check className="w-3 h-3 stroke-[3]" /> : <Plus className="w-3 h-3" />}
+                <div className="pt-2 border-t border-[var(--border-card)]/60 flex flex-wrap items-center gap-2 text-[10px] text-[var(--text-muted)]">
+                  <span>Curated by:</span>
+                  {gap.recommendedBrands.map((b, bIdx) => (
+                    <span key={bIdx} className="bg-[var(--bg-card-inner)] px-2 py-0.5 rounded text-[var(--text-heading)] border border-[var(--border-card)] font-medium">
+                      {b}
                     </span>
-                    <span className="text-[11px] text-[var(--text-muted)] font-medium">
-                      {gap.active ? 'Active in Simulation' : 'Click to Include'}
+                  ))}
+
+                  {/* Shopping list synergy action */}
+                  {isItemInShoppingList(gap.title) ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] bg-[var(--gold-primary)]/15 px-2 py-0.5 rounded-full border border-[var(--gold-primary)]/40 ml-auto">
+                      <Check className="w-3 h-3 text-[var(--gold-primary)] stroke-[3]" />
+                      <span>In Shopping List</span>
                     </span>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          setGuestPromptTitle(`Save "${gap.title}" to Wishlist`);
+                          return;
+                        }
+                        addToShoppingList({
+                          name: gap.title,
+                          category: gap.category.toLowerCase().includes('outerwear')
+                            ? 'outerwear'
+                            : gap.category.toLowerCase().includes('footwear')
+                            ? 'footwear'
+                            : 'tops',
+                          subType: gap.category,
+                          stylingNote: gap.rationale,
+                          icon: gap.icon,
+                          brand: gap.recommendedBrands[0],
+                          outfitContext: {
+                            occasion: 'Capsule Wardrobe Expansion',
+                            outfitTitle: 'OTD Strategic Wardrobe Gap',
+                          },
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--gold-primary)] hover:text-black hover:bg-[var(--gold-primary)] dark:hover:text-black border border-[var(--border-gold)] px-2.5 py-0.5 rounded-full transition-all cursor-pointer shadow-2xs ml-auto"
+                      title="Add this gap recommendation to your shopping ledger"
+                    >
+                      <ShoppingBag className="w-2.5 h-2.5" />
+                      <span>Add to Shopping List</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -234,7 +227,7 @@ export const GapIntelligence: React.FC = () => {
           {/* Action Footer */}
           <div className="pt-6 border-t border-[var(--border-card)] flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-[var(--text-muted)]">
-              * Calculations powered by OTD Graph Neural Network over 400,000 sartorial rules.
+              * Interactive demo projection on a sample 32-piece wardrobe — live Closet AI graph scoring connects in Cloud Phase 2.
             </div>
             <a
               href="#download"

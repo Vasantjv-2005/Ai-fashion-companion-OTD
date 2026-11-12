@@ -282,7 +282,7 @@ const DEFAULT_PROFILE: UserProfile = {
   weight: '70 kg',
   bodyShape: 'Athletic / V-Taper',
   stylePersonas: ['Old Money Heritage', 'Clean Minimalist'],
-  preferredFit: 'Tailored / Regular',
+  preferredFit: 'Regular Classic',
   palettePreferences: ['Espresso & Earth', 'Ivory & Cream', 'Charcoal & Navy'],
   avatarOption: 'archetype',
   avatarArchetype: 'classic_tailored',
@@ -578,19 +578,19 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }
 
   const activeScopeIdRef = useRef<string>(targetScopeId);
+  const scopeGenerationRef = useRef<number>(0);
   const generateTimerRef = useRef<number | null>(null);
   const modifyTimerRef = useRef<number | null>(null);
   const ownerUserId = workspaceScope.kind === 'authenticated' ? workspaceScope.userId : null;
 
   useLayoutEffect(() => {
-    setActivePrivateCacheOwnerId(ownerUserId);
+    // Only refresh active owner when ClosetProvider is mounted for an authenticated scope.
+    // Do NOT clear owner to null on unmount so AuthContext logout/guest teardown retains
+    // the outgoing owner ID even if ClosetProvider unmounts before teardown completes.
+    if (ownerUserId) {
+      setActivePrivateCacheOwnerId(ownerUserId);
+    }
   }, [ownerUserId]);
-
-  useEffect(() => {
-    return () => {
-      setActivePrivateCacheOwnerId(null);
-    };
-  }, []);
 
   const clearPendingOutfitTimers = () => {
     if (generateTimerRef.current !== null) {
@@ -605,7 +605,9 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     activeScopeIdRef.current = targetScopeId;
+    scopeGenerationRef.current += 1;
     return () => {
+      scopeGenerationRef.current += 1;
       clearPendingOutfitTimers();
     };
   }, [targetScopeId]);
@@ -613,6 +615,7 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     return subscribeAuthSessionEvents({
       onSessionInvalidated: () => {
+        scopeGenerationRef.current += 1;
         clearPendingOutfitTimers();
       },
     });
@@ -737,6 +740,7 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const generateOutfit = (context: { venue: string; occasion: string; vibe: string; weather: string }) => {
     const dispatchedScopeId = targetScopeId;
+    const dispatchedGeneration = scopeGenerationRef.current;
     if (generateTimerRef.current !== null) {
       window.clearTimeout(generateTimerRef.current);
       generateTimerRef.current = null;
@@ -748,7 +752,10 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     generateTimerRef.current = window.setTimeout(() => {
       generateTimerRef.current = null;
-      if (activeScopeIdRef.current !== dispatchedScopeId) {
+      if (
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedGeneration
+      ) {
         return;
       }
 
@@ -760,51 +767,96 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Intelligent matching strictly from the user's active (non-archived) closet
         const activeCloset = prev.closet.filter((i) => !i.isArchived);
         if (activeCloset.length === 0) {
-          return { ...prev, isGenerating: false };
+          return { ...prev, currentOutfit: null, isGenerating: false };
         }
 
         let selectedTop =
           activeCloset.find((i) => i.category === 'tops' && i.formality >= 3) ||
           activeCloset.find((i) => i.category === 'tops') ||
-          activeCloset[0];
+          null;
         let selectedBottom =
           activeCloset.find((i) => i.category === 'bottoms' && i.formality >= 3) ||
           activeCloset.find((i) => i.category === 'bottoms') ||
-          activeCloset[0];
+          null;
         let selectedOuterwear =
           activeCloset.find(
             (i) =>
               i.category === 'outerwear' &&
               (context.weather.includes('Breezy') || context.weather.includes('Cool'))
-          ) || activeCloset.find((i) => i.category === 'outerwear');
+          ) ||
+          activeCloset.find((i) => i.category === 'outerwear') ||
+          null;
         let selectedShoe =
           activeCloset.find((i) => i.category === 'footwear' && i.formality >= 3) ||
           activeCloset.find((i) => i.category === 'footwear') ||
-          activeCloset[0];
-        const selectedAcc = activeCloset.find((i) => i.category === 'accessories') || activeCloset[0];
+          null;
+        const selectedAcc = activeCloset.find((i) => i.category === 'accessories') || null;
 
-        // Context adjustments based on destination/vibe
+        // Context adjustments using strictly semantic wardrobe attributes (never demo IDs)
         if (
           context.vibe.toLowerCase().includes('relaxed') ||
           context.occasion.toLowerCase().includes('casual')
         ) {
-          selectedTop = activeCloset.find((i) => i.id === 't3' || i.id === 't4') || selectedTop;
-          selectedBottom = activeCloset.find((i) => i.id === 'b2' || i.id === 'b3') || selectedBottom;
-          selectedShoe = activeCloset.find((i) => i.id === 'f3' || i.id === 'f2') || selectedShoe;
+          selectedTop =
+            activeCloset.find((i) => i.category === 'tops' && i.formality <= 2) ||
+            selectedTop;
+          selectedBottom =
+            activeCloset.find((i) => i.category === 'bottoms' && i.formality <= 3) ||
+            selectedBottom;
+          selectedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                (i.subType.toLowerCase().includes('sneaker') || i.formality <= 3)
+            ) || selectedShoe;
         } else if (
           context.occasion.toLowerCase().includes('date') ||
           context.venue.toLowerCase().includes('rooftop')
         ) {
-          selectedTop = activeCloset.find((i) => i.id === 't1') || selectedTop; // Silk-Cashmere High Neck
-          selectedBottom = activeCloset.find((i) => i.id === 'b1') || selectedBottom; // Forward Pleat Flannel
-          selectedOuterwear = activeCloset.find((i) => i.id === 'o1') || selectedOuterwear; // Navy Blazer
-          selectedShoe = activeCloset.find((i) => i.id === 'f2') || selectedShoe; // Suede Tassel Loafer
+          selectedTop =
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                (i.subType.toLowerCase().includes('knit') ||
+                  i.name.toLowerCase().includes('cashmere') ||
+                  i.formality >= 3)
+            ) || selectedTop;
+          selectedBottom =
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                !i.subType.toLowerCase().includes('jean') &&
+                i.formality >= 3
+            ) || selectedBottom;
+          selectedOuterwear =
+            activeCloset.find(
+              (i) =>
+                i.category === 'outerwear' &&
+                (i.subType.toLowerCase().includes('blazer') || i.formality >= 3)
+            ) || selectedOuterwear;
+          selectedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                (i.subType.toLowerCase().includes('loafer') || i.formality >= 3)
+            ) || selectedShoe;
         }
 
-        const pieces: ClosetItem[] = [selectedTop, selectedBottom];
+        const pieces: ClosetItem[] = [];
+        if (selectedTop) pieces.push(selectedTop);
+        if (selectedBottom) pieces.push(selectedBottom);
         if (selectedOuterwear) pieces.push(selectedOuterwear);
-        pieces.push(selectedShoe);
-        if (selectedAcc && selectedAcc.category === 'accessories') pieces.push(selectedAcc);
+        if (selectedShoe) pieces.push(selectedShoe);
+        if (selectedAcc) pieces.push(selectedAcc);
+
+        if (pieces.length === 0) {
+          return { ...prev, currentOutfit: null, isGenerating: false };
+        }
+
+        const primaryAnchor = selectedTop || pieces[0];
+        const secondaryAnchor = selectedBottom || pieces[1] || pieces[0];
+        const coverageScore = Math.round((Math.min(4, pieces.length) / 4) * 60);
+        const computedHarmonyScore = Math.min(99, coverageScore + 38);
 
         return {
           ...prev,
@@ -817,11 +869,11 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             weather: context.weather,
             pieces,
             rationale: {
-              venueAlignment: `Selected to match the ambience of ${context.venue}. The ${selectedTop.name} sets an alluring, refined tone without looking excessively corporate.`,
+              venueAlignment: `Selected to match the ambience of ${context.venue}. The ${primaryAnchor.name} sets a refined tone anchored to your owned wardrobe.`,
               weatherComfort: `Calibrated for ${context.weather}. Breathable natural fabrics prevent overheating while retaining structure in the breeze.`,
-              paletteHarmony: `The pairing of ${selectedTop.color} against ${selectedBottom.color} creates high-contrast visual balance calibrated to your ${prev.profile.palettePreferences[0] || 'subtle tonal'} preference.`,
+              paletteHarmony: `The pairing of ${primaryAnchor.color} against ${secondaryAnchor.color} creates balanced visual contrast calibrated to your ${prev.profile.palettePreferences[0] || 'subtle tonal'} preference.`,
             },
-            harmonyScore: 98.6,
+            harmonyScore: computedHarmonyScore,
           },
           isGenerating: false,
         };
@@ -832,6 +884,7 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const modifyOutfit = (instruction: string) => {
     if (!activeWorkspace.currentOutfit) return;
     const dispatchedScopeId = targetScopeId;
+    const dispatchedGeneration = scopeGenerationRef.current;
     if (modifyTimerRef.current !== null) {
       window.clearTimeout(modifyTimerRef.current);
       modifyTimerRef.current = null;
@@ -849,7 +902,10 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     modifyTimerRef.current = window.setTimeout(() => {
       modifyTimerRef.current = null;
-      if (activeScopeIdRef.current !== dispatchedScopeId) {
+      if (
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedGeneration
+      ) {
         return;
       }
 
@@ -862,63 +918,188 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let updatedPieces = [...prev.currentOutfit.pieces];
         const newRationale = { ...prev.currentOutfit.rationale };
         const lower = instruction.toLowerCase();
+        let didModify = false;
 
         if (lower.includes('casual') || lower.includes('relax')) {
-          // Swap shoes for sneakers
-          const sneakers =
-            activeCloset.find((i) => i.subType === 'Clean Sneaker') ||
-            activeCloset.find((i) => i.category === 'footwear');
-          if (sneakers) {
-            updatedPieces = updatedPieces.map((p) => (p.category === 'footwear' ? sneakers : p));
-          }
-          // Swap formal pants for relaxed chinos/denim
-          const chinos =
-            activeCloset.find((i) => i.id === 'b2') ||
-            activeCloset.find((i) => i.category === 'bottoms');
-          if (chinos) {
-            updatedPieces = updatedPieces.map((p) => (p.category === 'bottoms' ? chinos : p));
-          }
-          newRationale.venueAlignment = `Modified for a more relaxed, approachable casual energy while retaining clean lines.`;
-        } else if (lower.includes('shoes') || lower.includes('shoe') || lower.includes('boot')) {
-          // Swap footwear to boots or alternative loafers
           const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+          const casualShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                (i.subType.toLowerCase().includes('sneaker') || i.formality <= 2)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                i.formality < (currentShoe?.formality ?? 5)
+            );
+          if (casualShoe) {
+            updatedPieces = updatedPieces.map((p) => (p.category === 'footwear' ? casualShoe : p));
+            didModify = true;
+          }
+
+          const currentBottom = updatedPieces.find((p) => p.category === 'bottoms');
+          const casualBottom =
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                i.id !== currentBottom?.id &&
+                (i.subType.toLowerCase().includes('chino') ||
+                  i.subType.toLowerCase().includes('jean') ||
+                  i.formality <= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                i.id !== currentBottom?.id &&
+                i.formality < (currentBottom?.formality ?? 5)
+            );
+          if (casualBottom) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'bottoms' ? casualBottom : p
+            );
+            didModify = true;
+          }
+
+          newRationale.venueAlignment = didModify
+            ? `Modified for a more relaxed, approachable casual energy while preserving your other outfit pieces.`
+            : `No more casual footwear or bottoms were found in your active closet; existing pieces were kept.`;
+        } else if (lower.includes('shoes') || lower.includes('shoe') || lower.includes('boot')) {
+          const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+          const wantsBoot = lower.includes('boot');
           const nextShoe =
-            activeCloset.find((i) => i.category === 'footwear' && i.id !== currentShoe?.id) ||
-            currentShoe;
+            (wantsBoot
+              ? activeCloset.find(
+                  (i) =>
+                    i.category === 'footwear' &&
+                    i.id !== currentShoe?.id &&
+                    (i.name.toLowerCase().includes('boot') ||
+                      i.subType.toLowerCase().includes('boot'))
+                )
+              : undefined) ||
+            activeCloset.find((i) => i.category === 'footwear' && i.id !== currentShoe?.id);
+
           if (nextShoe) {
             updatedPieces = updatedPieces.map((p) => (p.category === 'footwear' ? nextShoe : p));
+            didModify = true;
             newRationale.venueAlignment = `Footwear adjusted to ${nextShoe.name} to alter the ground posture and silhouette weight.`;
+          } else {
+            newRationale.venueAlignment = `No alternative footwear item was found in your active closet; existing pieces were preserved.`;
           }
         } else if (
           lower.includes('no jeans') ||
           lower.includes('dont use jeans') ||
           lower.includes("don't use jeans")
         ) {
-          const trousers = activeCloset.find((i) => i.id === 'b1' || i.id === 'b2')!;
-          if (trousers) {
-            updatedPieces = updatedPieces.map((p) => (p.category === 'bottoms' ? trousers : p));
-            newRationale.venueAlignment = `Substituted denim with tailored ${trousers.name} for greater sartorial formality.`;
+          const isDenim = (i: ClosetItem) =>
+            i.name.toLowerCase().includes('jean') ||
+            i.subType.toLowerCase().includes('jean') ||
+            i.subType.toLowerCase().includes('denim');
+          const nonDenimBottoms = activeCloset.filter(
+            (i) => i.category === 'bottoms' && !isDenim(i)
+          );
+          const currentBottom = updatedPieces.find((p) => p.category === 'bottoms');
+          const tailoredTrouser =
+            nonDenimBottoms.find((i) => i.formality >= 3 && i.id !== currentBottom?.id) ||
+            nonDenimBottoms.find((i) => i.id !== currentBottom?.id) ||
+            (currentBottom && isDenim(currentBottom) ? nonDenimBottoms[0] : undefined);
+
+          if (tailoredTrouser) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'bottoms' ? tailoredTrouser : p
+            );
+            didModify = true;
+            newRationale.venueAlignment = `Substituted denim with tailored ${tailoredTrouser.name} for greater sartorial formality.`;
+          } else {
+            newRationale.venueAlignment = `No non-denim tailored bottoms were found in your active closet; existing pieces were preserved.`;
           }
         } else if (
           lower.includes('attractive') ||
           lower.includes('date') ||
           lower.includes('sharp')
         ) {
-          const luxuryKnit = activeCloset.find((i) => i.id === 't1')!;
-          const chelseaBoots =
-            activeCloset.find((i) => i.id === 'f4') || activeCloset.find((i) => i.id === 'f2')!;
-          if (luxuryKnit) {
-            updatedPieces = updatedPieces.map((p) => (p.category === 'tops' ? luxuryKnit : p));
-          }
-          if (chelseaBoots) {
-            updatedPieces = updatedPieces.map((p) =>
-              p.category === 'footwear' ? chelseaBoots : p
+          const currentTop = updatedPieces.find((p) => p.category === 'tops');
+          const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+
+          const elevatedTop =
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                i.id !== currentTop?.id &&
+                (i.subType.toLowerCase().includes('knit') ||
+                  i.name.toLowerCase().includes('cashmere') ||
+                  i.formality >= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                i.id !== currentTop?.id &&
+                i.formality > (currentTop?.formality ?? 0)
             );
+          const elevatedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                (i.subType.toLowerCase().includes('boot') ||
+                  i.subType.toLowerCase().includes('loafer') ||
+                  i.formality >= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                i.formality > (currentShoe?.formality ?? 0)
+            );
+
+          if (elevatedTop) {
+            updatedPieces = updatedPieces.map((p) => (p.category === 'tops' ? elevatedTop : p));
+            didModify = true;
           }
-          newRationale.venueAlignment = `Elevated allure: Swapped in ${luxuryKnit?.name || 'knitwear'} and ${chelseaBoots?.name || 'boots'} for high-definition night appeal.`;
+          if (elevatedShoe) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'footwear' ? elevatedShoe : p
+            );
+            didModify = true;
+          }
+
+          newRationale.venueAlignment = didModify
+            ? `Elevated allure: Swapped in ${elevatedTop?.name || currentTop?.name || 'refined top'} and ${elevatedShoe?.name || currentShoe?.name || 'tailored footwear'} from your active wardrobe.`
+            : `No sharper evening alternatives matched in your active closet; existing pieces were preserved.`;
+        } else if (lower.includes('lighter') || lower.includes('layer')) {
+          const currentOuterwear = updatedPieces.find((p) => p.category === 'outerwear');
+          const lighterOuterwear =
+            activeCloset.find(
+              (i) =>
+                i.category === 'outerwear' &&
+                i.id !== currentOuterwear?.id &&
+                (i.formality ?? 3) <= 3
+            ) ||
+            activeCloset.find(
+              (i) => i.category === 'outerwear' && i.id !== currentOuterwear?.id
+            );
+          if (
+            lighterOuterwear &&
+            (!currentOuterwear ||
+              (lighterOuterwear.formality ?? 3) <= (currentOuterwear.formality ?? 3))
+          ) {
+            updatedPieces = currentOuterwear
+              ? updatedPieces.map((p) => (p.category === 'outerwear' ? lighterOuterwear : p))
+              : [...updatedPieces.slice(0, 1), lighterOuterwear, ...updatedPieces.slice(1)];
+            didModify = true;
+            newRationale.venueAlignment = `Layered with ${lighterOuterwear.name} for breathable, lightweight versatility.`;
+          } else if (currentOuterwear) {
+            updatedPieces = updatedPieces.filter((p) => p.category !== 'outerwear');
+            didModify = true;
+            newRationale.venueAlignment = `Removed ${currentOuterwear.name} for a cleaner, lighter unlayered silhouette.`;
+          } else {
+            newRationale.venueAlignment = `Maintained a breathable, unlayered base silhouette; no alternate outerwear was changed.`;
+          }
         } else {
-          // Generic smart tweak
-          newRationale.venueAlignment = `Customized based on instruction: "${instruction}". Balanced with existing wardrobe synergy.`;
+          // Generic smart tweak (preserves existing slots cleanly)
+          newRationale.venueAlignment = `Noted instruction "${instruction}". Unaffected wardrobe slots remain preserved.`;
         }
 
         return {
@@ -927,7 +1108,9 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ...prev.currentOutfit,
             pieces: updatedPieces,
             rationale: newRationale,
-            harmonyScore: Math.min(99.4, prev.currentOutfit.harmonyScore + 0.3),
+            harmonyScore: didModify
+              ? Math.min(99.4, prev.currentOutfit.harmonyScore + 0.3)
+              : prev.currentOutfit.harmonyScore,
           },
           isGenerating: false,
         };

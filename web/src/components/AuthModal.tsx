@@ -427,7 +427,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
                   onBlur={() => handleBlur('name')}
                   placeholder="e.g. Eleanor Vance"
                   disabled={isLoading}
-                  className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all ${
+                  className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A67C1E] transition-all ${
                     touched.name && fieldErrors.name
                       ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
                       : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'
@@ -462,7 +462,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
                 onBlur={() => handleBlur('email')}
                 placeholder="you@example.com"
                 disabled={isLoading}
-                className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all ${
+                className={`w-full px-3.5 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A67C1E] transition-all ${
                   touched.email && fieldErrors.email
                     ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
                     : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'
@@ -510,7 +510,7 @@ const AuthModalDialog: React.FC<Omit<AuthModalProps, 'isOpen'>> = ({
                   onBlur={() => handleBlur('password')}
                   placeholder="••••••••"
                   disabled={isLoading}
-                  className={`w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] outline-none transition-all tracking-normal ${
+                  className={`w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FCF8F2] border text-xs sm:text-[13px] text-[#1C1612] placeholder:text-[#9E9284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A67C1E] transition-all tracking-normal ${
                     touched.password && fieldErrors.password
                       ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
                       : 'border-[#DECDB3] focus:border-[#1C1612] focus:ring-1 focus:ring-[#1C1612]'

@@ -16,6 +16,7 @@ export interface UserSettings {
 }
 
 const SETTINGS_STORAGE_KEY = 'otd_user_settings';
+export const SETTINGS_UPDATED_EVENT = 'otd:settings-updated';
 
 const DEFAULT_SETTINGS: UserSettings = {
   measurementUnit: 'metric',
@@ -24,7 +25,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   notifySuggestions: true,
 };
 
-function loadStoredSettings(): UserSettings {
+export function loadStoredSettings(): UserSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (raw) {
@@ -187,6 +188,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
     };
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toSave));
+      window.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_UPDATED_EVENT, { detail: toSave }));
       setStatusMessage('Preferences saved successfully.');
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
@@ -260,8 +262,8 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
         {/* Settings options list */}
         <div className="py-4 space-y-5 text-xs max-h-[60vh] overflow-y-auto pr-1">
           {/* Appearance / Theme */}
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2.5">
+            <div className="min-w-0">
               <h4 className="font-semibold text-[var(--text-heading)] text-sm">
                 Appearance Mode
               </h4>
@@ -270,8 +272,9 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
               </p>
             </div>
             <button
+              type="button"
               onClick={toggleTheme}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] text-xs font-semibold cursor-pointer transition-colors"
+              className="self-start min-[380px]:self-auto shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] text-xs font-semibold cursor-pointer transition-colors"
             >
               {theme === 'dark' ? (
                 <>
@@ -288,8 +291,8 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
           </div>
 
           {/* Measurement Units */}
-          <div className="flex items-center justify-between pt-3 border-t border-[var(--border-card)]">
-            <div>
+          <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center justify-between gap-2.5 pt-3 border-t border-[var(--border-card)]">
+            <div className="min-w-0">
               <h4 className="font-semibold text-[var(--text-heading)] text-sm flex items-center gap-1.5">
                 <Ruler className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>Measurement Units</span>
@@ -298,11 +301,12 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
                 Used for garment dimensions and style avatar calibration
               </p>
             </div>
-            <div className="flex rounded-xl p-0.5 border border-[var(--border-card)] bg-[var(--pill-bg)]">
+            <div className="self-start min-[420px]:self-auto inline-flex flex-wrap rounded-xl p-0.5 border border-[var(--border-card)] bg-[var(--pill-bg)] shrink-0">
               <button
                 type="button"
+                aria-pressed={measurementUnit === 'metric'}
                 onClick={() => setMeasurementUnit('metric')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   measurementUnit === 'metric'
                     ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
                     : 'text-[var(--text-muted)]'
@@ -312,8 +316,9 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
               </button>
               <button
                 type="button"
+                aria-pressed={measurementUnit === 'imperial'}
                 onClick={() => setMeasurementUnit('imperial')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   measurementUnit === 'imperial'
                     ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
                     : 'text-[var(--text-muted)]'
@@ -331,27 +336,30 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
               <span>Smart Alerts & Notifications</span>
             </h4>
             <div className="space-y-2">
-              <label className="flex items-center justify-between cursor-pointer">
+              <label htmlFor="settings-notify-weather" className="flex items-center justify-between cursor-pointer">
                 <span className="text-[11px] text-[var(--text-body)]">Weather & climate adaptation alerts</span>
                 <input
+                  id="settings-notify-weather"
                   type="checkbox"
                   checked={notifyWeather}
                   onChange={(e) => setNotifyWeather(e.target.checked)}
                   className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)] cursor-pointer"
                 />
               </label>
-              <label className="flex items-center justify-between cursor-pointer">
+              <label htmlFor="settings-notify-occasions" className="flex items-center justify-between cursor-pointer">
                 <span className="text-[11px] text-[var(--text-body)]">Upcoming occasion outfit reminders</span>
                 <input
+                  id="settings-notify-occasions"
                   type="checkbox"
                   checked={notifyOccasions}
                   onChange={(e) => setNotifyOccasions(e.target.checked)}
                   className="rounded text-[var(--gold-primary)] focus:ring-[var(--gold-primary)] cursor-pointer"
                 />
               </label>
-              <label className="flex items-center justify-between cursor-pointer">
+              <label htmlFor="settings-notify-suggestions" className="flex items-center justify-between cursor-pointer">
                 <span className="text-[11px] text-[var(--text-body)]">Wardrobe synergy & recommendation tips</span>
                 <input
+                  id="settings-notify-suggestions"
                   type="checkbox"
                   checked={notifySuggestions}
                   onChange={(e) => setNotifySuggestions(e.target.checked)}
@@ -363,8 +371,8 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
 
           {/* Data Reset & Cache Cleanup */}
           <div className="pt-3 border-t border-[var(--border-card)] space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2.5">
+              <div className="min-w-0">
                 <h4 className="font-semibold text-[var(--text-heading)] text-sm">
                   Reset Local Data
                 </h4>
@@ -375,7 +383,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
               <button
                 type="button"
                 onClick={() => setIsResetConfirmOpen(!isResetConfirmOpen)}
-                className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="self-start min-[380px]:self-auto shrink-0 px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset Cache</span>
@@ -418,7 +426,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
         </div>
 
         {/* Footer actions */}
-        <div className="pt-4 border-t border-[var(--border-card)] flex items-center justify-between">
+        <div className="pt-4 border-t border-[var(--border-card)] flex flex-wrap items-center justify-between gap-3">
           {onSignOut ? (
             <button
               type="button"
@@ -443,7 +451,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
             <div />
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}

@@ -52,6 +52,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose })
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-full hover:bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors cursor-pointer shrink-0"
             aria-label="Close modal"
@@ -143,6 +144,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose })
         {/* Footer */}
         <div className="pt-4 border-t border-[var(--border-card)] flex items-center justify-end shrink-0">
           <button
+            type="button"
             onClick={onClose}
             className="px-6 py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-md"
           >

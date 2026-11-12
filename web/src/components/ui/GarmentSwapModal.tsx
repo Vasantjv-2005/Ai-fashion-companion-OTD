@@ -147,7 +147,16 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
               <span>{modalTitle}</span>
             </h2>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Select an alternative piece from your closet. All other 4 ensemble pieces remain locked.
+              {(() => {
+                const otherPieceCount = Math.max(0, allSlots.length - 1);
+                if (otherPieceCount === 0) {
+                  return 'Select an alternative piece from your closet for this ensemble slot.';
+                }
+                if (otherPieceCount === 1) {
+                  return 'Select an alternative piece from your closet. The other 1 ensemble piece remains locked.';
+                }
+                return `Select an alternative piece from your closet. All other ${otherPieceCount} ensemble pieces remain locked.`;
+              })()}
             </p>
           </div>
 
@@ -180,10 +189,11 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
             <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
+              aria-label={`Search ${targetCategory} by name, brand, or color`}
               placeholder={`Search ${targetCategory} by name, brand, or color...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-all"
             />
             {searchQuery && (
               <button
@@ -230,25 +240,18 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
                 const isDuplicateWorn = wornInOtherSlots.includes(item.id);
 
                 return (
-                  <div
+                  <button
                     key={item.id}
-                    role="button"
-                    tabIndex={isDuplicateWorn ? -1 : 0}
+                    type="button"
+                    disabled={isDuplicateWorn}
                     aria-pressed={isSelected}
-                    aria-disabled={isDuplicateWorn}
                     aria-label={`Select ${item.name}, ${item.brand || ''} ${item.subType}${isDuplicateWorn ? ' (Already worn in another slot)' : ''}`}
                     onClick={() => {
                       if (!isDuplicateWorn) {
                         setSelectedItemId(item.id);
                       }
                     }}
-                    onKeyDown={(e) => {
-                      if (!isDuplicateWorn && (e.key === 'Enter' || e.key === ' ')) {
-                        e.preventDefault();
-                        setSelectedItemId(item.id);
-                      }
-                    }}
-                    className={`p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3.5 select-none ${
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3.5 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                       isDuplicateWorn
                         ? 'opacity-40 cursor-not-allowed border-[var(--border-card)] bg-[var(--bg-card)]'
                         : isSelected
@@ -312,7 +315,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Right: Selection Checkmark Button */}
+                    {/* Right: Selection Checkmark */}
                     <div className="shrink-0 pl-2">
                       <div
                         className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
@@ -324,7 +327,7 @@ export const GarmentSwapModal: React.FC<GarmentSwapModalProps> = ({
                         <Check className="w-3.5 h-3.5 stroke-[3]" />
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

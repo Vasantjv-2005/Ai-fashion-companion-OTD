@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Download, Smartphone, QrCode, Copy, Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Smartphone, Copy, Check, ArrowRight } from 'lucide-react';
 
 interface AppDownloadProps {
   onOpenModal: () => void;
@@ -7,12 +7,27 @@ interface AppDownloadProps {
 
 export const AppDownload: React.FC<AppDownloadProps> = ({ onOpenModal }) => {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleCopyLink = () => {
-    const url = window.location.origin + '/fashion_otd_companion.apk';
+    const url = window.location.origin;
     navigator.clipboard.writeText(url);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      setCopied(false);
+    }, 2000);
   };
 
   return (
@@ -30,7 +45,7 @@ export const AppDownload: React.FC<AppDownloadProps> = ({ onOpenModal }) => {
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-[var(--border-gold)] bg-[var(--pill-bg)]">
                 <Smartphone className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                 <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[var(--gold-primary)] font-mono">
-                  MOBILE COMPANION APPLICATION
+                  MOBILE COMPANION · EARLY BETA
                 </span>
               </div>
 
@@ -41,69 +56,71 @@ export const AppDownload: React.FC<AppDownloadProps> = ({ onOpenModal }) => {
 
 
               <p className="text-sm sm:text-base text-[var(--text-body)] font-light leading-relaxed">
-                Download the official standalone Android APK package. No app store waiting lines. 
-                Experience instant camera closet digitization, real-time weather synchronization, 
-                and private local encryption for your wardrobe archives.
+                Our native Android companion is currently in private pre-release preparation. 
+                Today, you can use the full responsive OTD Web Atelier from any desktop or mobile browser 
+                while the native Android package completes release verification.
               </p>
 
-              {/* Specs & Security Pills */}
+              {/* Specs & Release Status Pills */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                 <div className="p-3 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)]">
-                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">Package</span>
-                  <span className="text-xs font-semibold text-[var(--text-heading)]">Android APK (v1.0.0)</span>
+                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">Platform</span>
+                  <span className="text-xs font-semibold text-[var(--text-heading)]">Android Native</span>
                 </div>
                 <div className="p-3 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)]">
-                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">File Size</span>
-                  <span className="text-xs font-mono text-[var(--gold-primary)] font-bold">150.0 MB Clean</span>
+                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">Release Status</span>
+                  <span className="text-xs font-mono text-[var(--gold-primary)] font-bold">Coming Soon (Beta)</span>
                 </div>
                 <div className="p-3 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] col-span-2 sm:col-span-1">
-                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">Compatibility</span>
-                  <span className="text-xs font-semibold text-[#10B981]">Android 8.0+ Ready</span>
+                  <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block font-medium">Web Access</span>
+                  <span className="text-xs font-semibold text-[#10B981]">Available Now</span>
                 </div>
               </div>
 
-              {/* Download Buttons */}
+              {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
                 <button
+                  type="button"
                   onClick={onOpenModal}
                   className="gold-btn w-full sm:w-auto px-8 py-4 rounded-full text-xs flex items-center justify-center gap-3 cursor-pointer shadow-md"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Download APK Now (150 MB)</span>
+                  <span>Android Beta Release Info</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleCopyLink}
                   className="gold-btn-outline w-full sm:w-auto px-6 py-4 rounded-full text-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-[#10B981]" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Link Copied to Clipboard!' : 'Copy Direct APK Link'}</span>
+                  <span>{copied ? 'Web Studio URL Copied!' : 'Copy Web Studio Link'}</span>
                 </button>
               </div>
 
-              {/* 3 Step Installation Guide */}
+              {/* 3 Step Mobile Access Guide */}
               <div className="pt-6 border-t border-[var(--border-card)]">
                 <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">
-                  Quick 30-Second Sideload Instructions:
+                  Use OTD On Any Phone Today:
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-[var(--text-body)]">
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-[var(--pill-bg)] text-[var(--gold-primary)] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 border border-[var(--border-gold)]">
                       1
                     </span>
-                    <span>Download the APK file directly to your Android device</span>
+                    <span>Open the responsive OTD Web Studio in your mobile browser</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-[var(--pill-bg)] text-[var(--gold-primary)] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 border border-[var(--border-gold)]">
                       2
                     </span>
-                    <span>Tap the downloaded file; allow "Install from unknown sources"</span>
+                    <span>Capture and upload closet garments straight from camera or gallery</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-[var(--pill-bg)] text-[var(--gold-primary)] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 border border-[var(--border-gold)]">
                       3
                     </span>
-                    <span>Launch OTD (Outfit Of The Day) and start digitizing your wardrobe</span>
+                    <span>Watch this space for signed Android APK beta availability</span>
                   </div>
                 </div>
               </div>
@@ -174,10 +191,10 @@ export const AppDownload: React.FC<AppDownloadProps> = ({ onOpenModal }) => {
                 </div>
               </div>
 
-              {/* Direct QR Code Hint */}
+              {/* Direct Web Access Hint */}
               <div className="mt-6 flex items-center gap-3 bg-[var(--bg-card-inner)] px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs text-[var(--text-body)] shadow-sm">
-                <QrCode className="w-4 h-4 text-[var(--gold-primary)]" />
-                <span>Scan with phone camera or download above</span>
+                <Smartphone className="w-4 h-4 text-[var(--gold-primary)]" />
+                <span>Responsive Web Atelier live now · Android APK coming soon</span>
               </div>
 
             </div>

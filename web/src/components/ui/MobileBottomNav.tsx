@@ -1,9 +1,10 @@
 import React from 'react';
 import { Home, Shirt, Sparkles, Bookmark, Menu } from 'lucide-react';
+import type { StudioTab } from '../AppStudio';
 
 interface MobileBottomNavProps {
-  activeTab: string;
-  onSelectTab: (tab: any) => void;
+  activeTab: StudioTab;
+  onSelectTab: (tab: StudioTab) => void;
   onOpenMenu: () => void;
   isMenuOpen?: boolean;
   closetCount?: number;
@@ -21,14 +22,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--bg-header)]/95 backdrop-blur-xl border-t border-[var(--border-card)] px-2 py-1.5 flex items-center justify-around shadow-lg transition-colors duration-300"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--bg-header)]/95 backdrop-blur-xl border-t border-[var(--border-card)] px-1 sm:px-2 py-1.5 flex items-center justify-around gap-0.5 shadow-lg transition-colors duration-300"
     >
       <button
         type="button"
         onClick={() => onSelectTab('home')}
         aria-current={activeTab === 'home' ? 'page' : undefined}
         aria-label="Home Studio Dashboard"
-        className={`flex flex-col items-center justify-center min-h-[44px] min-w-[52px] gap-1 py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+        className={`flex flex-1 min-w-0 flex-col items-center justify-center min-h-[44px] gap-1 py-1.5 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
           activeTab === 'home'
             ? 'text-[var(--text-heading)] font-bold'
             : 'text-[var(--text-muted)]'
@@ -43,7 +44,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         onClick={() => onSelectTab('closet')}
         aria-current={activeTab === 'closet' ? 'page' : undefined}
         aria-label={`Digital Closet (${closetCount || 0} items)`}
-        className={`flex flex-col items-center justify-center min-h-[44px] min-w-[52px] gap-1 py-1.5 px-2 rounded-xl transition-all relative cursor-pointer ${
+        className={`flex flex-1 min-w-0 flex-col items-center justify-center min-h-[44px] gap-1 py-1.5 px-1 sm:px-2 rounded-xl transition-all relative cursor-pointer ${
           activeTab === 'closet'
             ? 'text-[var(--text-heading)] font-bold'
             : 'text-[var(--text-muted)]'
@@ -63,7 +64,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         onClick={() => onSelectTab('stylist')}
         aria-current={activeTab === 'stylist' ? 'page' : undefined}
         aria-label="AI Stylist Wizard"
-        className={`flex flex-col items-center justify-center min-h-[44px] min-w-[52px] gap-1 py-1 px-2 rounded-xl transition-all cursor-pointer ${
+        className={`flex flex-1 min-w-0 flex-col items-center justify-center min-h-[44px] gap-1 py-1 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
           activeTab === 'stylist'
             ? 'text-[var(--gold-primary)] font-bold'
             : 'text-[var(--gold-primary)]/80'
@@ -80,7 +81,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         onClick={() => onSelectTab('saved')}
         aria-current={activeTab === 'saved' ? 'page' : undefined}
         aria-label={`Saved Looks (${savedCount || 0} looks)`}
-        className={`flex flex-col items-center justify-center min-h-[44px] min-w-[52px] gap-1 py-1.5 px-2 rounded-xl transition-all relative cursor-pointer ${
+        className={`flex flex-1 min-w-0 flex-col items-center justify-center min-h-[44px] gap-1 py-1.5 px-1 sm:px-2 rounded-xl transition-all relative cursor-pointer ${
           activeTab === 'saved'
             ? 'text-[var(--text-heading)] font-bold'
             : 'text-[var(--text-muted)]'
@@ -100,7 +101,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         onClick={onOpenMenu}
         aria-expanded={isMenuOpen}
         aria-label="Toggle more navigation options"
-        className="flex flex-col items-center justify-center min-h-[44px] min-w-[52px] gap-1 py-1.5 px-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
+        className="flex flex-1 min-w-0 flex-col items-center justify-center min-h-[44px] gap-1 py-1.5 px-1 sm:px-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-all cursor-pointer"
       >
         <Menu className="w-4 h-4" />
         <span className="text-[10px]">Menu</span>

@@ -22,6 +22,44 @@ export interface UseFocusTrapOptions {
   returnFocus?: boolean;
 }
 
+let activeScrollLockCount = 0;
+let savedBodyOverflow: string | null = null;
+
+/**
+ * Acquires a reference-counted body scroll lock so stacked modals never clobber
+ * each other's overflow state on out-of-order close/unmount.
+ */
+export function acquireBodyScrollLock(): () => void {
+  if (typeof document === 'undefined' || !document.body) {
+    return () => {};
+  }
+
+  if (activeScrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  activeScrollLockCount += 1;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (activeScrollLockCount <= 0) {
+      activeScrollLockCount = 0;
+      return;
+    }
+    activeScrollLockCount -= 1;
+    if (activeScrollLockCount === 0 && typeof document !== 'undefined' && document.body) {
+      document.body.style.overflow = savedBodyOverflow ?? '';
+      savedBodyOverflow = null;
+    }
+  };
+}
+
+export function getActiveScrollLockCount(): number {
+  return activeScrollLockCount;
+}
+
 /**
  * Custom hook to manage keyboard focus trapping, Escape dismissal,
  * background scroll locking, and focus restoration for modal dialogs.
@@ -52,9 +90,8 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
     // 1. Remember the previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement | null;
 
-    // 2. Prevent background scrolling
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // 2. Acquire reference-counted body scroll lock
+    const releaseScrollLock = acquireBodyScrollLock();
 
     // 3. Move initial focus into the container after mounting
     const timer = setTimeout(() => {
@@ -143,10 +180,10 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
 
     return () => {
       clearTimeout(timer);
-      document.body.style.overflow = originalOverflow;
+      releaseScrollLock();
       window.removeEventListener('keydown', handleKeyDown, true);
-      if (returnFocus !== false) {
-        previousActiveElement.current?.focus?.();
+      if (returnFocus !== false && previousActiveElement.current?.isConnected) {
+        previousActiveElement.current.focus?.();
       }
     };
   }, [isOpen, autoFocus, returnFocus]);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Check, Compass, Layers, ShieldCheck } from 'lucide-react';
 
 interface OutfitGenerationLoaderProps {
@@ -15,54 +15,71 @@ export const OutfitGenerationLoader: React.FC<OutfitGenerationLoaderProps> = ({
   durationMs = 1400,
 }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-
-  const steps = [
-    {
-      title: 'Formality & Venue Code Analysis',
-      desc: `Evaluating dress expectations for ${occasion} at ${venueName || 'your venue'}...`,
-      icon: Compass,
-    },
-    {
-      title: 'Digital Wardrobe Scan',
-      desc: 'Retrieving verified garments from your active closet...',
-      icon: Layers,
-    },
-    {
-      title: 'Sartorial Silhouette Balancing',
-      desc: 'Pairing base layers, tailoring, and footwear for high-contrast harmony...',
-      icon: Sparkles,
-    },
-    {
-      title: 'Finalizing Bespoke Recommendation',
-      desc: 'Synthesizing editorial rationale and calibration score...',
-      icon: ShieldCheck,
-    },
-  ];
+  const onCompleteRef = useRef(onComplete);
+  const hasCompletedRef = useRef(false);
 
   useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  const steps = useMemo(
+    () => [
+      {
+        title: 'Formality & Venue Code Analysis',
+        desc: `Evaluating dress expectations for ${occasion} at ${venueName || 'your venue'}...`,
+        icon: Compass,
+      },
+      {
+        title: 'Digital Wardrobe Scan',
+        desc: 'Retrieving verified garments from your active closet...',
+        icon: Layers,
+      },
+      {
+        title: 'Sartorial Silhouette Balancing',
+        desc: 'Pairing base layers, tailoring, and footwear for high-contrast harmony...',
+        icon: Sparkles,
+      },
+      {
+        title: 'Finalizing Bespoke Recommendation',
+        desc: 'Synthesizing editorial rationale and calibration score...',
+        icon: ShieldCheck,
+      },
+    ],
+    [occasion, venueName],
+  );
+
+  useEffect(() => {
+    hasCompletedRef.current = false;
     const stepInterval = durationMs / steps.length;
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       setCurrentStepIndex((prev) => {
         if (prev < steps.length - 1) {
           return prev + 1;
         }
-        clearInterval(interval);
+        window.clearInterval(interval);
         return prev;
       });
     }, stepInterval);
 
-    const timer = setTimeout(() => {
-      if (onComplete) onComplete();
+    const timer = window.setTimeout(() => {
+      if (!hasCompletedRef.current) {
+        hasCompletedRef.current = true;
+        onCompleteRef.current?.();
+      }
     }, durationMs);
 
     return () => {
-      clearInterval(interval);
-      clearTimeout(timer);
+      window.clearInterval(interval);
+      window.clearTimeout(timer);
     };
-  }, [durationMs, onComplete, steps.length]);
+  }, [durationMs, steps.length]);
 
   return (
-    <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] p-8 sm:p-12 shadow-xl max-w-xl mx-auto my-12 text-center space-y-6 relative overflow-hidden animate-fadeIn">
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] p-8 sm:p-12 shadow-xl max-w-xl mx-auto my-12 text-center space-y-6 relative overflow-hidden animate-fadeIn"
+    >
       {/* Background Glow */}
       <div className="absolute inset-0 bg-radial from-[var(--gold-primary)]/10 via-transparent to-transparent pointer-events-none" />
 

@@ -148,7 +148,7 @@ export const StudioRouteGuard: React.FC<StudioRouteGuardProps> = ({ children }) 
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors cursor-pointer py-1 px-2"
+            className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Return to Landing Page</span>

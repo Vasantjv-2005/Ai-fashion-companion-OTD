@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ShoppingBag,
   CheckCircle2,
@@ -88,10 +88,19 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     action: GuestRestrictedAction;
     actionTitle?: string;
   } | null>(null);
+  const intakeTimerRef = useRef<number | null>(null);
+  const wearTimerRef = useRef<number | null>(null);
 
-  if (isAuthenticated && guestPromptState !== null) {
-    setGuestPromptState(null);
-  }
+  useEffect(() => {
+    return () => {
+      if (intakeTimerRef.current !== null) {
+        window.clearTimeout(intakeTimerRef.current);
+      }
+      if (wearTimerRef.current !== null) {
+        window.clearTimeout(wearTimerRef.current);
+      }
+    };
+  }, []);
 
   const requireRegistered = (action: GuestRestrictedAction, actionTitle?: string): boolean => {
     if (isAuthenticated) return true;
@@ -235,7 +244,11 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     });
 
     setIntakeSuccessId(item.id);
-    setTimeout(() => {
+    if (intakeTimerRef.current !== null) {
+      window.clearTimeout(intakeTimerRef.current);
+    }
+    intakeTimerRef.current = window.setTimeout(() => {
+      intakeTimerRef.current = null;
       setIntakeSuccessId((curr) => (curr === item.id ? null : curr));
     }, 3500);
   };
@@ -281,13 +294,17 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   const handleWearInstead = (itemId: string, altName: string) => {
     setWearInsteadNote({ itemId, altName });
     setActiveAlternativeItem(null);
-    setTimeout(() => {
+    if (wearTimerRef.current !== null) {
+      window.clearTimeout(wearTimerRef.current);
+    }
+    wearTimerRef.current = window.setTimeout(() => {
+      wearTimerRef.current = null;
       setWearInsteadNote((current) => (current?.itemId === itemId ? null : current));
     }, 4500);
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[var(--bg-canvas)] text-[var(--text-body)] p-4 sm:p-6 lg:p-8 space-y-8 select-none">
+    <div className="flex-1 overflow-y-auto bg-[var(--bg-canvas)] text-[var(--text-body)] p-4 sm:p-6 lg:p-8 pb-24 md:pb-8 space-y-8 select-none">
       
       {/* 1. Header & Context */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-card)] pb-6">
@@ -484,11 +501,12 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
+                aria-label="Search wishlist"
                 maxLength={CLOSET_SEARCH_MAX_LENGTH}
                 placeholder="Search wishlist..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3 py-1.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3 py-1.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
           </div>
@@ -718,6 +736,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           </span>
                           <input
                             type="number"
+                            aria-label="Estimated budget in INR"
                             min="0"
                             step="100"
                             placeholder="Enter amount (e.g. 3500)"
@@ -728,7 +747,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                               if (e.key === 'Escape') handleCancelBudgetEdit();
                             }}
                             autoFocus
-                            className="w-full bg-[var(--bg-card)] text-xs text-[var(--text-heading)] pl-6 pr-2 py-1 rounded-lg border border-[var(--border-gold)] focus:outline-none"
+                            className="w-full bg-[var(--bg-card)] text-xs text-[var(--text-heading)] pl-6 pr-2 py-1 rounded-lg border border-[var(--border-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                           />
                         </div>
                         <button
@@ -736,6 +755,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           onClick={() => handleSaveBudget(item.id)}
                           className="p-1.5 rounded-lg bg-[var(--gold-primary)] text-black hover:opacity-90 cursor-pointer shadow-2xs"
                           title="Save budget"
+                          aria-label={`Save budget for ${item.name}`}
                         >
                           <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                         </button>
@@ -744,6 +764,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           onClick={handleCancelBudgetEdit}
                           className="p-1.5 rounded-lg border border-[var(--border-card)] text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
                           title="Cancel"
+                          aria-label="Cancel budget editing"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -1164,32 +1185,34 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Garment Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
+            <label htmlFor="wishlist-name" className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
               <span>Garment Name *</span>
               <span className="text-[10px] text-[var(--text-muted)] font-mono">e.g. Charcoal Wool Trousers</span>
             </label>
             <input
+              id="wishlist-name"
               type="text"
               required
               maxLength={GARMENT_NAME_MAX_LENGTH}
               placeholder="e.g., Italian Linen Overshirt, Cashmere Crewneck"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               autoFocus
             />
           </div>
 
           {/* Category Selector Chips */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)]">
+            <span className="block text-xs font-semibold text-[var(--text-heading)]">
               Category *
-            </label>
+            </span>
             <div className="grid grid-cols-5 gap-2">
               {CATEGORY_OPTIONS.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
+                  aria-pressed={category === cat.id}
                   onClick={() => setCategory(cat.id)}
                   className={`p-2 rounded-xl text-center text-xs flex flex-col items-center gap-1 border transition-all cursor-pointer ${
                     category === cat.id
@@ -1207,37 +1230,39 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
           {/* Subtype & Color (2 cols) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[var(--text-heading)]">
+              <label htmlFor="wishlist-subtype" className="block text-xs font-semibold text-[var(--text-heading)]">
                 Silhouette / Subtype
               </label>
               <input
+                id="wishlist-subtype"
                 type="text"
                 maxLength={GARMENT_SUBTYPE_MAX_LENGTH}
                 placeholder="e.g. Pleated Trouser, Blazer"
                 value={subType}
                 onChange={(e) => setSubType(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[var(--text-heading)]">
+              <label htmlFor="wishlist-color" className="block text-xs font-semibold text-[var(--text-heading)]">
                 Color Tone
               </label>
               <input
+                id="wishlist-color"
                 type="text"
                 maxLength={GARMENT_COLOR_MAX_LENGTH}
                 placeholder="e.g. Navy, Charcoal, Camel"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
           </div>
 
           {/* Estimated Budget (INR ₹) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
+            <label htmlFor="wishlist-budget" className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
               <span className="flex items-center gap-1">
                 <IndianRupee className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                 <span>Estimated Budget (INR ₹, Optional)</span>
@@ -1249,29 +1274,31 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
                 ₹
               </span>
               <input
+                id="wishlist-budget"
                 type="number"
                 min="0"
                 step="100"
                 placeholder="e.g., 4500"
                 value={estimatedBudgetStr}
                 onChange={(e) => setEstimatedBudgetStr(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors font-mono"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors font-mono"
               />
             </div>
           </div>
 
           {/* Styling Note / Need */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)]">
+            <label htmlFor="wishlist-note" className="block text-xs font-semibold text-[var(--text-heading)]">
               Styling Purpose / Reason (Optional)
             </label>
             <input
+              id="wishlist-note"
               type="text"
               maxLength={GARMENT_NOTES_MAX_LENGTH}
               placeholder="e.g. Versatile layer for evening dinner & quarterly presentations"
               value={stylingNote}
               onChange={(e) => setStylingNote(e.target.value)}
-              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
             />
           </div>
 

@@ -98,6 +98,10 @@ export function setActivePrivateCacheOwnerId(userId: string | null): void {
   activePrivateCacheOwnerId = normalizeAuthUserId(userId);
 }
 
+export function getActivePrivateCacheOwnerId(): string | null {
+  return activePrivateCacheOwnerId;
+}
+
 export function normalizeAuthUserId(userId: string | null | undefined): string | null {
   if (typeof userId !== 'string') return null;
   const trimmed = userId.trim();
@@ -333,12 +337,17 @@ export function setGuestDemoSessionActive(active: boolean): void {
 export function clearPrivateUserCaches(options?: {
   userId?: string | null;
   allUsers?: boolean;
+  preserveGuestSession?: boolean;
 }): void {
   privateCachePurgeGeneration += 1;
   const allUsers = Boolean(options?.allUsers);
-  const targetUserId = allUsers
-    ? null
-    : normalizeAuthUserId(options?.userId) ?? activePrivateCacheOwnerId;
+  const preserveGuestSession = Boolean(options?.preserveGuestSession);
+  const explicitUserId = options && 'userId' in options ? normalizeAuthUserId(options.userId) : null;
+  const targetUserId = allUsers ? null : explicitUserId ?? activePrivateCacheOwnerId;
+
+  if (allUsers || (targetUserId && targetUserId === activePrivateCacheOwnerId)) {
+    activePrivateCacheOwnerId = null;
+  }
 
   try {
     if (typeof window === 'undefined') return;
@@ -357,7 +366,7 @@ export function clearPrivateUserCaches(options?: {
     const ssKeys = collectMatchingKeys(
       window.sessionStorage,
       (key) =>
-        key === GUEST_SESSION_STORAGE_KEY ||
+        (!preserveGuestSession && key === GUEST_SESSION_STORAGE_KEY) ||
         shouldPurgePrivateKey(key, targetUserId, allUsers)
     );
     for (const key of ssKeys) {

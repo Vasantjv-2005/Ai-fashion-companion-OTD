@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, ArrowRight, Send, Bookmark, RefreshCw, Sun } from 'lucide-react';
 import { useCloset } from '../context/ClosetContext';
 import { useAuth } from '../hooks/useAuth';
+import { resolveWorkspaceScope } from '../utils/authStorage';
+import {
+  buildSavedLookFromEnsemble,
+  findDuplicateSavedLook,
+  loadStoredSavedLooks,
+  persistSavedLooks,
+} from '../utils/savedLooksStorage';
+import type { OutfitSlotItem } from './ui/AvatarOutfitCanvas';
 import {
   GuestRegistrationPromptModal,
   type GuestRestrictedAction,
@@ -13,28 +21,233 @@ interface HeroProps {
   onExploreDemo?: () => void;
 }
 
+const DEFAULT_HERO_PROMPT = 'Rooftop restaurant tonight for a date';
+
+interface EditorialProcessStep {
+  readonly step: string;
+  readonly tag: string;
+  readonly title: string;
+  readonly description: string;
+  readonly imageUrl: string;
+  readonly imageAlt: string;
+  readonly isFinal?: boolean;
+}
+
+const HOW_IT_WORKS_STEPS: readonly EditorialProcessStep[] = [
+  {
+    step: '01',
+    tag: 'Digitize',
+    title: 'Upload Your Closet',
+    description:
+      'Capture or import pieces you already own in seconds to build a searchable digital wardrobe.',
+    imageUrl: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=500&q=80',
+    imageAlt: 'Upload Closet',
+  },
+  {
+    step: '02',
+    tag: 'Context',
+    title: "Tell OTD Where You're Going",
+    description:
+      'Dial in your venue, dress code, mood, and live climate so every ensemble fits the moment.',
+    imageUrl: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=500&q=80',
+    imageAlt: 'Where are you going',
+  },
+  {
+    step: '03',
+    tag: 'Curate',
+    title: 'Get Personalized Outfits',
+    description:
+      'Receive five-slot looks styled directly around your silhouette, palette, and real garments.',
+    imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=500&q=80',
+    imageAlt: 'Personalized Outfits',
+  },
+  {
+    step: '04',
+    tag: 'Step Out',
+    title: 'Feel Confident Everywhere',
+    description:
+      'Swap any layer on cue, save favorite pairings, and walk into every room composed.',
+    imageUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
+    imageAlt: 'Feel Confident',
+    isFinal: true,
+  },
+];
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function inferPromptOverrides(text: string): { venue?: string; occasion?: string } {
+  const lower = text.trim().toLowerCase();
+  if (!lower || lower === DEFAULT_HERO_PROMPT.toLowerCase()) {
+    return {};
+  }
+  if (lower.includes('boardroom') || lower.includes('office') || lower.includes('pitch') || lower.includes('work') || lower.includes('meeting')) {
+    return { venue: 'Executive Boardroom', occasion: 'Office / Work' };
+  }
+  if (lower.includes('party') || lower.includes('cocktail') || lower.includes('celebration') || lower.includes('club')) {
+    return { venue: 'Cocktails & Social', occasion: 'Party / Celebration' };
+  }
+  if (lower.includes('travel') || lower.includes('airport') || lower.includes('flight') || lower.includes('weekend')) {
+    return { venue: 'Casual Cafe & Walk', occasion: 'Travel / Weekend' };
+  }
+  if (lower.includes('gallery') || lower.includes('museum') || lower.includes('exhibition')) {
+    return { venue: 'Art Gallery Vernissage', occasion: 'Casual Day' };
+  }
+  if (lower.includes('brunch') || lower.includes('coffee') || lower.includes('casual')) {
+    return { venue: 'Casual Cafe & Walk', occasion: 'Casual Day' };
+  }
+  if (lower.includes('fine dining') || lower.includes('bistro') || lower.includes('dinner')) {
+    return { venue: 'Fine Dining Bistro', occasion: 'Date Night' };
+  }
+  if (lower.includes('date') || lower.includes('rooftop')) {
+    return { venue: 'Rooftop Cafe, Hyderabad', occasion: 'Date Night' };
+  }
+  return { venue: text.trim().slice(0, 60) };
+}
+
 export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onExploreDemo }) => {
-  const { isAuthenticated } = useAuth();
-  const { currentOutfit, generateOutfit, modifyOutfit, isGenerating, profile } = useCloset();
+  const { isAuthenticated, user, status } = useAuth();
+  const { currentOutfit, closet, generateOutfit, modifyOutfit, isGenerating, profile } = useCloset();
+  const workspaceScope = useMemo(
+    () => resolveWorkspaceScope(status, user?.id),
+    [status, user?.id],
+  );
   
-  // Context Form State (Matching Screenshots 2, 6, 7, 8)
-  const [promptText, setPromptText] = useState('Rooftop restaurant tonight for a date');
+  // Context Form State
+  const [promptText, setPromptText] = useState(DEFAULT_HERO_PROMPT);
   const [venue, setVenue] = useState('Rooftop Cafe, Hyderabad');
   const [occasion, setOccasion] = useState('Date Night');
-  const [vibe, setVibe] = useState('Romantic & Alluring');
+  const [vibe, setVibe] = useState('Elegant + Attractive');
   const [weather, setWeather] = useState('Tonight · 21°C Mild Autumn');
   
   // Chat Modification Input
   const [chatInput, setChatInput] = useState('');
-  const [savedLook, setSavedLook] = useState(false);
+  const [savedOutfitIds, setSavedOutfitIds] = useState<Record<string, boolean>>({});
   const [guestPromptState, setGuestPromptState] = useState<{
     action: GuestRestrictedAction;
     actionTitle?: string;
   } | null>(null);
+  const [stepsRevealed, setStepsRevealed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return !('IntersectionObserver' in window) || prefersReducedMotion();
+  });
+  const scrollTimerRef = useRef<number | null>(null);
+  const stepsSectionRef = useRef<HTMLDivElement | null>(null);
 
-  if (isAuthenticated && guestPromptState !== null) {
-    setGuestPromptState(null);
-  }
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current !== null) {
+        window.clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (stepsRevealed) return;
+    const node = stepsSectionRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+
+    const revealIfInView = (): boolean => {
+      const rect = node.getBoundingClientRect();
+      if (rect.top <= window.innerHeight * 0.96) {
+        setStepsRevealed(true);
+        return true;
+      }
+      return false;
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting || entry.boundingClientRect.top <= window.innerHeight)) {
+          setStepsRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.05, rootMargin: '0px 0px -20px 0px' },
+    );
+    observer.observe(node);
+
+    const rafId = window.requestAnimationFrame(() => {
+      if (revealIfInView()) {
+        observer.disconnect();
+      }
+    });
+
+    const onViewportChange = () => {
+      if (revealIfInView()) {
+        observer.disconnect();
+        window.removeEventListener('scroll', onViewportChange);
+        window.removeEventListener('resize', onViewportChange);
+      }
+    };
+
+    window.addEventListener('scroll', onViewportChange, { passive: true });
+    window.addEventListener('resize', onViewportChange, { passive: true });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      observer.disconnect();
+      window.removeEventListener('scroll', onViewportChange);
+      window.removeEventListener('resize', onViewportChange);
+    };
+  }, [stepsRevealed]);
+
+  const currentOutfitSlots = useMemo<OutfitSlotItem[]>(() => {
+    if (!currentOutfit) return [];
+    const categoryToSlot = (cat: string): OutfitSlotItem['slot'] => {
+      if (cat === 'tops') return 'top';
+      if (cat === 'outerwear') return 'outerwear';
+      if (cat === 'bottoms') return 'bottom';
+      if (cat === 'footwear') return 'footwear';
+      return 'accessory';
+    };
+    const slotLabelMap: Record<OutfitSlotItem['slot'], string> = {
+      top: 'Base Top',
+      outerwear: 'Outerwear / Layer',
+      bottom: 'Bottoms',
+      footwear: 'Footwear',
+      accessory: 'Accessories',
+    };
+    return currentOutfit.pieces.map((piece) => {
+      const slot = categoryToSlot(piece.category);
+      return {
+        slot,
+        slotLabel: slotLabelMap[slot],
+        closetItemId: piece.id,
+        name: piece.name,
+        category: piece.subType || piece.category,
+        brand: piece.brand,
+        color: piece.color,
+        fit: piece.fit,
+        formality: piece.formality,
+        imageUrl: piece.imageUrl,
+        icon: piece.icon,
+        status: 'owned',
+      };
+    });
+  }, [currentOutfit]);
+
+  const savedLook = useMemo(() => {
+    if (!currentOutfit) return false;
+    if (savedOutfitIds[currentOutfit.id]) return true;
+    const storedLooks = loadStoredSavedLooks(workspaceScope);
+    return Boolean(
+      findDuplicateSavedLook(
+        {
+          occasion: currentOutfit.occasion,
+          title: currentOutfit.title,
+          slots: currentOutfitSlots,
+          garments: currentOutfit.pieces.map((p) => p.name),
+          garmentIds: currentOutfit.pieces.map((p) => p.id),
+        },
+        storedLooks,
+      ),
+    );
+  }, [currentOutfit, currentOutfitSlots, savedOutfitIds, workspaceScope]);
 
   const requireRegisteredHeroAction = (
     action: GuestRestrictedAction,
@@ -47,20 +260,41 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
     return false;
   };
 
-  const handleCurate = (e?: React.FormEvent) => {
+  const handleCurate = (
+    e?: React.FormEvent,
+    overrides?: { venue?: string; occasion?: string; vibe?: string; prompt?: string },
+  ) => {
     if (e) e.preventDefault();
     if (!requireRegisteredHeroAction('personalized-styling', 'Curate a Personalized Outfit')) {
       return;
     }
+    const inferred = e ? inferPromptOverrides(promptText) : {};
+    const nextVenue = overrides?.venue ?? inferred.venue ?? venue;
+    const nextOccasion = overrides?.occasion ?? inferred.occasion ?? occasion;
+    const nextVibe = overrides?.vibe ?? vibe;
+    if (overrides?.prompt !== undefined) {
+      setPromptText(overrides.prompt);
+    }
+    if (nextVenue !== venue && ['Rooftop Cafe, Hyderabad', 'Fine Dining Bistro', 'Executive Boardroom', 'Casual Cafe & Walk', 'Art Gallery Vernissage', 'Cocktails & Social'].includes(nextVenue)) {
+      setVenue(nextVenue);
+    }
+    if (nextOccasion !== occasion) {
+      setOccasion(nextOccasion);
+    }
+
     generateOutfit({
-      venue,
-      occasion,
-      vibe,
-      weather
+      venue: nextVenue,
+      occasion: nextOccasion,
+      vibe: nextVibe,
+      weather,
     });
 
     // Smooth scroll down to result card
-    setTimeout(() => {
+    if (scrollTimerRef.current !== null) {
+      window.clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = window.setTimeout(() => {
+      scrollTimerRef.current = null;
       const el = document.getElementById('curated-result-section');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }, 400);
@@ -104,7 +338,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
               </div>
 
               {/* Huge Serif Headline: Your Wardrobe. Your World. Your Look. */}
-              <h1 className="font-playfair text-5xl sm:text-6xl xl:text-7xl font-bold tracking-tight text-[var(--text-heading)] leading-[1.05]">
+              <h1 className="font-playfair text-[2.45rem] min-[360px]:text-5xl sm:text-6xl xl:text-7xl font-bold tracking-tight text-[var(--text-heading)] leading-[1.05]">
                 Your Wardrobe.<br />
                 Your World.<br />
                 Your Look.
@@ -149,7 +383,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <button
                   type="button"
                   onClick={onExploreDemo}
-                  className="px-6 py-4 rounded-full border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-black text-[var(--text-heading)] text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+                  className="px-6 py-4 rounded-full border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] text-[var(--text-heading)] text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                   <span>Explore AI Stylist</span>
@@ -182,26 +416,38 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
             <div className="lg:col-span-6 relative">
               
               {/* Main Editorial Image Container */}
-              <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-[var(--border-card)] bg-neutral-900 aspect-[4/5] max-h-[580px] w-full">
+              <div
+                data-testid="hero-editorial-media"
+                className="relative rounded-3xl overflow-hidden shadow-2xl border border-[var(--border-card)] bg-neutral-900 aspect-[4/5] max-h-[580px] w-full"
+              >
                 <img
                   src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80"
                   alt="OTD Haute Editorial Pair"
                   className="w-full h-full object-cover object-top"
                 />
-                
-                {/* Handwritten Cursive Script Overlay */}
-                <div className="absolute top-8 right-8 z-10">
-                  <span className="font-script text-white text-3xl sm:text-4xl drop-shadow-lg -rotate-6 block">
-                    Your style. Every place.
+
+                {/* Dark Gradient Scrims for script legibility over lower-left negative space */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(13,12,11,0.62)_0%,rgba(13,12,11,0.18)_46%,transparent_72%)] pointer-events-none" />
+
+                {/* Handwritten Cursive Script Overlay — anchored to lower-left negative space clear of face & preview card */}
+                <div
+                  data-testid="hero-script-headline"
+                  className="absolute bottom-4 left-3.5 min-[360px]:bottom-5 min-[360px]:left-4 sm:bottom-8 sm:left-7 lg:bottom-9 lg:left-7 z-10 pointer-events-none max-w-[54%] min-[360px]:max-w-[58%] sm:max-w-[50%]"
+                >
+                  <span className="font-script otd-hero-script text-white -rotate-3 origin-bottom-left block">
+                    Your style.{' '}
+                    <br />
+                    Every place.
                   </span>
                 </div>
-
-                {/* Dark Gradient Overlay for text contrast */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
               </div>
 
               {/* Floating Card: Tonight's Look (Matches Image 1 directly) */}
-              <div className="absolute top-10 right-4 sm:-right-4 w-56 sm:w-64 glass-card rounded-2xl p-4 border border-white/40 dark:border-white/10 shadow-2xl bg-white/95 dark:bg-[#141418]/95 backdrop-blur-xl animate-in fade-in duration-700">
+              <div
+                data-testid="hero-tonights-look-card"
+                className="absolute top-3 min-[360px]:top-4 sm:top-8 right-2 min-[360px]:right-3 sm:-right-4 w-44 min-[360px]:w-[13rem] sm:w-64 glass-card rounded-2xl p-2.5 min-[360px]:p-3 sm:p-4 border border-white/40 dark:border-white/10 shadow-2xl bg-white/95 dark:bg-[#141418]/95 backdrop-blur-xl animate-in fade-in duration-700"
+              >
                 <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/10">
                   <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[var(--text-heading)]">
                     Tonight's Look
@@ -263,10 +509,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
               {/* Floating Mini Destination Cards (Bottom Row of Image 1) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
                 {[
-                  { name: 'Date Night', img: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=300&q=80' },
-                  { name: 'Office', img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=300&q=80' },
-                  { name: 'Travel', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=300&q=80' },
-                  { name: 'Party', img: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=300&q=80' },
+                  { name: 'Date Night', venue: 'Fine Dining Bistro', occasion: 'Date Night', prompt: 'Romantic dinner date tonight', img: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=300&q=80' },
+                  { name: 'Office', venue: 'Executive Boardroom', occasion: 'Office / Work', prompt: 'Executive boardroom presentation today', img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=300&q=80' },
+                  { name: 'Travel', venue: 'Casual Cafe & Walk', occasion: 'Travel / Weekend', prompt: 'Comfortable weekend travel look', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=300&q=80' },
+                  { name: 'Party', venue: 'Cocktails & Social', occasion: 'Party / Celebration', prompt: 'Evening cocktail party tonight', img: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=300&q=80' },
                 ].map(dest => (
                   <button
                     type="button"
@@ -275,8 +521,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                       if (!requireRegisteredHeroAction('personalized-styling', `Curate ${dest.name} Look`)) {
                         return;
                       }
-                      setVenue(dest.name);
-                      handleCurate();
+                      setVenue(dest.venue);
+                      setOccasion(dest.occasion);
+                      handleCurate(undefined, {
+                        venue: dest.venue,
+                        occasion: dest.occasion,
+                        prompt: dest.prompt,
+                      });
                     }}
                     aria-label={`Curate outfit for ${dest.name}`}
                     className="group relative rounded-xl overflow-hidden aspect-[4/3] border border-[var(--border-card)] shadow-md cursor-pointer text-left p-0"
@@ -295,77 +546,100 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
 
           </div>
 
-          {/* 4 HORIZONTAL NUMBERED PROCESS STEPS (01 to 04 from Image 1) */}
-          <div className="mt-16 pt-12 border-t border-[var(--border-card)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-mono font-bold text-[var(--gold-primary)] block">01</span>
-                  <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">Upload Your Closet</h4>
+          {/* 4-STEP EDITORIAL EXPERIENCE SHOWCASE (01 to 04) */}
+          <div
+            ref={stepsSectionRef}
+            id="how-otd-works"
+            data-testid="hero-four-step-section"
+            className="mt-16 pt-12 border-t border-[var(--border-card)] space-y-8"
+          >
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-mono tracking-[0.22em] uppercase font-bold text-[var(--gold-primary)]">
+                    How OTD Works
+                  </span>
+                  <span className="h-[1px] w-10 bg-[var(--border-gold)]" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
+                <h3 className="font-playfair text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-heading)]">
+                  Four Moments From Closet to Confidence
+                </h3>
               </div>
-              <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-[var(--border-card)] bg-neutral-900 shadow-sm">
-                <img
-                  src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=500&q=80"
-                  alt="Upload Closet"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              <p className="text-xs sm:text-sm text-[var(--text-body)] max-w-md leading-relaxed">
+                Every look is curated from garments you already own — tuned to destination, climate, and your natural poise.
+              </p>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-mono font-bold text-[var(--gold-primary)] block">02</span>
-                  <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">Tell OTD Where You're Going</h4>
-                </div>
-                <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
-              </div>
-              <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-[var(--border-card)] bg-neutral-900 shadow-sm">
-                <img
-                  src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=500&q=80"
-                  alt="Where are you going"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+              {HOW_IT_WORKS_STEPS.map((item, idx) => (
+                <div
+                  key={item.step}
+                  data-revealed={stepsRevealed ? 'true' : 'false'}
+                  style={{ transitionDelay: stepsRevealed ? `${idx * 90}ms` : '0ms' }}
+                  className="otd-step-reveal h-full"
+                >
+                  <article
+                    data-testid={`hero-step-card-${item.step}`}
+                    className="otd-step-card group h-full rounded-2xl overflow-hidden flex flex-col"
+                  >
+                    <div className="relative aspect-[4/3] overflow-hidden bg-neutral-900">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.imageAlt}
+                        className="otd-step-image w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent opacity-80 group-hover:opacity-95 transition-opacity duration-300 pointer-events-none" />
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-mono font-bold text-[var(--gold-primary)] block">03</span>
-                  <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">Get Personalized Outfits</h4>
-                </div>
-                <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
-              </div>
-              <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-[var(--border-card)] bg-neutral-900 shadow-sm">
-                <img
-                  src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=500&q=80"
-                  alt="Personalized Outfits"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
+                      <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 group-hover:border-[#D4AF37]/70 transition-colors duration-300">
+                        <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-[#F7E7A9]">
+                          {item.step}
+                        </span>
+                        <span className="h-2.5 w-[1px] bg-white/25" aria-hidden="true" />
+                        <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/90">
+                          {item.tag}
+                        </span>
+                      </div>
+                    </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-mono font-bold text-[var(--gold-primary)] block">04</span>
-                  <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">Feel Confident Everywhere</h4>
-                </div>
-                <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
-              </div>
-              <div className="aspect-[4/3] rounded-2xl overflow-hidden border border-[var(--border-card)] bg-neutral-900 shadow-sm">
-                <img
-                  src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80"
-                  alt="Feel Confident"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
+                    <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono uppercase tracking-[0.18em] font-semibold text-[var(--gold-primary)]">
+                            Step {item.step}
+                          </span>
+                          <span className="h-[1px] flex-1 bg-[var(--border-card)] group-hover:bg-[var(--border-gold)] transition-colors duration-300" />
+                          {item.isFinal ? (
+                            <Sparkles
+                              aria-hidden="true"
+                              className="w-3.5 h-3.5 text-[var(--gold-primary)] transition-transform duration-300 group-hover:scale-110 shrink-0"
+                            />
+                          ) : (
+                            <ArrowRight
+                              aria-hidden="true"
+                              className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--gold-primary)] transition-all duration-300 group-hover:translate-x-1 shrink-0"
+                            />
+                          )}
+                        </div>
 
+                        <h4 className="font-playfair text-lg font-bold text-[var(--text-heading)] leading-snug group-hover:text-[var(--gold-primary)] transition-colors duration-300">
+                          {item.title}
+                        </h4>
+
+                        <p className="text-xs text-[var(--text-body)] leading-relaxed">
+                          {item.description}
+                        </p>
+                      </div>
+
+                      <div
+                        aria-hidden="true"
+                        className="h-[1.5px] w-8 bg-[var(--border-gold)] group-hover:w-14 group-hover:bg-[var(--gold-primary)] transition-all duration-300 rounded-full"
+                      />
+                    </div>
+                  </article>
+                </div>
+              ))}
+            </div>
           </div>
 
         </div>
@@ -411,20 +685,25 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
             <form onSubmit={handleCurate} className="space-y-6">
               
               <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2 font-mono">
+                <label
+                  htmlFor="hero-prompt-input"
+                  className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2 font-mono"
+                >
                   Tell OTD Your Destination & Event:
                 </label>
                 <div className="relative">
                   <input
+                    id="hero-prompt-input"
                     type="text"
                     maxLength={200}
                     value={promptText}
                     onChange={e => setPromptText(e.target.value)}
                     placeholder="e.g. Rooftop cafe tonight for a date, or boardroom pitch..."
-                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-2xl px-5 py-4 text-sm sm:text-base text-[var(--text-heading)] font-semibold outline-none focus:border-black shadow-inner pr-14"
+                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-2xl px-5 py-4 text-sm sm:text-base text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] shadow-inner pr-14"
                   />
                   <button
                     type="submit"
+                    aria-label="Curate outfit from prompt"
                     disabled={isGenerating}
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center cursor-pointer hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
                   >
@@ -436,13 +715,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
               {/* Guided Micro-Selectors */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5">
+                  <label
+                    htmlFor="hero-venue-select"
+                    className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5"
+                  >
                     Destination / Venue
                   </label>
                   <select
+                    id="hero-venue-select"
                     value={venue}
                     onChange={e => setVenue(e.target.value)}
-                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold outline-none focus:border-black cursor-pointer"
+                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer"
                   >
                     <option value="Rooftop Cafe, Hyderabad">Rooftop Cafe, Hyderabad</option>
                     <option value="Fine Dining Bistro">Fine Dining Bistro</option>
@@ -454,13 +737,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5">
+                  <label
+                    htmlFor="hero-occasion-select"
+                    className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5"
+                  >
                     Occasion
                   </label>
                   <select
+                    id="hero-occasion-select"
                     value={occasion}
                     onChange={e => setOccasion(e.target.value)}
-                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold outline-none focus:border-black cursor-pointer"
+                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer"
                   >
                     <option value="Date Night">Date Night</option>
                     <option value="Casual Day">Casual Day</option>
@@ -471,13 +758,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5">
+                  <label
+                    htmlFor="hero-vibe-select"
+                    className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5"
+                  >
                     Desired Vibe
                   </label>
                   <select
+                    id="hero-vibe-select"
                     value={vibe}
                     onChange={e => setVibe(e.target.value)}
-                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold outline-none focus:border-black cursor-pointer"
+                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer"
                   >
                     <option value="Elegant + Attractive">Elegant + Attractive</option>
                     <option value="The Parisian Minimalist">The Parisian Minimalist</option>
@@ -487,13 +778,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5">
+                  <label
+                    htmlFor="hero-weather-select"
+                    className="block text-[10px] uppercase font-mono font-semibold text-[var(--text-muted)] mb-1.5"
+                  >
                     Weather (Auto-Detected)
                   </label>
                   <select
+                    id="hero-weather-select"
                     value={weather}
                     onChange={e => setWeather(e.target.value)}
-                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold outline-none focus:border-black cursor-pointer"
+                    className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer"
                   >
                     <option value="Tonight · 21°C Mild Autumn">Tonight · 21°C Mild Autumn</option>
                     <option value="Evening · 16°C Cool">Evening · 16°C Cool</option>
@@ -539,7 +834,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono tracking-wider uppercase bg-black text-white px-2.5 py-0.5 rounded-full font-bold">
+                    <span className="text-[10px] font-mono tracking-wider uppercase bg-black text-white dark:bg-white dark:text-black px-2.5 py-0.5 rounded-full font-bold">
                       {currentOutfit.harmonyScore}% AI MATCH
                     </span>
                     <span className="text-xs text-[var(--text-muted)]">·</span>
@@ -560,12 +855,41 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                       if (!requireRegisteredHeroAction('save-outfit', 'Save This Curated Look')) {
                         return;
                       }
-                      setSavedLook(!savedLook);
+                      const existing = loadStoredSavedLooks(workspaceScope);
+                      const duplicate = findDuplicateSavedLook(
+                        {
+                          occasion: currentOutfit.occasion,
+                          title: currentOutfit.title,
+                          slots: currentOutfitSlots,
+                          garments: currentOutfit.pieces.map((p) => p.name),
+                          garmentIds: currentOutfit.pieces.map((p) => p.id),
+                        },
+                        existing,
+                      );
+                      if (duplicate) {
+                        const updated = existing.map((look) =>
+                          look.id === duplicate.id ? { ...look, isFavorite: true } : look,
+                        );
+                        persistSavedLooks(updated, workspaceScope);
+                      } else {
+                        const newLook = buildSavedLookFromEnsemble({
+                          title: currentOutfit.title,
+                          subtitle: currentOutfit.rationale.venueAlignment,
+                          occasion: currentOutfit.occasion,
+                          venue: currentOutfit.venue,
+                          weatherTag: currentOutfit.weather,
+                          vibe: currentOutfit.vibe,
+                          slots: currentOutfitSlots,
+                          closet,
+                        });
+                        persistSavedLooks([newLook, ...existing], workspaceScope);
+                      }
+                      setSavedOutfitIds((prev) => ({ ...prev, [currentOutfit.id]: true }));
                     }}
                     className={`px-4 py-2.5 rounded-full border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                       savedLook
                         ? 'bg-[#10B981] text-white border-[#10B981]'
-                        : 'border-[var(--border-card)] text-[var(--text-heading)] hover:border-black'
+                        : 'border-[var(--border-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
                     }`}
                   >
                     <Bookmark className="w-3.5 h-3.5" />
@@ -639,7 +963,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                         type="button"
                         disabled={isGenerating}
                         onClick={() => handleChipTweak(chip)}
-                        className="px-3.5 py-1.5 rounded-full border border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-black text-xs text-[var(--text-heading)] font-semibold transition-all cursor-pointer hover:scale-105 active:scale-95"
+                        className="px-3.5 py-1.5 rounded-full border border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--gold-primary)] text-xs text-[var(--text-heading)] font-semibold transition-all cursor-pointer hover:scale-105 active:scale-95"
                       >
                         "{chip}"
                       </button>
@@ -650,11 +974,12 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <form onSubmit={handleSendChat} className="flex gap-2">
                   <input
                     type="text"
+                    aria-label="Modify curated outfit instruction"
                     maxLength={200}
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     placeholder="e.g. 'Make it more casual' or 'Change the shoes'..."
-                    className="flex-1 bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-4 py-3 text-xs sm:text-sm text-[var(--text-heading)] outline-none focus:border-black font-semibold"
+                    className="flex-1 bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-4 py-3 text-xs sm:text-sm text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-semibold"
                   />
                   <button
                     type="submit"

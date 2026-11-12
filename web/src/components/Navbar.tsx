@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Menu, X, Sun, Moon, User, Plus, LogOut } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
@@ -37,14 +37,25 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
+
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-[var(--bg-header)] border-b border-[var(--border-card)] transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 xl:px-8">
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-4 h-20">
           
           {/* Logo with the Official OTD Artwork */}
-          <a href="#" className="flex items-center gap-3 shrink-0 group">
-            <div className="h-12 w-10 sm:h-13 sm:w-11 rounded-lg overflow-hidden border border-[var(--border-gold)] shadow-sm bg-[#F7EFE0] flex items-center justify-center p-0.5 group-hover:scale-105 transition-all duration-300">
+          <a href="#" className="flex items-center gap-2 sm:gap-2.5 xl:gap-3 shrink-0 group">
+            <div className="h-10 w-8 min-[360px]:h-11 min-[360px]:w-9 xl:h-13 xl:w-11 rounded-lg overflow-hidden border border-[var(--border-gold)] shadow-sm bg-[#F7EFE0] flex items-center justify-center p-0.5 group-hover:scale-105 transition-all duration-300">
               <img
                 src="/otd_logo.png"
                 alt="OTD - Outfit of the Day Haute Couture Logo"
@@ -52,20 +63,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             </div>
             <div className="flex flex-col whitespace-nowrap">
-              <div className="flex items-center gap-1.5">
-                <span className="font-cinzel text-lg sm:text-xl tracking-[0.22em] font-bold text-[var(--text-heading)]">
+              <div className="flex items-center gap-1 xl:gap-1.5">
+                <span className="font-cinzel text-sm min-[360px]:text-base sm:text-lg xl:text-xl tracking-[0.14em] min-[360px]:tracking-[0.18em] xl:tracking-[0.22em] font-bold text-[var(--text-heading)]">
                   OTD
                 </span>
                 <span className="text-[var(--gold-primary)] text-xs">✦</span>
               </div>
-              <span className="text-[10px] tracking-[0.22em] uppercase text-[var(--gold-primary)] font-mono font-semibold">
+              <span className="text-[8px] min-[360px]:text-[9px] xl:text-[10px] tracking-[0.08em] min-[360px]:tracking-[0.15em] xl:tracking-[0.22em] uppercase text-[var(--gold-primary)] font-mono font-semibold">
                 Outfit Of The Day
               </span>
             </div>
           </a>
 
           {/* Desktop Navigation Links (Matching Screenshot 1) */}
-          <nav className="hidden lg:flex items-center space-x-8 text-[12px] font-semibold text-[var(--text-body)]">
+          <nav
+            aria-label="Primary navigation"
+            className="hidden lg:flex items-center space-x-3.5 xl:space-x-8 text-[11px] xl:text-[12px] font-semibold text-[var(--text-body)]"
+          >
             <a
               href="#"
               className="whitespace-nowrap hover:text-black dark:hover:text-white transition-colors py-1 relative font-bold text-[var(--text-heading)]"
@@ -103,15 +117,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             </a>
           </nav>
 
-          {/* Right Action Buttons + Theme Toggle */}
-          <div className="hidden sm:flex items-center gap-3 shrink-0">
+          {/* Right Action Buttons + Theme Toggle (Desktop lg+) */}
+          <div className="hidden lg:flex items-center gap-1.5 xl:gap-3 shrink-0">
             
             {/* Elegant Light / Dark Mode Toggle Button */}
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Switch to Ivory Light Mode' : 'Switch to Obsidian Dark Mode'}
               aria-label="Toggle theme mode"
-              className="p-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] text-[var(--gold-primary)] transition-all duration-300 cursor-pointer shadow-sm hover:scale-105"
+              className="p-2 xl:p-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] text-[var(--gold-primary)] transition-all duration-300 cursor-pointer shadow-sm hover:scale-105"
             >
               {theme === 'dark' ? (
                 <Sun className="w-4 h-4 transition-transform rotate-0 hover:rotate-90 duration-300 text-[#F7E7A9]" />
@@ -123,10 +137,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenProfile && (
               <button
                 onClick={onOpenProfile}
-                className="whitespace-nowrap text-[11px] uppercase tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-3.5 py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                className="whitespace-nowrap text-[10px] xl:text-[11px] uppercase tracking-[0.06em] xl:tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1 xl:gap-1.5"
                 title="Calibrate My Style Profile"
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3.5 h-3.5 shrink-0" />
                 <span>My Style</span>
               </button>
             )}
@@ -134,10 +148,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenAddPiece && (
               <button
                 onClick={onOpenAddPiece}
-                className="whitespace-nowrap text-[11px] uppercase tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-3.5 py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                className="whitespace-nowrap text-[10px] xl:text-[11px] uppercase tracking-[0.06em] xl:tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1 xl:gap-1.5"
                 title="Upload Garment to Digital Closet"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 shrink-0" />
                 <span>+ Piece</span>
               </button>
             )}
@@ -145,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onLaunchStudio && (
               <button
                 onClick={onLaunchStudio}
-                className="whitespace-nowrap text-[11px] uppercase tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-3.5 py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                className="whitespace-nowrap text-[10px] xl:text-[11px] uppercase tracking-[0.06em] xl:tracking-[0.16em] text-[var(--gold-primary)] hover:text-[var(--text-heading)] px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-full border border-[var(--border-gold)] hover:bg-[var(--pill-bg)] transition-all duration-200 cursor-pointer flex items-center gap-1 xl:gap-1.5 shadow-sm"
                 title={
                   isAuthenticated && user
                     ? `Open Web Studio (${user.name})`
@@ -164,18 +178,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={handleSignOut}
                 disabled={isSigningOut}
-                className="whitespace-nowrap px-4 py-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] hover:border-rose-400 hover:text-rose-600 text-[var(--text-heading)] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                className="whitespace-nowrap px-3 py-1.5 xl:px-4 xl:py-2.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-card)] hover:border-rose-400 hover:text-rose-600 text-[var(--text-heading)] text-[11px] xl:text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
                 title={user ? `Signed in as ${user.email}` : 'Sign out'}
                 aria-label="Sign out of OTD"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>{isSigningOut ? 'Signing Out...' : 'Sign Out'}</span>
               </button>
             ) : (
               (onOpenAuth || onOpenOnboarding) && (
                 <button
                   onClick={onOpenAuth || onOpenOnboarding}
-                  className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
+                  className="whitespace-nowrap px-3.5 py-1.5 xl:px-5 xl:py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[11px] xl:text-xs font-bold hover:bg-neutral-800 dark:hover:bg-neutral-200 flex items-center gap-1 xl:gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all"
                 >
                   <span>Sign In</span>
                   <span className="text-sm">→</span>
@@ -184,34 +198,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             <button
+              type="button"
               onClick={onOpenDownload}
-              className="gold-btn whitespace-nowrap px-4 py-2.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
+              aria-label="Open Android Companion App info"
+              className="gold-btn whitespace-nowrap px-3 py-1.5 xl:px-4 xl:py-2.5 rounded-full text-[10px] xl:text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Download className="w-3.5 h-3.5 shrink-0" />
-              <span>APK</span>
+              <span>App Beta</span>
             </button>
           </div>
 
-          {/* Mobile hamburger & Theme button */}
-          <div className="lg:hidden flex items-center gap-2">
+          {/* Mobile & Tablet (<1024px) hamburger & Theme button */}
+          <div className="lg:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
+              type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-full border border-[var(--border-gold)] text-[var(--gold-primary)] bg-[var(--bg-card)]"
+              className="p-2 rounded-full border border-[var(--border-gold)] text-[var(--gold-primary)] bg-[var(--bg-card)] cursor-pointer"
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <Sun className="w-4 h-4 text-[#F7E7A9]" /> : <Moon className="w-4 h-4 text-[#A67C1E]" />}
             </button>
             <button
+              type="button"
               onClick={onOpenDownload}
-              className="gold-btn px-3 py-1.5 rounded-full text-[10px] font-semibold flex items-center gap-1.5 whitespace-nowrap"
+              aria-label="Open Android Companion App info"
+              className="gold-btn px-2.5 sm:px-3 py-1.5 rounded-full text-[10px] font-semibold flex items-center gap-1 sm:gap-1.5 whitespace-nowrap cursor-pointer"
             >
-              <Download className="w-3 h-3" />
-              <span>APK</span>
+              <Download className="w-3 h-3 shrink-0" />
+              <span>App Beta</span>
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] transition-colors"
+              className="p-2 rounded-lg text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
               aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation-drawer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -220,9 +241,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile & Tablet Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[var(--bg-card-elevated)] border-b border-[var(--border-gold)] px-6 py-6 space-y-4 backdrop-blur-2xl animate-in slide-in-from-top-2 duration-200">
+        <div
+          id="mobile-navigation-drawer"
+          className="lg:hidden bg-[var(--bg-card-elevated)] border-b border-[var(--border-gold)] px-6 py-6 space-y-4 backdrop-blur-2xl animate-in slide-in-from-top-2 duration-200"
+        >
           <a
             href="#atelier"
             onClick={() => setMobileMenuOpen(false)}
@@ -339,6 +363,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               )
             )}
             <button
+              type="button"
               onClick={() => {
                 setMobileMenuOpen(false);
                 onOpenDownload();
@@ -346,7 +371,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="gold-btn w-full py-3 rounded-full text-xs font-semibold flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
-              <span>Download Android APK (150 MB)</span>
+              <span>Android App (Coming Soon)</span>
             </button>
           </div>
         </div>

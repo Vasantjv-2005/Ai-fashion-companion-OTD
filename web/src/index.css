@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -251,6 +252,145 @@
   color: var(--gold-primary);
 }
 
+/* Shared Surface & CTA Component Utilities */
+@layer components {
+  .glass-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-card);
+    box-shadow: var(--card-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.25s ease,
+      background-color 0.25s ease;
+  }
+
+  .glass-card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow-hover);
+    border-color: var(--border-gold);
+    background-color: var(--bg-card-hover);
+  }
+
+  .gold-btn {
+    background-color: var(--gold-btn-bg);
+    color: var(--gold-btn-text);
+    border: 1px solid var(--border-gold);
+    box-shadow: var(--card-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+  }
+
+  .gold-btn:hover {
+    opacity: 0.92;
+    box-shadow: var(--card-shadow-hover);
+  }
+
+  .gold-btn-outline {
+    background-color: transparent;
+    color: var(--gold-primary);
+    border: 1px solid var(--border-gold);
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  }
+
+  .gold-btn-outline:hover {
+    background-color: var(--pill-bg);
+    border-color: var(--gold-primary);
+    color: var(--text-heading);
+  }
+}
+
+/* Entry & Modal Reveal Animations */
+@keyframes otd-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes otd-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), 1);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  }
+}
+
+.animate-fadeIn {
+  animation: otd-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-in {
+  animation: otd-enter var(--tw-duration, 200ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.fade-in {
+  --tw-enter-opacity: 0;
+}
+
+.zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+
+.slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+}
+
+/* Hero & Four-Step Editorial Motion System */
+.otd-hero-script {
+  font-size: clamp(1.75rem, 3.1vw, 2.65rem);
+  line-height: 1.06;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.78), 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.otd-step-reveal {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition: opacity 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.otd-step-reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.otd-step-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--card-shadow);
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 320ms ease,
+    background-color 320ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .otd-step-card:hover {
+    transform: translate3d(0, -5px, 0);
+    box-shadow: var(--card-shadow-hover);
+    border-color: var(--border-gold);
+    background-color: var(--bg-card-hover);
+  }
+}
+
+.otd-step-image {
+  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .otd-step-card:hover .otd-step-image {
+    transform: scale(1.04);
+  }
+}
+
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -258,5 +398,18 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .otd-step-reveal,
+  .otd-step-reveal[data-revealed="true"] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  .otd-step-card:hover,
+  .otd-step-card:hover .otd-step-image {
+    transform: none !important;
   }
 }

@@ -18,6 +18,21 @@ import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
 import { useAuth } from '../hooks/useAuth';
 import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { useFocusTrap } from '../utils/focusTrap';
+import { loadStoredSettings, SETTINGS_UPDATED_EVENT, type UserSettings } from './ui/SettingsModal';
+import {
+  convertHeightValue,
+  convertWeightValue,
+  formatHeightForStorage,
+  formatWeightForStorage,
+  normalizeHeightForSystem,
+  normalizeWeightForSystem,
+  parseHeightPrefill,
+  parseWeightPrefill,
+  validateOptionalHeight,
+  validateOptionalWeight,
+  type HeightUnit,
+  type WeightUnit,
+} from '../utils/measurementUtils';
 import {
   ACCEPTED_GARMENT_IMAGE_ACCEPT,
   validateGarmentImageFile,
@@ -31,6 +46,47 @@ export interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete?: (destination?: 'closet' | 'home') => void;
+}
+
+const FIT_OPTIONS = [
+  { id: 'Tailored / Slim', label: 'Tailored / Slim', sub: 'Clean contour' },
+  { id: 'Regular Classic', label: 'Regular Classic', sub: 'Balanced comfort' },
+  { id: 'Relaxed / Drape', label: 'Relaxed / Drape', sub: 'Contemporary ease' },
+] as const;
+
+const BODY_SHAPE_OPTIONS = [
+  { id: 'Athletic / V-Taper', label: 'Athletic / V-Taper', sub: 'Broader shoulders' },
+  { id: 'Lean / Slim', label: 'Lean / Slim', sub: 'Linear silhouette' },
+  { id: 'Broad / Structured', label: 'Broad / Structured', sub: 'Substantial frame' },
+  { id: 'Balanced / Regular', label: 'Balanced / Regular', sub: 'Proportional drape' },
+] as const;
+
+const STYLE_PERSONA_OPTIONS = [
+  'Clean Minimalist',
+  'Old Money Heritage',
+  'Smart Sartorial',
+  'Relaxed Contemporary',
+  'Quiet Luxury',
+  'Streetwear Chic',
+  'Evening Haute',
+  'Capsule Modular',
+] as const;
+
+function normalizeFitPreference(raw?: string): string {
+  const token = (raw || '').trim().toLowerCase();
+  if (!token) return 'Regular Classic';
+  if (token.includes('slim') || token === 'tailored') return 'Tailored / Slim';
+  if (token.includes('relaxed') || token.includes('drape') || token.includes('loose')) {
+    return 'Relaxed / Drape';
+  }
+  return 'Regular Classic';
+}
+
+function normalizeBodyShape(raw?: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  if (trimmed === 'Broad / Regular') return 'Balanced / Regular';
+  return trimmed;
 }
 
 const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
@@ -63,17 +119,56 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
   );
 
   // Step 2: Optional Measurements & Silhouette
-  const [heightValue, setHeightValue] = useState<string>('');
-  const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
-  const [weightValue, setWeightValue] = useState<string>('');
-  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [bodyShape, setBodyShape] = useState<string>(profile.bodyShape || '');
-  const [fitPreference, setFitPreference] = useState<string>(profile.preferredFit || 'Regular Fit');
+  const preferredUnitSystem = loadStoredSettings().measurementUnit;
+  const initialHeight = parseHeightPrefill(
+    normalizeHeightForSystem(profile.height, preferredUnitSystem),
+    preferredUnitSystem,
+  );
+  const initialWeight = parseWeightPrefill(
+    normalizeWeightForSystem(profile.weight, preferredUnitSystem),
+    preferredUnitSystem,
+  );
+  const [heightValue, setHeightValue] = useState<string>(initialHeight.value);
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>(initialHeight.unit);
+  const [weightValue, setWeightValue] = useState<string>(initialWeight.value);
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(initialWeight.unit);
+  const [heightError, setHeightError] = useState<string | null>(null);
+  const [weightError, setWeightError] = useState<string | null>(null);
+  const [bodyShape, setBodyShape] = useState<string>(normalizeBodyShape(profile.bodyShape));
+  const [fitPreference, setFitPreference] = useState<string>(
+    normalizeFitPreference(profile.preferredFit)
+  );
   const [selectedColours, setSelectedColours] = useState<string[]>(
     profile.palettePreferences?.length
       ? profile.palettePreferences
       : ['Black', 'Ivory', 'Camel']
   );
+
+  // Sync Onboarding measurement units when SettingsModal dispatches updated unit preference
+  useEffect(() => {
+    const onSettingsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<UserSettings>).detail;
+      const nextSystem = detail?.measurementUnit || loadStoredSettings().measurementUnit;
+      const nextHeightUnit: HeightUnit = nextSystem === 'imperial' ? 'ft' : 'cm';
+      const nextWeightUnit: WeightUnit = nextSystem === 'imperial' ? 'lbs' : 'kg';
+      setHeightUnit((prevUnit) => {
+        if (prevUnit !== nextHeightUnit) {
+          setHeightValue((curr) => convertHeightValue(curr, prevUnit, nextHeightUnit));
+          setHeightError(null);
+        }
+        return nextHeightUnit;
+      });
+      setWeightUnit((prevUnit) => {
+        if (prevUnit !== nextWeightUnit) {
+          setWeightValue((curr) => convertWeightValue(curr, prevUnit, nextWeightUnit));
+          setWeightError(null);
+        }
+        return nextWeightUnit;
+      });
+    };
+    window.addEventListener(SETTINGS_UPDATED_EVENT, onSettingsUpdated);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, onSettingsUpdated);
+  }, []);
 
   // Step 3: Optional Avatar Setup
   const [avatarChoice, setAvatarChoice] = useState<'archetype' | 'custom_photo' | 'skipped'>(
@@ -102,10 +197,6 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
       }
     };
   }, []);
-
-  if (isAuthenticated && guestPromptAction !== null) {
-    setGuestPromptAction(null);
-  }
 
   const isGuestPromptOpen = !isAuthenticated && guestPromptAction !== null;
   const handleCloseGuestPrompt = useCallback(() => {
@@ -228,8 +319,8 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
   }) => {
     if (!isAuthenticated) return;
     const finalName = fullName.trim() || 'Curator';
-    const finalHeight = heightValue ? `${heightValue} ${heightUnit}` : profile.height || '';
-    const finalWeight = weightValue ? `${weightValue} ${weightUnit}` : profile.weight || '';
+    const finalHeight = formatHeightForStorage(heightValue, heightUnit);
+    const finalWeight = formatWeightForStorage(weightValue, weightUnit);
 
     updateProfile({
       name: finalName,
@@ -237,7 +328,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
       stylePersonas: selectedStyles,
       height: finalHeight,
       weight: finalWeight,
-      bodyShape: bodyShape || profile.bodyShape || 'Athletic / V-Taper',
+      bodyShape,
       preferredFit: fitPreference,
       palettePreferences: selectedColours,
       avatarOption: overrides?.avatarChoice || avatarChoice,
@@ -260,6 +351,8 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
   };
 
   const handleSkipMeasurements = () => {
+    setHeightError(null);
+    setWeightError(null);
     if (isAuthenticated) {
       saveProfileData();
     }
@@ -267,6 +360,13 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
   };
 
   const handleNextFromStep2 = () => {
+    const nextHeightError = validateOptionalHeight(heightValue, heightUnit);
+    const nextWeightError = validateOptionalWeight(weightValue, weightUnit);
+    setHeightError(nextHeightError);
+    setWeightError(nextWeightError);
+    if (nextHeightError || nextWeightError) {
+      return;
+    }
     if (isAuthenticated) {
       saveProfileData();
     }
@@ -335,6 +435,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
         
         {/* Top-Right Modal Close Button */}
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-4 right-4 z-30 p-2 rounded-full bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
           aria-label="Close onboarding modal"
@@ -414,7 +515,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                 <span className="w-5 h-5 rounded-md bg-[var(--pill-bg)] border border-[var(--border-card)] flex items-center justify-center text-xs text-[var(--gold-primary)]">
                   🔒
                 </span>
-                <span className="text-[var(--text-heading)] font-medium">100% Private & Locally Controlled</span>
+                <span className="text-[var(--text-heading)] font-medium">Privacy-First & User Controlled</span>
               </div>
             </div>
           </div>
@@ -432,7 +533,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
           
           {/* Top Bar: Stepper Progress & Fast Skip Link */}
           <div className="pb-5 border-b border-[var(--border-card)]">
-            <div className="flex items-center justify-between text-xs mb-3 pr-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-3 pr-9">
               <span className="text-[10px] uppercase font-mono tracking-widest text-[var(--gold-primary)] font-semibold">
                 Step {currentStep} of 3 ·{' '}
                 {currentStep === 1 && 'Basic Style Focus'}
@@ -444,7 +545,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               <button
                 type="button"
                 onClick={handleSkipDirectlyToCloset}
-                className="text-[11px] font-semibold text-[var(--gold-primary)] hover:underline flex items-center gap-1 cursor-pointer"
+                className="text-[11px] font-semibold text-[var(--gold-primary)] hover:underline flex items-center gap-1 cursor-pointer shrink-0"
                 title="Bypass all remaining setup and open your wardrobe immediately"
               >
                 <span>Skip to Closet</span>
@@ -520,7 +621,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       if (nameError) setNameError(null);
                     }}
                     placeholder="e.g. Eleanor or Julian"
-                    className={`w-full pl-10 pr-4 py-3 rounded-2xl bg-[var(--bg-card-inner)] border text-xs sm:text-sm text-[var(--text-heading)] outline-none font-medium transition-all ${
+                    className={`w-full pl-10 pr-4 py-3 rounded-2xl bg-[var(--bg-card-inner)] border text-xs sm:text-sm text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] font-medium transition-all ${
                       nameError
                         ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
                         : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
@@ -535,9 +636,9 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               {/* Wardrobe Styling Focus (Women / Men / Personalize) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                     Select Your Wardrobe Styling Focus <span className="text-[var(--gold-primary)]">*</span>
-                  </label>
+                  </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">
                     Wardrobe Personalization
                   </span>
@@ -569,23 +670,18 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                   ].map((card) => {
                     const isSelected = wardrobeFocus === card.id;
                     return (
-                      <div
+                      <button
                         key={card.id}
+                        type="button"
+                        aria-pressed={isSelected}
                         onClick={() => setWardrobeFocus(card.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            setWardrobeFocus(card.id);
-                          }
-                        }}
-                        className={`p-4 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 ${
+                        className={`w-full p-4 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                           isSelected
                             ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] shadow-sm ring-1 ring-[var(--gold-primary)]'
                             : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between w-full">
                           <span className="text-2xl">{card.icon}</span>
                           <div
                             className={`w-5 h-5 rounded-full flex items-center justify-center text-xs transition-all ${
@@ -604,14 +700,14 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                               {card.title}
                             </h3>
                           </div>
-                          <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--gold-primary)] block font-semibold mb-1">
+                          <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--gold-dark)] dark:text-[var(--gold-primary)] block font-semibold mb-1">
                             {card.badge}
                           </span>
                           <p className="text-[11px] text-[var(--text-muted)] leading-snug">
                             {card.desc}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -624,25 +720,16 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               {/* Personal Style Personas */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                     Primary Style Personas (Select 1 to 3)
-                  </label>
+                  </span>
                   <span className="text-[10px] text-[var(--gold-primary)] font-mono">
                     {selectedStyles.length}/3 selected
                   </span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    'Clean Minimalist',
-                    'Old Money Heritage',
-                    'Smart Sartorial',
-                    'Relaxed Contemporary',
-                    'Quiet Luxury',
-                    'Streetwear Chic',
-                    'Evening Haute',
-                    'Capsule Modular',
-                  ].map((style) => {
+                  {STYLE_PERSONA_OPTIONS.map((style) => {
                     const isSelected = selectedStyles.includes(style);
                     return (
                       <button
@@ -680,7 +767,10 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       Can be added or edited later
                     </span>
                   </div>
-                  <h2 className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight">
+                  <h2
+                    id="onboarding-modal-title"
+                    className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight"
+                  >
                     Silhouette & Fit Proportions
                   </h2>
                 </div>
@@ -702,15 +792,25 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Height */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <label
+                      htmlFor="onboarding-height"
+                      className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5"
+                    >
                       <Ruler className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                       <span>Height (Optional)</span>
                     </label>
-                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)]">
+                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)] shrink-0">
                       <button
                         type="button"
-                        onClick={() => setHeightUnit('cm')}
+                        aria-pressed={heightUnit === 'cm'}
+                        onClick={() => {
+                          if (heightUnit !== 'cm') {
+                            setHeightValue((v) => convertHeightValue(v, heightUnit, 'cm'));
+                            setHeightUnit('cm');
+                            setHeightError(null);
+                          }
+                        }}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                           heightUnit === 'cm'
                             ? 'bg-black text-white dark:bg-white dark:text-black'
@@ -721,38 +821,67 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setHeightUnit('ft')}
+                        aria-pressed={heightUnit === 'ft'}
+                        onClick={() => {
+                          if (heightUnit !== 'ft') {
+                            setHeightValue((v) => convertHeightValue(v, heightUnit, 'ft'));
+                            setHeightUnit('ft');
+                            setHeightError(null);
+                          }
+                        }}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                           heightUnit === 'ft'
                             ? 'bg-black text-white dark:bg-white dark:text-black'
                             : 'text-[var(--text-muted)]'
                         }`}
                       >
-                        ft
+                        ft/in
                       </button>
                     </div>
                   </div>
                   <input
+                    id="onboarding-height"
                     type="text"
                     maxLength={20}
                     value={heightValue}
-                    onChange={(e) => setHeightValue(e.target.value)}
+                    onChange={(e) => {
+                      setHeightValue(e.target.value);
+                      if (heightError) setHeightError(null);
+                    }}
+                    aria-invalid={Boolean(heightError)}
                     placeholder={heightUnit === 'cm' ? 'e.g. 178' : `e.g. 5'10"`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                    className={`w-full min-w-0 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
+                      heightError
+                        ? 'border-rose-400 focus:border-rose-500'
+                        : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                    }`}
                   />
+                  {heightError && (
+                    <p className="text-[11px] text-rose-500 font-medium leading-snug">{heightError}</p>
+                  )}
                 </div>
 
                 {/* Weight */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <label
+                      htmlFor="onboarding-weight"
+                      className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5"
+                    >
                       <Scale className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                       <span>Weight (Optional)</span>
                     </label>
-                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)]">
+                    <div className="flex bg-[var(--pill-bg)] p-0.5 rounded-lg border border-[var(--border-card)] shrink-0">
                       <button
                         type="button"
-                        onClick={() => setWeightUnit('kg')}
+                        aria-pressed={weightUnit === 'kg'}
+                        onClick={() => {
+                          if (weightUnit !== 'kg') {
+                            setWeightValue((v) => convertWeightValue(v, weightUnit, 'kg'));
+                            setWeightUnit('kg');
+                            setWeightError(null);
+                          }
+                        }}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                           weightUnit === 'kg'
                             ? 'bg-black text-white dark:bg-white dark:text-black'
@@ -763,7 +892,14 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setWeightUnit('lbs')}
+                        aria-pressed={weightUnit === 'lbs'}
+                        onClick={() => {
+                          if (weightUnit !== 'lbs') {
+                            setWeightValue((v) => convertWeightValue(v, weightUnit, 'lbs'));
+                            setWeightUnit('lbs');
+                            setWeightError(null);
+                          }
+                        }}
                         className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                           weightUnit === 'lbs'
                             ? 'bg-black text-white dark:bg-white dark:text-black'
@@ -775,28 +911,35 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                     </div>
                   </div>
                   <input
+                    id="onboarding-weight"
                     type="text"
                     maxLength={20}
                     value={weightValue}
-                    onChange={(e) => setWeightValue(e.target.value)}
+                    onChange={(e) => {
+                      setWeightValue(e.target.value);
+                      if (weightError) setWeightError(null);
+                    }}
+                    aria-invalid={Boolean(weightError)}
                     placeholder={weightUnit === 'kg' ? 'e.g. 68' : 'e.g. 150'}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                    className={`w-full min-w-0 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card-inner)] border text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
+                      weightError
+                        ? 'border-rose-400 focus:border-rose-500'
+                        : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                    }`}
                   />
+                  {weightError && (
+                    <p className="text-[11px] text-rose-500 font-medium leading-snug">{weightError}</p>
+                  )}
                 </div>
               </div>
 
               {/* Body Silhouette Proportions */}
               <div className="space-y-2">
-                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                   Silhouette Archetype (Optional)
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { id: 'Athletic / V-Taper', label: 'Athletic / V-Taper', sub: 'Broader shoulders' },
-                    { id: 'Lean / Slim', label: 'Lean / Slim', sub: 'Linear silhouette' },
-                    { id: 'Broad / Structured', label: 'Broad / Structured', sub: 'Substantial frame' },
-                    { id: 'Balanced / Regular', label: 'Balanced / Regular', sub: 'Proportional drape' },
-                  ].map((shape) => {
+                </span>
+                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {BODY_SHAPE_OPTIONS.map((shape) => {
                     const isSelected = bodyShape === shape.id;
                     return (
                       <button
@@ -823,15 +966,11 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
 
               {/* Preferred Fit */}
               <div className="space-y-2">
-                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                   Preferred Garment Cut & Fit
-                </label>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {[
-                    { id: 'Slim Fit', label: 'Tailored / Slim', sub: 'Clean contour' },
-                    { id: 'Regular Fit', label: 'Classic Regular', sub: 'Balanced comfort' },
-                    { id: 'Loose Fit', label: 'Relaxed / Drape', sub: 'Contemporary ease' },
-                  ].map((fit) => {
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {FIT_OPTIONS.map((fit) => {
                     const isSelected = fitPreference === fit.id;
                     return (
                       <button
@@ -859,9 +998,9 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               {/* Palette Preferences */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                  <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                     Palette Preferences (Optional, Choose up to 4)
-                  </label>
+                  </span>
                   <span className="text-[10px] text-[var(--gold-primary)] font-mono">
                     {selectedColours.length}/4 selected
                   </span>
@@ -908,7 +1047,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                   <strong className="text-[var(--text-heading)] block mb-0.5">
                     Privacy Guarantee
                   </strong>
-                  All measurements are kept strictly local to your browser session. They are used purely for proportional math, never transmitted without consent, and can be deleted anytime.
+                  Your measurements stay in this workspace&apos;s browser storage for proportional fit math until account cloud sync is active, are never shared with third-party ad networks, and can be edited or cleared anytime in Settings.
                 </div>
               </div>
             </div>
@@ -929,7 +1068,10 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       Phase 1 Preview Mode
                     </span>
                   </div>
-                  <h2 className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight">
+                  <h2
+                    id="onboarding-modal-title"
+                    className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[var(--text-heading)] leading-tight"
+                  >
                     Style Avatar Preview
                   </h2>
                 </div>
@@ -949,9 +1091,9 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
 
               {/* Avatar Archetype Choices */}
               <div className="space-y-3">
-                <label className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
+                <span className="block text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold">
                   Select a Mannequin Archetype (Optional)
-                </label>
+                </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
@@ -977,19 +1119,21 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                     const isSelected =
                       avatarChoice === 'archetype' && avatarArchetype === arch.id;
                     return (
-                      <div
+                      <button
                         key={arch.id}
+                        type="button"
+                        aria-pressed={isSelected}
                         onClick={() => {
                           setAvatarChoice('archetype');
                           setAvatarArchetype(arch.id);
                         }}
-                        className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-2 ${
+                        className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                           isSelected
                             ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]'
                             : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between w-full">
                           <span className="text-xl">{arch.icon}</span>
                           {isSelected && (
                             <span className="text-xs text-[var(--gold-primary)] font-bold">
@@ -1005,7 +1149,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                             {arch.subtitle}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1014,10 +1158,10 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               {/* Reference Photo Upload (Optional) */}
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
+                  <span className="text-[11px] uppercase font-mono tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1.5">
                     <Camera className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                     <span>Reference Fit or Profile Photo (Optional)</span>
-                  </label>
+                  </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">Max 5MB</span>
                 </div>
 
@@ -1036,7 +1180,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                           Reference Photo Attached
                         </span>
                         <span className="text-[10px] text-emerald-500 font-mono">
-                          Stored locally in browser cache
+                          Stored locally in this browser workspace
                         </span>
                       </div>
                     </div>
@@ -1045,36 +1189,41 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                       onClick={handleRemovePhoto}
                       className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                       title="Remove photo"
+                      aria-label="Remove reference photo"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
-                  <div
-                    onClick={() => {
-                      if (!isAuthenticated) {
-                        setGuestPromptAction('upload');
-                        return;
-                      }
-                      fileInputRef.current?.click();
-                    }}
-                    className="p-4 rounded-2xl border border-dashed border-[var(--border-card)] hover:border-[var(--gold-primary)] bg-[var(--bg-card-inner)]/50 text-center cursor-pointer transition-colors space-y-1.5"
-                  >
-                    <Upload className="w-5 h-5 mx-auto text-[var(--gold-primary)]" />
-                    <p className="text-xs font-semibold text-[var(--text-heading)]">
-                      Click to upload an optional reference photo
-                    </p>
-                    <p className="text-[10px] text-[var(--text-muted)]">
-                      PNG, JPEG, or WebP (up to 5MB). This is strictly optional and can be skipped.
-                    </p>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          setGuestPromptAction('upload');
+                          return;
+                        }
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full p-4 rounded-2xl border border-dashed border-[var(--border-card)] hover:border-[var(--gold-primary)] bg-[var(--bg-card-inner)]/50 text-center cursor-pointer transition-colors space-y-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+                    >
+                      <Upload className="w-5 h-5 mx-auto text-[var(--gold-primary)]" />
+                      <span className="block text-xs font-semibold text-[var(--text-heading)]">
+                        Click to upload an optional reference photo
+                      </span>
+                      <span className="block text-[10px] text-[var(--text-muted)]">
+                        PNG, JPEG, or WebP (up to 5MB). This is strictly optional and can be skipped.
+                      </span>
+                    </button>
                     <input
                       ref={fileInputRef}
                       type="file"
+                      aria-label="Upload optional reference photo"
                       accept={ACCEPTED_GARMENT_IMAGE_ACCEPT}
                       onChange={handlePhotoSelect}
                       className="hidden"
                     />
-                  </div>
+                  </>
                 )}
                 {photoError && (
                   <p className="text-[11px] text-rose-500 font-medium">{photoError}</p>
@@ -1082,9 +1231,11 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
               </div>
 
               {/* Direct Skip Option Card */}
-              <div
+              <button
+                type="button"
+                aria-pressed={avatarChoice === 'skipped'}
                 onClick={() => setAvatarChoice('skipped')}
-                className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all ${
+                className={`w-full p-3.5 rounded-2xl border text-left cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                   avatarChoice === 'skipped'
                     ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] ring-1 ring-[var(--gold-primary)]'
                     : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] hover:border-[var(--border-gold)]'
@@ -1101,7 +1252,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                     <span className="text-xs text-[var(--gold-primary)] font-bold">✓ Selected</span>
                   )}
                 </div>
-              </div>
+              </button>
 
               {/* AI Transparency Box */}
               <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-xs text-[var(--text-muted)] flex items-start gap-2.5">
@@ -1110,7 +1261,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
                   <strong className="text-[var(--text-heading)] block mb-0.5">
                     Transparent Architecture
                   </strong>
-                  OTD will never generate fake avatars or transmit biometric data to third-party endpoints. You can style outfits using clean flat-lays at any time.
+                  OTD never fabricates third-party biometric profiles. In this preview, avatar preferences and optional reference photos stay in your browser&apos;s local workspace storage, and sync only to your OTD account when cloud sync is active. You can edit, remove, or use flat-lays anytime.
                 </div>
               </div>
             </div>
@@ -1119,7 +1270,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
           {/* ======================================================================= */}
           {/* BOTTOM ACTIONS BAR (Back / Skip / Next / Finish) */}
           {/* ======================================================================= */}
-          <div className="pt-5 border-t border-[var(--border-card)] flex items-center justify-between gap-3">
+          <div className="pt-5 border-t border-[var(--border-card)] flex flex-wrap items-center justify-between gap-3">
             {/* Left Button: Back or Skip to Closet */}
             {currentStep > 1 ? (
               <button
@@ -1141,7 +1292,7 @@ const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
             )}
 
             {/* Right Buttons: Skip Step / Next / Finish */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-auto">
               {currentStep === 1 && (
                 <button
                   type="button"

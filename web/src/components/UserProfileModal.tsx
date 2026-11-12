@@ -5,27 +5,119 @@ import { useAuth } from '../hooks/useAuth';
 import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { useFocusTrap } from '../utils/focusTrap';
 import { GuestRegistrationPromptModal } from './auth/GuestRegistrationPromptModal';
+import {
+  loadStoredSettings,
+  SETTINGS_UPDATED_EVENT,
+  type UserSettings,
+} from './ui/SettingsModal';
+import {
+  formatHeightForStorage,
+  formatWeightForStorage,
+  normalizeHeightForSystem,
+  normalizeWeightForSystem,
+  parseHeightPrefill,
+  parseWeightPrefill,
+  validateOptionalHeight,
+  validateOptionalWeight,
+} from '../utils/measurementUtils';
 
 interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const PROFILE_BODY_SHAPES = [
+  'Athletic / V-Taper',
+  'Lean / Slim',
+  'Broad / Structured',
+  'Balanced / Regular',
+] as const;
+
+const PROFILE_STYLE_PERSONAS = [
+  'Clean Minimalist',
+  'Old Money Heritage',
+  'Smart Sartorial',
+  'Relaxed Contemporary',
+  'Quiet Luxury',
+  'Streetwear Chic',
+  'Evening Haute',
+  'Capsule Modular',
+] as const;
+
+const PROFILE_FIT_OPTIONS = [
+  'Tailored / Slim',
+  'Regular Classic',
+  'Relaxed / Drape',
+] as const;
+
+function normalizeProfileBodyShape(raw?: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  if (trimmed === 'Broad / Regular') return 'Balanced / Regular';
+  return trimmed;
+}
+
+function normalizeProfileFit(raw?: string): string {
+  const token = (raw || '').trim().toLowerCase();
+  if (!token) return 'Regular Classic';
+  if (token.includes('slim') || token === 'tailored') return 'Tailored / Slim';
+  if (token.includes('relaxed') || token.includes('drape') || token.includes('loose')) {
+    return 'Relaxed / Drape';
+  }
+  return 'Regular Classic';
+}
+
 const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = ({ onClose }) => {
   const { isAuthenticated } = useAuth();
   const { profile, updateProfile } = useCloset();
+  const initialUnitSystem = loadStoredSettings().measurementUnit;
+  const [unitSystem, setUnitSystem] = useState<'metric' | 'imperial'>(initialUnitSystem);
   const [name, setName] = useState(profile.name);
   const [wardrobeFocus, setWardrobeFocus] = useState<WardrobeFocus>(profile.wardrobeFocus || 'personalize');
-  const [height, setHeight] = useState(profile.height);
-  const [bodyShape, setBodyShape] = useState(profile.bodyShape);
+  const [height, setHeight] = useState(() =>
+    parseHeightPrefill(normalizeHeightForSystem(profile.height, initialUnitSystem), initialUnitSystem).value
+  );
+  const [weight, setWeight] = useState(() =>
+    parseWeightPrefill(normalizeWeightForSystem(profile.weight, initialUnitSystem), initialUnitSystem).value
+  );
+  const [heightError, setHeightError] = useState<string | null>(null);
+  const [weightError, setWeightError] = useState<string | null>(null);
+  const [bodyShape, setBodyShape] = useState(normalizeProfileBodyShape(profile.bodyShape));
   const [selectedStyles, setSelectedStyles] = useState<string[]>(profile.stylePersonas);
-  const [fit, setFit] = useState(profile.preferredFit);
+  const [fit, setFit] = useState(normalizeProfileFit(profile.preferredFit));
   const [saved, setSaved] = useState(false);
   const [isGuestPromptOpen, setIsGuestPromptOpen] = useState(false);
 
-  if (isAuthenticated && isGuestPromptOpen) {
-    setIsGuestPromptOpen(false);
-  }
+  useEffect(() => {
+    const onSettingsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<UserSettings>).detail;
+      const nextSystem = detail?.measurementUnit || loadStoredSettings().measurementUnit;
+      setUnitSystem((prevSystem) => {
+        if (prevSystem === nextSystem) return prevSystem;
+        setHeight((curr) =>
+          curr.trim()
+            ? parseHeightPrefill(normalizeHeightForSystem(curr, nextSystem), nextSystem).value
+            : curr
+        );
+        setWeight((curr) =>
+          curr.trim()
+            ? parseWeightPrefill(
+                normalizeWeightForSystem(
+                  /\b(kg|lbs?)\b/i.test(curr) ? curr : `${curr} ${prevSystem === 'imperial' ? 'lbs' : 'kg'}`,
+                  nextSystem
+                ),
+                nextSystem
+              ).value
+            : curr
+        );
+        setHeightError(null);
+        setWeightError(null);
+        return nextSystem;
+      });
+    };
+    window.addEventListener(SETTINGS_UPDATED_EVENT, onSettingsUpdated);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, onSettingsUpdated);
+  }, []);
 
   const isMountedRef = useRef(true);
   const saveTimerRef = useRef<number | null>(null);
@@ -55,9 +147,13 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
 
   const toggleStyle = (style: string) => {
     if (selectedStyles.includes(style)) {
-      setSelectedStyles(selectedStyles.filter(s => s !== style));
-    } else {
+      if (selectedStyles.length > 1) {
+        setSelectedStyles(selectedStyles.filter((s) => s !== style));
+      }
+    } else if (selectedStyles.length < 3) {
       setSelectedStyles([...selectedStyles, style]);
+    } else {
+      setSelectedStyles([...selectedStyles.slice(1), style]);
     }
   };
 
@@ -66,6 +162,17 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
       setIsGuestPromptOpen(true);
       return;
     }
+
+    const activeHeightUnit = unitSystem === 'imperial' ? 'ft' : 'cm';
+    const activeWeightUnit = unitSystem === 'imperial' ? 'lbs' : 'kg';
+    const nextHeightError = validateOptionalHeight(height, activeHeightUnit);
+    const nextWeightError = validateOptionalWeight(weight, activeWeightUnit);
+    setHeightError(nextHeightError);
+    setWeightError(nextWeightError);
+    if (nextHeightError || nextWeightError) {
+      return;
+    }
+
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
@@ -73,7 +180,8 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
     updateProfile({
       name,
       wardrobeFocus,
-      height,
+      height: formatHeightForStorage(height, activeHeightUnit),
+      weight: formatWeightForStorage(weight, activeWeightUnit),
       bodyShape,
       stylePersonas: selectedStyles,
       preferredFit: fit
@@ -94,7 +202,7 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
         aria-modal="true"
         aria-hidden={isActiveGuestPromptOpen ? true : undefined}
         aria-labelledby="user-profile-title"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
         onClick={(e) => {
           if (!isActiveGuestPromptOpen && e.target === e.currentTarget) {
             onClose();
@@ -103,14 +211,15 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
       >
       <div
         ref={modalRef}
-        className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-lg glass-card rounded-3xl p-4 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+          className="absolute top-5 right-5 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
@@ -142,12 +251,12 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
           {/* Wardrobe Styling Focus (Women / Men / Personalize) */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+              <span className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
                 Wardrobe Styling Focus
-              </label>
+              </span>
               <span className="text-[10px] text-[var(--gold-primary)] font-mono">Editable Anytime</span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
               {[
                 { id: 'women' as const, label: 'Women', badge: 'Capsule & Fluid', icon: '👗' },
                 { id: 'men' as const, label: 'Men', badge: 'Sartorial & Tailored', icon: '👔' },
@@ -158,16 +267,20 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
                   <button
                     key={opt.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setWardrobeFocus(opt.id)}
-                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                       isSelected
-                        ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] shadow-sm'
-                        : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                        ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] ring-1 ring-[var(--gold-primary)] shadow-sm'
+                        : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
                     }`}
                   >
                     <span className="text-xl">{opt.icon}</span>
-                    <span className="font-semibold text-xs text-[var(--text-heading)]">{opt.label}</span>
-                    <span className="text-[9px] font-mono text-[var(--gold-primary)] tracking-tight">
+                    <span className="font-semibold text-xs text-[var(--text-heading)] flex items-center gap-1">
+                      {isSelected && <Check className="w-3 h-3 text-[var(--gold-dark)] dark:text-[var(--gold-primary)] stroke-[3]" />}
+                      <span>{opt.label}</span>
+                    </span>
+                    <span className="text-[9px] font-mono text-[var(--gold-dark)] dark:text-[var(--gold-primary)] tracking-tight font-semibold">
                       {opt.badge}
                     </span>
                   </button>
@@ -180,51 +293,101 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
           </div>
 
           {/* Biometrics */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-3">
+              <label
+                htmlFor="profile-name-input"
+                className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1"
+              >
                 Preferred Name
               </label>
               <input
+                id="profile-name-input"
                 type="text"
                 maxLength={100}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus:border-[var(--gold-primary)] outline-none font-medium"
+                className="w-full min-w-0 bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] font-medium"
               />
             </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
-                Height
+            <div className="sm:col-span-1 min-[360px]:col-span-1">
+              <label
+                htmlFor="profile-height-input"
+                className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1"
+              >
+                Height ({unitSystem === 'imperial' ? 'ft/in' : 'cm'})
               </label>
               <input
+                id="profile-height-input"
                 type="text"
                 maxLength={20}
                 value={height}
-                onChange={e => setHeight(e.target.value)}
-                className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus:border-[var(--gold-primary)] outline-none font-medium"
+                placeholder={unitSystem === 'imperial' ? `e.g. 5'10"` : 'e.g. 178 cm'}
+                onChange={(e) => {
+                  setHeight(e.target.value);
+                  if (heightError) setHeightError(null);
+                }}
+                aria-invalid={Boolean(heightError)}
+                className={`w-full min-w-0 bg-[var(--bg-card-inner)] border rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] font-medium ${
+                  heightError
+                    ? 'border-rose-400 focus:border-rose-500'
+                    : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                }`}
               />
+              {heightError && (
+                <p className="text-[10px] text-rose-500 font-medium mt-1 leading-snug">{heightError}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="profile-weight-input"
+                className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1"
+              >
+                Weight ({unitSystem === 'imperial' ? 'lbs' : 'kg'}) <span className="font-normal opacity-75">· Optional</span>
+              </label>
+              <input
+                id="profile-weight-input"
+                type="text"
+                maxLength={20}
+                value={weight}
+                placeholder={unitSystem === 'imperial' ? 'e.g. 154 lbs' : 'e.g. 70 kg'}
+                onChange={(e) => {
+                  setWeight(e.target.value);
+                  if (weightError) setWeightError(null);
+                }}
+                aria-invalid={Boolean(weightError)}
+                className={`w-full min-w-0 bg-[var(--bg-card-inner)] border rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] font-medium ${
+                  weightError
+                    ? 'border-rose-400 focus:border-rose-500'
+                    : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                }`}
+              />
+              {weightError && (
+                <p className="text-[10px] text-rose-500 font-medium mt-1 leading-snug">{weightError}</p>
+              )}
             </div>
           </div>
 
           {/* Body Shape */}
           <div>
-            <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">
+            <span className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">
               Body Silhouette
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Athletic / V-Taper', 'Lean / Slim', 'Broad / Regular'].map(shape => (
+            </span>
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-2">
+              {PROFILE_BODY_SHAPES.map(shape => (
                 <button
                   key={shape}
                   type="button"
+                  aria-pressed={bodyShape === shape}
                   onClick={() => setBodyShape(shape)}
-                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                     bodyShape === shape
-                      ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] font-semibold'
-                      : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                      ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] ring-1 ring-[var(--gold-primary)] font-semibold'
+                      : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
                   }`}
                 >
-                  {shape}
+                  {bodyShape === shape && <Check className="w-3 h-3 text-[var(--gold-dark)] dark:text-[var(--gold-primary)] stroke-[3] shrink-0" />}
+                  <span>{shape}</span>
                 </button>
               ))}
             </div>
@@ -232,26 +395,26 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
 
           {/* Style Personas */}
           <div>
-            <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">
-              Personal Style DNA (Choose 1–3)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <span className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+                Personal Style DNA (Choose 1–3)
+              </span>
+              <span className="text-[10px] text-[var(--gold-dark)] dark:text-[var(--gold-primary)] font-mono font-semibold">
+                {selectedStyles.length}/3 selected
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
-              {[
-                'Old Money Heritage',
-                'Clean Minimalist',
-                'Smart Sartorial',
-                'Relaxed Contemporary',
-                'Streetwear Chic'
-              ].map(style => {
+              {PROFILE_STYLE_PERSONAS.map(style => {
                 const isSelected = selectedStyles.includes(style);
                 return (
                   <button
                     key={style}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => toggleStyle(style)}
-                    className={`px-3 py-2 rounded-full border text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-2 rounded-full border text-xs transition-all cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                       isSelected
-                        ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)] text-white dark:text-black font-semibold'
+                        ? 'border-[var(--gold-dark)] bg-[var(--gold-dark)] text-white dark:border-[var(--gold-primary)] dark:bg-[var(--gold-primary)] dark:text-black font-semibold shadow-xs ring-1 ring-[var(--gold-primary)]'
                         : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
                     }`}
                   >
@@ -265,38 +428,45 @@ const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = 
 
           {/* Fit Preferences */}
           <div>
-            <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">
+            <span className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">
               Preferred Silhouette Fit
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Tailored / Slim', 'Regular Classic', 'Relaxed / Drape'].map(fitOption => (
+            </span>
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
+              {PROFILE_FIT_OPTIONS.map(fitOption => (
                 <button
                   key={fitOption}
                   type="button"
+                  aria-pressed={fit === fitOption}
                   onClick={() => setFit(fitOption)}
-                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                     fit === fitOption
-                      ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] font-semibold'
-                      : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-muted)] hover:border-[var(--gold-primary)]'
+                      ? 'border-[var(--gold-primary)] bg-[var(--pill-bg)] text-[var(--text-heading)] ring-1 ring-[var(--gold-primary)] font-semibold'
+                      : 'border-[var(--border-card)] bg-[var(--bg-card-inner)] text-[var(--text-body)] hover:border-[var(--gold-primary)]'
                   }`}
                 >
-                  {fitOption}
+                  {fit === fitOption && <Check className="w-3 h-3 text-[var(--gold-dark)] dark:text-[var(--gold-primary)] stroke-[3] shrink-0" />}
+                  <span>{fitOption}</span>
                 </button>
               ))}
             </div>
           </div>
+
+          <p className="text-[11px] text-[var(--text-muted)] leading-relaxed pt-1">
+            Privacy: In this preview, profile preferences stay in your browser&apos;s local workspace storage and sync only to your OTD account when cloud sync is active. You can edit or clear them anytime in Settings.
+          </p>
 
         </div>
 
         {/* Action Button */}
         <div className="mt-8 pt-4 border-t border-[var(--border-card)]">
           <button
+            type="button"
             onClick={handleSave}
-            className="gold-btn w-full py-3.5 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-md"
+            className="gold-btn w-full py-3.5 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
           >
             {saved ? (
               <>
-                <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+                <Check className="w-4 h-4 text-emerald-300 dark:text-emerald-700 stroke-[3]" />
                 <span>Profile Calibrated & Saved!</span>
               </>
             ) : (

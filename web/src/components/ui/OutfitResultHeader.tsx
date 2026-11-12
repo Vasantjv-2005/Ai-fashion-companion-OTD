@@ -12,7 +12,7 @@ interface OutfitResultHeaderProps {
   weatherCondition: string;
   weatherSummary: string;
   selectedMoods: string[];
-  harmonyScore: number;
+  harmonyScore: number | null;
 }
 
 export const OutfitResultHeader: React.FC<OutfitResultHeaderProps> = ({
@@ -52,14 +52,31 @@ export const OutfitResultHeader: React.FC<OutfitResultHeaderProps> = ({
             <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)] block">
               Sartorial Harmony Index
             </span>
-            <div className="flex items-baseline justify-end gap-1.5">
-              <span className="text-base sm:text-lg font-serif-luxury font-bold text-emerald-600 dark:text-emerald-400">
-                {harmonyScore}% Calibrated
-              </span>
-              <span className="text-[9px] font-mono text-[var(--text-muted)]">
-                (Wardrobe DNA)
-              </span>
-            </div>
+            {harmonyScore === null ? (
+              <div className="flex items-baseline justify-end gap-1.5">
+                <span className="text-sm sm:text-base font-serif-luxury font-bold text-amber-700 dark:text-amber-300">
+                  Unavailable — Insufficient Data
+                </span>
+                <span className="text-[9px] font-mono text-[var(--text-muted)]">
+                  (0 Owned Pieces)
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-baseline justify-end gap-1.5">
+                <span
+                  className={`text-base sm:text-lg font-serif-luxury font-bold ${
+                    harmonyScore >= 70
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}
+                >
+                  {harmonyScore}% Calibrated
+                </span>
+                <span className="text-[9px] font-mono text-[var(--text-muted)]">
+                  (Wardrobe DNA)
+                </span>
+              </div>
+            )}
           </div>
           <div className="w-9 h-9 rounded-xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] shadow-xs">
             <Sparkles className="w-4 h-4" />

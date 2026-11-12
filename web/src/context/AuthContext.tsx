@@ -17,6 +17,8 @@ import type {
 import {
   clearPrivateUserCaches,
   isGuestDemoSessionActive,
+  normalizeAuthUserId,
+  setActivePrivateCacheOwnerId,
   setGuestDemoSessionActive,
 } from '../utils/authStorage';
 import { AuthContext } from './AuthContextInstance';
@@ -28,10 +30,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const mountedRef = useRef(true);
   const statusRef = useRef<AuthStatus>(status);
+  const userRef = useRef<AuthUser | null>(user);
+
+  const commitAuthenticatedUser = useCallback((nextUser: AuthUser) => {
+    const outgoingUserId = normalizeAuthUserId(userRef.current?.id);
+    const incomingUserId = normalizeAuthUserId(nextUser.id);
+    if (outgoingUserId && outgoingUserId !== incomingUserId) {
+      clearPrivateUserCaches({ userId: outgoingUserId, preserveGuestSession: false });
+    }
+    setActivePrivateCacheOwnerId(incomingUserId);
+    setGuestDemoSessionActive(false);
+    userRef.current = nextUser;
+    statusRef.current = 'authenticated';
+    setUser(nextUser);
+    setStatus('authenticated');
+  }, []);
 
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -46,20 +67,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!mountedRef.current || statusRef.current !== 'authenticated') {
           return;
         }
-        setUser(session.user);
+        commitAuthenticatedUser(session.user);
       },
       onSessionInvalidated: () => {
         if (!mountedRef.current || statusRef.current !== 'authenticated') {
           return;
         }
+        const outgoingUserId = normalizeAuthUserId(userRef.current?.id);
         clearMemoryAuthSession();
-        clearPrivateUserCaches();
+        clearPrivateUserCaches({ userId: outgoingUserId });
         setGuestDemoSessionActive(false);
+        userRef.current = null;
+        statusRef.current = 'unauthenticated';
         setUser(null);
         setStatus('unauthenticated');
       },
     });
-  }, []);
+  }, [commitAuthenticatedUser]);
 
   useEffect(() => {
     if (isGuestDemoSessionActive()) {
@@ -75,19 +99,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (result.success && result.data) {
-        setGuestDemoSessionActive(false);
-        setUser(result.data.user);
-        setStatus('authenticated');
+        commitAuthenticatedUser(result.data.user);
       } else {
+        userRef.current = null;
+        const fallbackStatus: AuthStatus = isGuestDemoSessionActive() ? 'guest' : 'unauthenticated';
+        statusRef.current = fallbackStatus;
         setUser(null);
-        setStatus(isGuestDemoSessionActive() ? 'guest' : 'unauthenticated');
+        setStatus(fallbackStatus);
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [commitAuthenticatedUser]);
 
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<AuthResult<AuthSession>> => {
@@ -95,13 +120,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!mountedRef.current) return result;
 
       if (result.success && result.data) {
-        setGuestDemoSessionActive(false);
-        setUser(result.data.user);
-        setStatus('authenticated');
+        commitAuthenticatedUser(result.data.user);
       }
       return result;
     },
-    []
+    [commitAuthenticatedUser]
   );
 
   const register = useCallback(
@@ -110,13 +133,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!mountedRef.current) return result;
 
       if (result.success && result.data) {
-        setGuestDemoSessionActive(false);
-        setUser(result.data.user);
-        setStatus('authenticated');
+        commitAuthenticatedUser(result.data.user);
       }
       return result;
     },
-    []
+    [commitAuthenticatedUser]
   );
 
   const refreshSession = useCallback(async (): Promise<AuthResult<AuthSession>> => {
@@ -127,23 +148,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (result.success && result.data) {
-      setGuestDemoSessionActive(false);
-      setUser(result.data.user);
-      setStatus('authenticated');
+      commitAuthenticatedUser(result.data.user);
     } else {
+      const outgoingUserId = normalizeAuthUserId(userRef.current?.id);
+      if (outgoingUserId) {
+        clearMemoryAuthSession();
+        clearPrivateUserCaches({ userId: outgoingUserId, preserveGuestSession: isGuestDemoSessionActive() });
+      }
+      userRef.current = null;
+      const nextStatus: AuthStatus = statusRef.current === 'guest' ? 'guest' : 'unauthenticated';
+      statusRef.current = nextStatus;
       setUser(null);
       setStatus((prev) => (prev === 'guest' ? 'guest' : 'unauthenticated'));
     }
     return result;
-  }, []);
+  }, [commitAuthenticatedUser]);
 
   const logout = useCallback(async (): Promise<void> => {
+    const outgoingUserId = normalizeAuthUserId(userRef.current?.id);
     try {
       await authService.logout();
     } finally {
       clearMemoryAuthSession();
-      clearPrivateUserCaches();
+      clearPrivateUserCaches({ userId: outgoingUserId });
       setGuestDemoSessionActive(false);
+      userRef.current = null;
+      statusRef.current = 'unauthenticated';
       if (mountedRef.current) {
         setUser(null);
         setStatus('unauthenticated');
@@ -152,15 +182,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const enterGuestMode = useCallback(() => {
+    const outgoingUserId = normalizeAuthUserId(userRef.current?.id);
     clearMemoryAuthSession();
+    clearPrivateUserCaches({ userId: outgoingUserId, preserveGuestSession: true });
     setGuestDemoSessionActive(true);
+    userRef.current = null;
+    statusRef.current = 'guest';
     setUser(null);
     setStatus('guest');
   }, []);
 
   const exitGuestMode = useCallback(() => {
     setGuestDemoSessionActive(false);
-    setUser(null);
+    if (statusRef.current !== 'authenticated') {
+      userRef.current = null;
+      statusRef.current = 'unauthenticated';
+    }
+    setUser((prev) => (statusRef.current === 'authenticated' ? prev : null));
     setStatus((prev) => (prev === 'authenticated' ? prev : 'unauthenticated'));
   }, []);
 

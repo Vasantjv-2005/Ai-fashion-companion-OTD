@@ -9,19 +9,20 @@ interface WardrobeStudioProps {
 
 export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }) => {
   const { closet } = useCloset();
+  const activeCloset = useMemo(() => closet.filter((item) => !item.isArchived), [closet]);
   const [activeTab, setActiveTab] = useState<string>('all');
-  const [selectedItem, setSelectedItem] = useState<ClosetItem | null>(closet[0] || null);
+  const [selectedItem, setSelectedItem] = useState<ClosetItem | null>(activeCloset[0] || null);
 
   const effectiveSelectedItem = useMemo(() => {
-    if (selectedItem && closet.some((item) => item.id === selectedItem.id)) {
+    if (selectedItem && activeCloset.some((item) => item.id === selectedItem.id)) {
       return selectedItem;
     }
-    return closet[0] || null;
-  }, [selectedItem, closet]);
+    return activeCloset[0] || null;
+  }, [selectedItem, activeCloset]);
 
   const filteredItems = activeTab === 'all'
-    ? closet
-    : closet.filter((i) => i.category === activeTab);
+    ? activeCloset
+    : activeCloset.filter((i) => i.category === activeTab);
 
   const getFormalityLabel = (tier: number) => {
     switch (tier) {
@@ -61,6 +62,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
           {onOpenAddPiece && (
             <div className="pt-2">
               <button
+                type="button"
                 onClick={onOpenAddPiece}
                 className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-semibold cursor-pointer shadow-md hover:scale-105 transition-all"
               >
@@ -74,7 +76,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
         {/* Filter Navigation Tabs */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
           {[
-            { id: 'all', label: `All (${closet.length})` },
+            { id: 'all', label: `All (${activeCloset.length})` },
             { id: 'tops', label: 'Tops & Knits' },
             { id: 'bottoms', label: 'Trousers & Denim' },
             { id: 'outerwear', label: 'Jackets & Coats' },
@@ -83,6 +85,8 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
+              aria-pressed={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2.5 rounded-full text-xs uppercase tracking-wider font-semibold transition-all duration-300 cursor-pointer ${
                 activeTab === tab.id
@@ -211,6 +215,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
 
                 {onOpenAddPiece && (
                   <button
+                    type="button"
                     onClick={onOpenAddPiece}
                     className="gold-btn-outline w-full mt-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
                   >

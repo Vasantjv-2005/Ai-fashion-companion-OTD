@@ -5,6 +5,7 @@
 
 import type {
   BackendAvatarDto,
+  BackendClothingCategoryDto,
   BackendProfileDto,
   BackendProfileStyleDto,
   CreateOrUpdateAvatarRequestDto,
@@ -12,12 +13,14 @@ import type {
 } from '../types/api';
 import type {
   AvatarConfig,
+  GarmentCategory,
   MeasurementUnit,
   UserStyleProfile,
   WardrobeFocus,
 } from '../types/domain';
 import {
   extractRecordId,
+  mapCategoryToBackend,
   normalizeCategoryToDomain,
   normalizeFitToDomain,
   normalizeSeasonList,
@@ -25,6 +28,46 @@ import {
   normalizeStyleTag,
   toIsoString,
 } from './shared.adapter';
+
+export function normalizePreferredCategoriesToDomain(rawCategories?: unknown): GarmentCategory[] {
+  if (!Array.isArray(rawCategories)) return [];
+  const mapped: GarmentCategory[] = [];
+  const seen = new Set<GarmentCategory>();
+
+  for (const raw of rawCategories) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const domainCategory = normalizeCategoryToDomain(trimmed);
+    if (!seen.has(domainCategory)) {
+      seen.add(domainCategory);
+      mapped.push(domainCategory);
+    }
+  }
+
+  return mapped.slice(0, 30);
+}
+
+export function mapPreferredCategoriesToBackend(
+  categories?: readonly string[],
+): BackendClothingCategoryDto[] {
+  if (!Array.isArray(categories)) return [];
+  const mapped: BackendClothingCategoryDto[] = [];
+  const seen = new Set<BackendClothingCategoryDto>();
+
+  for (const raw of categories) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const backendCategory = mapCategoryToBackend(trimmed);
+    if (!seen.has(backendCategory)) {
+      seen.add(backendCategory);
+      mapped.push(backendCategory);
+    }
+  }
+
+  return mapped.slice(0, 30);
+}
 
 const PERSONA_TO_BACKEND_STYLE: Readonly<Record<string, BackendProfileStyleDto>> = {
   'old money heritage': 'smart-casual',
@@ -172,9 +215,7 @@ export function mapProfileDtoToDomain(
         : mapStylePersonasToBackendStyles(derivedPersonas),
     preferredColors: normalizeStringArray(dto.preferredColors),
     preferredSeasons: normalizeSeasonList(dto.preferredSeasons),
-    preferredCategories: (dto.preferredCategories ?? []).map((cat) =>
-      normalizeCategoryToDomain(cat),
-    ),
+    preferredCategories: normalizePreferredCategoriesToDomain(dto.preferredCategories),
     fashionGoals: normalizeStringArray(dto.fashionGoals),
     avatarOption: localFallback?.avatarOption || 'silhouette-1',
     avatarArchetype: localFallback?.avatarArchetype || 'Classic',
@@ -231,7 +272,10 @@ export function mapProfileDomainToUpdateDto(
   }
 
   if (profile.preferredCategories && profile.preferredCategories.length > 0) {
-    payload.preferredCategories = profile.preferredCategories.map((c) => c).slice(0, 30);
+    const mappedCategories = mapPreferredCategoriesToBackend(profile.preferredCategories);
+    if (mappedCategories.length > 0) {
+      payload.preferredCategories = mappedCategories;
+    }
   }
 
   if (typeof profile.bodyType === 'string' && profile.bodyType.trim()) {
