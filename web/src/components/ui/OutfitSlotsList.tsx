@@ -11,6 +11,11 @@ import {
   X
 } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../../context/ClosetContext';
+import { useAuth } from '../../hooks/useAuth';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from '../auth/GuestRegistrationPromptModal';
 import type { OutfitSlotItem } from './AvatarOutfitCanvas';
 
 interface OutfitSlotsListProps {
@@ -25,6 +30,7 @@ interface OutfitSlotsListProps {
     outfitTitle?: string;
   };
   onNavigateToShopping?: () => void;
+  onRequireRegistration?: (action: GuestRestrictedAction, actionTitle?: string) => boolean;
 }
 
 const SLOT_ORDER = ['outerwear', 'top', 'bottom', 'footwear', 'accessory'] as const;
@@ -53,10 +59,29 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
   selectedSlotKey,
   outfitContext,
   onNavigateToShopping,
+  onRequireRegistration,
 }) => {
+  const { isAuthenticated } = useAuth();
   const { shoppingList, addToShoppingList, removeFromShoppingList, isItemInShoppingList } = useCloset();
   const [feedback, setFeedback] = useState<{ slot: string; message: string; type: 'success' | 'info' } | null>(null);
   const [failedImageUrls, setFailedImageUrls] = useState<Record<string, true>>({});
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    actionTitle?: string;
+  } | null>(null);
+
+  if (isAuthenticated && guestPromptState !== null) {
+    setGuestPromptState(null);
+  }
+
+  const requireRegistered = (action: GuestRestrictedAction, actionTitle?: string): boolean => {
+    if (isAuthenticated) return true;
+    if (onRequireRegistration) {
+      return onRequireRegistration(action, actionTitle);
+    }
+    setGuestPromptState({ action, actionTitle });
+    return false;
+  };
 
   // Strict frontend verification function:
   // An item can only receive an 'owned' status if its closetItemId strictly matches an ID in the user's active closet.
@@ -72,6 +97,9 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
   };
 
   const handleAddToShopping = (slot: OutfitSlotItem) => {
+    if (!requireRegistered('wishlist', `Save "${slot.name}" to Wishlist`)) {
+      return;
+    }
     const result = addToShoppingList({
       name: slot.name,
       category: slot.category || slot.slot,
@@ -101,6 +129,9 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
   };
 
   const handleRemoveFromShopping = (slot: OutfitSlotItem) => {
+    if (!requireRegistered('wishlist', `Remove "${slot.name}" from Wishlist`)) {
+      return;
+    }
     const item = shoppingList.find(
       (i) => i.name.trim().toLowerCase() === slot.name.trim().toLowerCase()
     );
@@ -172,19 +203,19 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
               aria-label={`Select slot ${slotNum}: ${slot.slotLabel}, ${slot.name}`}
               aria-pressed={isSelected}
               onClick={() => {
-                if (onSlotChangeClick) {
-                  onSlotChangeClick(slot);
-                } else if (onSlotClick) {
+                if (onSlotClick) {
                   onSlotClick(slot);
+                } else if (onSlotChangeClick) {
+                  onSlotChangeClick(slot);
                 }
               }}
               onKeyDown={(e) => {
                 if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault();
-                  if (onSlotChangeClick) {
-                    onSlotChangeClick(slot);
-                  } else if (onSlotClick) {
+                  if (onSlotClick) {
                     onSlotClick(slot);
+                  } else if (onSlotChangeClick) {
+                    onSlotChangeClick(slot);
                   }
                 }
               }}
@@ -408,6 +439,16 @@ export const OutfitSlotsList: React.FC<OutfitSlotsListProps> = ({
           </span>
         )}
       </div>
+
+      {!onRequireRegistration && (
+        <GuestRegistrationPromptModal
+          isOpen={!isAuthenticated && guestPromptState !== null}
+          action={guestPromptState?.action || 'wishlist'}
+          actionTitle={guestPromptState?.actionTitle}
+          redirectTo="/stylist"
+          onClose={() => setGuestPromptState(null)}
+        />
+      )}
     </div>
   );
 };

@@ -14,6 +14,7 @@ let accessTokenMemory: string | null = null;
 let sessionEpoch = 0;
 
 let inFlightRefreshPromise: Promise<AuthResult<AuthSession>> | null = null;
+let inFlightRefreshEpoch: number | null = null;
 let bootstrapPromise: Promise<AuthResult<AuthSession>> | null = null;
 
 export interface AuthSessionEventListener {
@@ -65,19 +66,22 @@ export function clearMemoryAuthSession(): void {
   sessionEpoch += 1;
   accessTokenMemory = null;
   inFlightRefreshPromise = null;
+  inFlightRefreshEpoch = null;
   bootstrapPromise = null;
 }
 
 export function applyAuthenticatedSessionToMemory(token: string): void {
   sessionEpoch += 1;
   accessTokenMemory = token.trim();
+  inFlightRefreshPromise = null;
+  inFlightRefreshEpoch = null;
   bootstrapPromise = null;
 }
 
 export async function runSingleFlightRefresh(
   fetcher: () => Promise<AuthResult<AuthSession>>
 ): Promise<AuthResult<AuthSession>> {
-  if (inFlightRefreshPromise) {
+  if (inFlightRefreshPromise && inFlightRefreshEpoch === sessionEpoch) {
     return inFlightRefreshPromise;
   }
 
@@ -104,10 +108,12 @@ export async function runSingleFlightRefresh(
     .finally(() => {
       if (inFlightRefreshPromise === promise) {
         inFlightRefreshPromise = null;
+        inFlightRefreshEpoch = null;
       }
     });
 
   inFlightRefreshPromise = promise;
+  inFlightRefreshEpoch = epochAtStart;
   return promise;
 }
 
@@ -120,8 +126,15 @@ export async function runBootstrapRefreshOnce(
   fetcher: () => Promise<AuthResult<AuthSession>>
 ): Promise<AuthResult<AuthSession>> {
   if (!bootstrapPromise) {
-    bootstrapPromise = runSingleFlightRefresh(fetcher);
+    const promise = runSingleFlightRefresh(fetcher).finally(() => {
+      if (bootstrapPromise === promise) {
+        bootstrapPromise = null;
+      }
+    });
+
+    bootstrapPromise = promise;
   }
+
   return bootstrapPromise;
 }
 

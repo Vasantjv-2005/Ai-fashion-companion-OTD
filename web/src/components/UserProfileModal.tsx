@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, User, Check, Sparkles } from 'lucide-react';
 import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { useFocusTrap } from '../utils/focusTrap';
+import { GuestRegistrationPromptModal } from './auth/GuestRegistrationPromptModal';
 
 interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
+const UserProfileModalDialog: React.FC<Omit<UserProfileModalProps, 'isOpen'>> = ({ onClose }) => {
+  const { isAuthenticated } = useAuth();
   const { profile, updateProfile } = useCloset();
   const [name, setName] = useState(profile.name);
   const [wardrobeFocus, setWardrobeFocus] = useState<WardrobeFocus>(profile.wardrobeFocus || 'personalize');
@@ -17,11 +21,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const [selectedStyles, setSelectedStyles] = useState<string[]>(profile.stylePersonas);
   const [fit, setFit] = useState(profile.preferredFit);
   const [saved, setSaved] = useState(false);
+  const [isGuestPromptOpen, setIsGuestPromptOpen] = useState(false);
 
-  // Focus trap, restoration & Escape key dismiss
-  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
+  if (isAuthenticated && isGuestPromptOpen) {
+    setIsGuestPromptOpen(false);
+  }
 
-  if (!isOpen) return null;
+  const isMountedRef = useRef(true);
+  const saveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Focus trap, restoration & Escape key dismiss (paused while sibling guest registration modal is open)
+  const isActiveGuestPromptOpen = !isAuthenticated && isGuestPromptOpen;
+  const handleCloseGuestPrompt = useCallback(() => {
+    setIsGuestPromptOpen(false);
+  }, []);
+
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    isPaused: isActiveGuestPromptOpen,
+    onClose,
+  });
 
   const toggleStyle = (style: string) => {
     if (selectedStyles.includes(style)) {
@@ -32,6 +62,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   };
 
   const handleSave = () => {
+    if (!isAuthenticated) {
+      setIsGuestPromptOpen(true);
+      return;
+    }
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
     updateProfile({
       name,
       wardrobeFocus,
@@ -41,24 +79,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
       preferredFit: fit
     });
     setSaved(true);
-    setTimeout(() => {
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      if (!isMountedRef.current) return;
       setSaved(false);
       onClose();
     }, 800);
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="user-profile-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
+    <>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={isActiveGuestPromptOpen ? true : undefined}
+        aria-labelledby="user-profile-title"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+        onClick={(e) => {
+          if (!isActiveGuestPromptOpen && e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      >
       <div
         ref={modalRef}
         className="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-gold)] shadow-2xl bg-[var(--bg-card-elevated)] text-[var(--text-body)] max-h-[90vh] overflow-y-auto"
@@ -86,6 +128,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             <p className="text-xs text-[var(--text-muted)] font-medium">Calibrate your personal styling rules for OTD</p>
           </div>
         </div>
+
+        {!isAuthenticated && (
+          <div className="mb-5 p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)]/50 text-xs text-[var(--text-body)]">
+            <span className="font-semibold text-[var(--gold-primary)]">Guest Demo Preview:</span>{' '}
+            Explore how Style DNA calibration works below. Create a free account or sign in to save your profile preferences.
+          </div>
+        )}
 
         {/* Form Fields */}
         <div className="space-y-5 text-xs">
@@ -138,6 +187,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               </label>
               <input
                 type="text"
+                maxLength={100}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus:border-[var(--gold-primary)] outline-none font-medium"
@@ -149,6 +199,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               </label>
               <input
                 type="text"
+                maxLength={20}
                 value={height}
                 onChange={e => setHeight(e.target.value)}
                 className="w-full bg-[var(--bg-card-inner)] border border-[var(--border-card)] rounded-xl px-3 py-2.5 text-[var(--text-heading)] focus:border-[var(--gold-primary)] outline-none font-medium"
@@ -256,8 +307,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             )}
           </button>
         </div>
-
+        </div>
       </div>
-    </div>
+
+      <GuestRegistrationPromptModal
+        isOpen={isActiveGuestPromptOpen}
+        action="profile"
+        redirectTo="/profile"
+        onClose={handleCloseGuestPrompt}
+      />
+    </>
   );
+};
+
+export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
+  const { status, user } = useAuth();
+  if (!isOpen) return null;
+
+  const workspaceScopeId = getWorkspaceScopeId(resolveWorkspaceScope(status, user?.id));
+  return <UserProfileModalDialog key={workspaceScopeId} onClose={onClose} />;
 };

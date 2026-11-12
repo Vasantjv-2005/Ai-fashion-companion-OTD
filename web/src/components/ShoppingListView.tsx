@@ -26,12 +26,25 @@ import {
   findOwnedAlternatives,
   type OwnedAlternative,
 } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  CLOSET_SEARCH_MAX_LENGTH,
+  GARMENT_COLOR_MAX_LENGTH,
+  GARMENT_NAME_MAX_LENGTH,
+  GARMENT_NOTES_MAX_LENGTH,
+  GARMENT_SUBTYPE_MAX_LENGTH,
+} from '../utils/garmentValidation';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 
 interface ShoppingListViewProps {
   onNavigateToStylist: () => void;
   onNavigateToCloset?: (searchTerm?: string) => void;
   onOpenAddPiece?: () => void;
+  onRequireRegistration?: (action: GuestRestrictedAction, actionTitle?: string) => boolean;
 }
 
 type FilterStatus = 'all' | 'missing' | 'owned';
@@ -56,7 +69,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   onNavigateToStylist,
   onNavigateToCloset,
   onOpenAddPiece,
+  onRequireRegistration,
 }) => {
+  const { isAuthenticated } = useAuth();
   const {
     closet,
     shoppingList,
@@ -68,6 +83,24 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     isItemInShoppingList,
     addClosetItem,
   } = useCloset();
+
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    actionTitle?: string;
+  } | null>(null);
+
+  if (isAuthenticated && guestPromptState !== null) {
+    setGuestPromptState(null);
+  }
+
+  const requireRegistered = (action: GuestRestrictedAction, actionTitle?: string): boolean => {
+    if (isAuthenticated) return true;
+    if (onRequireRegistration) {
+      return onRequireRegistration(action, actionTitle);
+    }
+    setGuestPromptState({ action, actionTitle });
+    return false;
+  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,6 +212,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
   // Quick action: Intake missing item directly into user's Digital Closet
   const handleIntakeToCloset = (item: ShoppingListItem) => {
+    if (!requireRegistered('upload', `Add "${item.name}" to Your Closet`)) {
+      return;
+    }
     const defaultCategory = (
       ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'].includes(item.category.toLowerCase())
         ? item.category.toLowerCase()
@@ -189,7 +225,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
       name: item.name,
       category: defaultCategory,
       subType: item.subType || item.name,
-      brand: item.brand || 'Wardrobe Acquisition',
+      brand: item.brand?.trim() || '',
       color: item.color || 'Classic Tone',
       fit: (item.fit as ClosetItem['fit']) || 'Regular',
       formality: (item.formality as ClosetItem['formality']) || 3,
@@ -206,6 +242,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
   // Start inline budget editing
   const handleStartBudgetEdit = (item: ShoppingListItem) => {
+    if (!requireRegistered('wishlist', `Set Budget for "${item.name}"`)) {
+      return;
+    }
     setEditingBudgetId(item.id);
     setEditingBudgetValue(item.estimatedBudget ? String(item.estimatedBudget) : '');
   };
@@ -232,6 +271,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
   // Clear budget directly
   const handleClearBudget = (itemId: string) => {
+    if (!requireRegistered('wishlist', 'Update Wishlist Budget')) {
+      return;
+    }
     updateShoppingListItem(itemId, { estimatedBudget: undefined });
   };
 
@@ -271,7 +313,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              if (!requireRegistered('wishlist', 'Add Item to Wardrobe Wishlist')) return;
+              setIsAddModalOpen(true);
+            }}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--gold-primary)] text-black hover:opacity-90 transition-all cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -290,7 +335,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           {totalCount > 0 && (
             <button
               type="button"
-              onClick={() => setConfirmClearOpen(true)}
+              onClick={() => {
+                if (!requireRegistered('wishlist', 'Clear Wardrobe Wishlist')) return;
+                setConfirmClearOpen(true);
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 border border-[var(--border-card)] transition-all cursor-pointer"
               title="Clear all wishlist items"
             >
@@ -436,6 +484,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
+                maxLength={CLOSET_SEARCH_MAX_LENGTH}
                 placeholder="Search wishlist..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -510,7 +559,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                if (!requireRegistered('wishlist', 'Add Item to Wardrobe Wishlist')) return;
+                setIsAddModalOpen(true);
+              }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold bg-[var(--gold-primary)] text-black hover:opacity-90 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -801,7 +853,12 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                   {/* Remove Button */}
                   <button
                     type="button"
-                    onClick={() => removeFromShoppingList(item.id)}
+                    onClick={() => {
+                      if (!requireRegistered('wishlist', `Remove "${item.name}" from Wishlist`)) {
+                        return;
+                      }
+                      removeFromShoppingList(item.id);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                     title="Remove item from wishlist"
                   >
@@ -843,7 +900,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         <div className="flex items-center gap-2">
           <Database className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
           <span>
-            Personal Wardrobe Ledger • Persisted in browser localStorage (Key: <code className="font-mono text-[10px] text-[var(--gold-primary)]">otd_shopping_list</code>).
+            Personal Wardrobe Ledger • Persisted in workspace-scoped browser storage.
           </span>
         </div>
         <div className="text-[11px] font-mono">
@@ -879,6 +936,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           onWearInstead={handleWearInstead}
           onOpenAddPiece={() => {
             setActiveAlternativeItem(null);
+            if (!requireRegistered('upload', 'Add Personal Garment to Closet')) return;
             if (onOpenAddPiece) onOpenAddPiece();
           }}
         />
@@ -935,6 +993,16 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {!onRequireRegistration && (
+        <GuestRegistrationPromptModal
+          isOpen={!isAuthenticated && guestPromptState !== null}
+          action={guestPromptState?.action || 'wishlist'}
+          actionTitle={guestPromptState?.actionTitle}
+          redirectTo="/shopping"
+          onClose={() => setGuestPromptState(null)}
+        />
       )}
 
     </div>
@@ -1103,6 +1171,7 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
             <input
               type="text"
               required
+              maxLength={GARMENT_NAME_MAX_LENGTH}
               placeholder="e.g., Italian Linen Overshirt, Cashmere Crewneck"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -1143,6 +1212,7 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_SUBTYPE_MAX_LENGTH}
                 placeholder="e.g. Pleated Trouser, Blazer"
                 value={subType}
                 onChange={(e) => setSubType(e.target.value)}
@@ -1156,6 +1226,7 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_COLOR_MAX_LENGTH}
                 placeholder="e.g. Navy, Charcoal, Camel"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
@@ -1196,6 +1267,7 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
             </label>
             <input
               type="text"
+              maxLength={GARMENT_NOTES_MAX_LENGTH}
               placeholder="e.g. Versatile layer for evening dinner & quarterly presentations"
               value={stylingNote}
               onChange={(e) => setStylingNote(e.target.value)}

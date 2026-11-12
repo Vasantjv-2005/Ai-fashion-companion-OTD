@@ -12,7 +12,12 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ClosetProvider } from './context/ClosetContext';
 import { useAuth } from './hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from './utils/authStorage';
 import { StudioRouteGuard } from './components/auth/StudioRouteGuard';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './components/auth/GuestRegistrationPromptModal';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { InteractiveStylist } from './components/InteractiveStylist';
@@ -88,10 +93,32 @@ function StudioLayout() {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, canAccessStudio } = useAuth();
+  const { status, user, isAuthenticated, canAccessStudio } = useAuth();
+  const workspaceScopeId = getWorkspaceScopeId(resolveWorkspaceScope(status, user?.id));
 
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    redirectTo: string;
+    actionTitle?: string;
+  } | null>(null);
+
+  if (isAuthenticated && guestPromptState !== null) {
+    setGuestPromptState(null);
+  }
+
+  const requireAuthenticatedAction = (
+    action: GuestRestrictedAction,
+    redirectTo: string,
+    actionTitle?: string,
+  ): boolean => {
+    if (isAuthenticated) {
+      return true;
+    }
+    setGuestPromptState({ action, redirectTo, actionTitle });
+    return false;
+  };
 
   // Modal route identification
   const isLogin = location.pathname === '/login';
@@ -176,10 +203,14 @@ function AppContent() {
       <Navbar
         onOpenDownload={handleOpenDownload}
         onExploreDemo={handleExploreDemo}
-        onOpenProfile={() =>
-          navigate('/profile', { state: { backgroundLocation: location } })
-        }
-        onOpenAddPiece={() => navigate('/closet/add')}
+        onOpenProfile={() => {
+          if (!requireAuthenticatedAction('profile', '/profile')) return;
+          navigate('/profile', { state: { backgroundLocation: location } });
+        }}
+        onOpenAddPiece={() => {
+          if (!requireAuthenticatedAction('upload', '/closet/add')) return;
+          navigate('/closet/add');
+        }}
         onOpenOnboarding={() =>
           navigate('/onboarding', { state: { backgroundLocation: location } })
         }
@@ -193,9 +224,10 @@ function AppContent() {
       <main id="main-content" className="flex-1">
         {/* Hero Section matching Screenshot 1 + Context Engine matching Screenshot 2 */}
         <Hero
-          onOpenProfile={() =>
-            navigate('/profile', { state: { backgroundLocation: location } })
-          }
+          onOpenProfile={() => {
+            if (!requireAuthenticatedAction('profile', '/profile')) return;
+            navigate('/profile', { state: { backgroundLocation: location } });
+          }}
           onOpenOnboarding={() =>
             navigate('/onboarding', { state: { backgroundLocation: location } })
           }
@@ -210,7 +242,10 @@ function AppContent() {
 
         {/* Smart Closet Digital Matrix (Screenshot 2: Screen 11) */}
         <WardrobeStudio
-          onOpenAddPiece={() => navigate('/closet/add')}
+          onOpenAddPiece={() => {
+            if (!requireAuthenticatedAction('upload', '/closet/add')) return;
+            navigate('/closet/add');
+          }}
         />
 
         {/* Closet Gap Intelligence Graph */}
@@ -291,16 +326,18 @@ function AppContent() {
 
       {isOnboarding && (
         <OnboardingModal
+          key={`onboarding:${workspaceScopeId}`}
           isOpen={true}
           onClose={() => handleCloseModal('/')}
           onComplete={(destination?: string) => {
-            navigate(destination === 'home' ? '/home' : '/closet');
+            navigate(destination === 'home' ? '/home' : '/closet', { replace: true });
           }}
         />
       )}
 
       {isProfile && canAccessStudio && (
         <UserProfileModal
+          key={`profile:${workspaceScopeId}`}
           isOpen={true}
           onClose={() =>
             handleCloseModal(
@@ -318,6 +355,15 @@ function AppContent() {
         isOpen={legalModalType !== null}
         type={legalModalType}
         onClose={() => setLegalModalType(null)}
+      />
+
+      {/* Registration Prompt Modal for Guest Personal-Data Actions */}
+      <GuestRegistrationPromptModal
+        isOpen={!isAuthenticated && guestPromptState !== null}
+        action={guestPromptState?.action || 'manage-closet'}
+        actionTitle={guestPromptState?.actionTitle}
+        redirectTo={guestPromptState?.redirectTo || '/closet'}
+        onClose={() => setGuestPromptState(null)}
       />
     </>
   );

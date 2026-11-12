@@ -19,6 +19,7 @@ import {
   toIsoString,
 } from '../adapters';
 import type { LegacySavedLookInput } from '../adapters';
+import { getScopedStorageKey, type OtdWorkspaceScope } from './authStorage';
 
 export const SAVED_LOOKS_STORAGE_KEY = 'otd_saved_looks';
 export const LIKED_LOOKS_STORAGE_KEY = 'otd_liked_looks';
@@ -706,17 +707,23 @@ function isLegacySavedLookShape(raw: unknown): raw is LegacySavedLookInput {
   return typeof candidate.id === 'string' && candidate.id.trim().length > 0;
 }
 
+export interface MergeAndMigrateSavedLooksOptions {
+  allowDemoSeed?: boolean;
+}
+
 /**
- * Safely reconciles & upgrades stored Saved Looks (`otd_saved_looks`) alongside
- * legacy favorited IDs (`otd_liked_looks`):
+ * Safely reconciles & upgrades stored Saved Looks alongside favorited IDs:
  * - Upgrades legacy `SavedLookItem` records and links curated default garment IDs.
  * - Ensures zero duplicate `id` collisions across migrated items.
  * - Syncs `isFavorite` consistently and cleanly preserves `backendOutfitId` only for real Mongo IDs.
+ * - Only seeds curated Guest Demo looks (`DEFAULT_SAVED_LOOKS`) when `allowDemoSeed` is true.
  */
 export function mergeAndMigrateSavedLooks(
   rawLooks: unknown,
   rawLikedIds: unknown,
+  options?: MergeAndMigrateSavedLooksOptions,
 ): SavedLook[] {
+  const allowDemoSeed = options?.allowDemoSeed ?? false;
   const hasExplicitLikedList = Array.isArray(rawLikedIds);
   const likedIdSet = new Set<string>(
     hasExplicitLikedList
@@ -727,6 +734,10 @@ export function mergeAndMigrateSavedLooks(
   );
 
   if (rawLooks === null) {
+    if (!allowDemoSeed) {
+      return [];
+    }
+
     const seeded = DEFAULT_SAVED_LOOKS.map((defaultLook) => {
       const isLiked = hasExplicitLikedList
         ? likedIdSet.has(defaultLook.id) ||
@@ -749,7 +760,7 @@ export function mergeAndMigrateSavedLooks(
   }
 
   if (!Array.isArray(rawLooks)) {
-    return DEFAULT_SAVED_LOOKS.map((look) => ({ ...look }));
+    return allowDemoSeed ? DEFAULT_SAVED_LOOKS.map((look) => ({ ...look })) : [];
   }
 
   const seenIds = new Set<string>();
@@ -818,18 +829,20 @@ export function mergeAndMigrateSavedLooks(
     normalized.push(look);
   }
 
-  // Upgrade legacy standalone template likes (e.g. `sug-4`) not yet present in `savedLooks`
-  for (const likedId of likedIdSet) {
-    const tpl = TEMPLATE_BY_ID.get(likedId);
-    if (!tpl) continue;
-    const alreadyExists = normalized.some(
-      (look) => look.sourceTemplateId === tpl.id || look.id === tpl.defaultSavedId,
-    );
-    if (!alreadyExists && !seenIds.has(tpl.defaultSavedId)) {
-      seenIds.add(tpl.defaultSavedId);
-      normalized.unshift(
-        createSavedLookFromTemplate(tpl, { isFavorite: true, savedAt: new Date().toISOString() }),
+  // Upgrade legacy standalone template likes (e.g. `sug-4`) only inside Guest Demo scope
+  if (allowDemoSeed) {
+    for (const likedId of likedIdSet) {
+      const tpl = TEMPLATE_BY_ID.get(likedId);
+      if (!tpl) continue;
+      const alreadyExists = normalized.some(
+        (look) => look.sourceTemplateId === tpl.id || look.id === tpl.defaultSavedId,
       );
+      if (!alreadyExists && !seenIds.has(tpl.defaultSavedId)) {
+        seenIds.add(tpl.defaultSavedId);
+        normalized.unshift(
+          createSavedLookFromTemplate(tpl, { isFavorite: true, savedAt: new Date().toISOString() }),
+        );
+      }
     }
   }
 
@@ -840,26 +853,50 @@ export function deriveSyncedLikedLookIds(savedLooks: readonly SavedLook[]): stri
   return savedLooks.filter((look) => look.isFavorite).map((look) => look.id);
 }
 
-export function loadStoredSavedLooks(): SavedLook[] {
+export function loadStoredSavedLooks(scope: OtdWorkspaceScope): SavedLook[] {
+  if (scope.kind === 'none') {
+    return [];
+  }
+
+  const savedKey = getScopedStorageKey(scope, 'saved_looks');
+  const likedKey = getScopedStorageKey(scope, 'liked_looks');
+  if (!savedKey || !likedKey) {
+    return [];
+  }
+
+  const allowDemoSeed = scope.kind === 'guest';
   try {
-    const rawSaved = localStorage.getItem(SAVED_LOOKS_STORAGE_KEY);
-    const rawLiked = localStorage.getItem(LIKED_LOOKS_STORAGE_KEY);
+    const rawSaved = localStorage.getItem(savedKey);
+    const rawLiked = localStorage.getItem(likedKey);
     const parsedSaved: unknown = rawSaved !== null ? JSON.parse(rawSaved) : null;
     const parsedLiked: unknown = rawLiked !== null ? JSON.parse(rawLiked) : null;
-    return mergeAndMigrateSavedLooks(parsedSaved, parsedLiked);
+    return mergeAndMigrateSavedLooks(parsedSaved, parsedLiked, { allowDemoSeed });
   } catch (err) {
-    console.warn('Failed to parse otd_saved_looks from localStorage:', err);
-    return DEFAULT_SAVED_LOOKS.map((look) => ({ ...look }));
+    console.warn(`Failed to parse ${savedKey} from localStorage:`, err);
+    return allowDemoSeed ? DEFAULT_SAVED_LOOKS.map((look) => ({ ...look })) : [];
   }
 }
 
-export function persistSavedLooks(looks: readonly SavedLook[]): boolean {
+export function persistSavedLooks(
+  looks: readonly SavedLook[],
+  scope: OtdWorkspaceScope,
+): boolean {
+  if (scope.kind === 'none') {
+    return false;
+  }
+
+  const savedKey = getScopedStorageKey(scope, 'saved_looks');
+  const likedKey = getScopedStorageKey(scope, 'liked_looks');
+  if (!savedKey || !likedKey) {
+    return false;
+  }
+
   try {
-    localStorage.setItem(SAVED_LOOKS_STORAGE_KEY, JSON.stringify(looks));
-    localStorage.setItem(LIKED_LOOKS_STORAGE_KEY, JSON.stringify(deriveSyncedLikedLookIds(looks)));
+    localStorage.setItem(savedKey, JSON.stringify(looks));
+    localStorage.setItem(likedKey, JSON.stringify(deriveSyncedLikedLookIds(looks)));
     return true;
   } catch (err) {
-    console.warn('Failed to persist otd_saved_looks:', err);
+    console.warn(`Failed to persist ${savedKey}:`, err);
     return false;
   }
 }

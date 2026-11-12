@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   Home,
   Shirt,
@@ -40,7 +40,8 @@ import {
   ArchiveRestore,
   ArrowUpDown,
   AlertCircle,
-  ShoppingBag
+  ShoppingBag,
+  Lock
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
@@ -63,10 +64,22 @@ import { GarmentSwapModal } from './ui/GarmentSwapModal';
 import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
 import { ClosetUploadView } from './ClosetUploadView';
 import { ShoppingListView } from './ShoppingListView';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  CLOSET_SEARCH_MAX_LENGTH,
+  formatGarmentMetaParts,
+} from '../utils/garmentValidation';
 import type { SavedLook } from '../types/domain';
 import { resolveSavedLookIdentifier } from '../adapters';
 import { deleteBackendOutfitForLook } from '../services/outfits.service';
+import {
+  getWorkspaceScopeId,
+  resolveWorkspaceScope,
+} from '../utils/authStorage';
 import {
   HOME_SUGGESTION_TEMPLATES,
   SAFE_LOOK_FALLBACK_IMAGE,
@@ -250,6 +263,27 @@ function computeWeekScheduleDays(): WeekScheduleDay[] {
   });
 }
 
+interface ScopedSavedLooksState {
+  scopeId: string;
+  looks: SavedLook[];
+}
+
+const EMPTY_SLOT_OVERRIDES: Partial<Record<OutfitSlotItem['slot'], ClosetItem>> = {};
+
+function createInitialConciergeMessages(): Array<{
+  sender: 'user' | 'ai';
+  text: string;
+  time: string;
+}> {
+  return [
+    {
+      sender: 'ai',
+      text: "Welcome to your AI Stylist Concierge. Ask me to refine silhouettes, adapt garments to weather shifts, or optimize formality for your venue.",
+      time: 'Just now',
+    },
+  ];
+}
+
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
@@ -262,7 +296,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackFromUpload,
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const { isAuthenticated, isGuest, user, logout, exitGuestMode } = useAuth();
+  const { status, isAuthenticated, isGuest, user, logout, exitGuestMode } = useAuth();
   const {
     closet,
     profile,
@@ -274,19 +308,41 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     checkItemOwnership
   } = useCloset();
 
+  const workspaceScope = useMemo(
+    () => resolveWorkspaceScope(status, user?.id),
+    [status, user?.id]
+  );
+  const workspaceScopeId = getWorkspaceScopeId(workspaceScope);
+
   // Prefer authenticated account name over local demo profile fallback
-  const userDisplayName =
-    isAuthenticated && user?.name?.trim()
-      ? user.name
-      : profile.name && profile.name.trim() && profile.name !== 'Curator'
-        ? profile.name
-        : 'Guest Curator';
-  const userGreetingName =
-    isAuthenticated && user?.name?.trim()
-      ? user.name.split(' ')[0]
-      : profile.name && profile.name.trim() && profile.name !== 'Curator'
-        ? profile.name.split(' ')[0]
-        : 'Curator';
+  const userDisplayName = isAuthenticated
+    ? user?.name?.trim() || profile.name.trim() || 'Style Member'
+    : 'Guest Curator';
+  const userGreetingName = isAuthenticated
+    ? (user?.name?.trim() || profile.name.trim() || 'Stylist').split(' ')[0]
+    : 'Curator';
+
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    redirectTo?: string;
+    actionTitle?: string;
+  } | null>(null);
+
+  if (isAuthenticated && guestPromptState !== null) {
+    setGuestPromptState(null);
+  }
+
+  const requireRegisteredUser = (
+    action: GuestRestrictedAction,
+    redirectTo?: string,
+    actionTitle?: string,
+  ): boolean => {
+    if (isAuthenticated) {
+      return true;
+    }
+    setGuestPromptState({ action, redirectTo, actionTitle });
+    return false;
+  };
 
   // Live count of missing / unacquired shopping list items for badge indication
   const unacquiredShoppingCount = useMemo(() => {
@@ -331,9 +387,25 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Home search bar
   const [homeSearchQuery, setHomeSearchQuery] = useState('');
 
-  // Favorites / Saved Looks state (Domain-normalized persistence with legacy migration)
-  const [savedLooksList, setSavedLooksList] = useState<SavedLook[]>(loadStoredSavedLooks);
+  // Favorites / Saved Looks state (Scope-isolated persistence with Guest-only demo seeding)
+  const [scopedSavedLooks, setScopedSavedLooks] = useState<ScopedSavedLooksState>(() => ({
+    scopeId: workspaceScopeId,
+    looks: loadStoredSavedLooks(workspaceScope),
+  }));
   const [restoredLook, setRestoredLook] = useState<SavedLook | null>(null);
+
+  const isScopeSynced = scopedSavedLooks.scopeId === workspaceScopeId;
+  const savedLooksList = useMemo(
+    () => (isScopeSynced ? scopedSavedLooks.looks : loadStoredSavedLooks(workspaceScope)),
+    [isScopeSynced, scopedSavedLooks.looks, workspaceScope],
+  );
+
+  const activeScopeIdRef = useRef<string>(workspaceScopeId);
+  const scopeGenerationRef = useRef<number>(0);
+  const locationRequestIdRef = useRef<number>(0);
+  const vibeTimerRef = useRef<number | null>(null);
+  const chatTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef<boolean>(true);
 
   const likedLooks = useMemo(
     () => deriveSyncedLikedLookIds(savedLooksList),
@@ -341,10 +413,26 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   );
   const favoriteLooksCount = likedLooks.length;
 
-  // Synchronize normalized Saved Looks and synced Favorite IDs to localStorage
+  const updateSavedLooksList = (updater: (prev: SavedLook[]) => SavedLook[]) => {
+    const dispatchedScopeId = workspaceScopeId;
+    setScopedSavedLooks((prev) => {
+      if (prev.scopeId !== dispatchedScopeId) {
+        return prev;
+      }
+      return {
+        scopeId: prev.scopeId,
+        looks: updater(prev.looks),
+      };
+    });
+  };
+
+  // Synchronize normalized Saved Looks and synced Favorite IDs strictly to the active scope
   useEffect(() => {
-    persistSavedLooks(savedLooksList);
-  }, [savedLooksList]);
+    if (scopedSavedLooks.scopeId !== workspaceScopeId) {
+      return;
+    }
+    persistSavedLooks(scopedSavedLooks.looks, workspaceScope);
+  }, [scopedSavedLooks, workspaceScope, workspaceScopeId]);
 
   // Focus traps & keyboard accessibility for Studio internal modals
   const inspectionModalRef = useFocusTrap<HTMLDivElement>({
@@ -392,10 +480,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       setLocationFeedback('Geolocation is not supported by your browser.');
       return;
     }
+    const initiatingScopeId = activeScopeIdRef.current;
+    const initiatingScopeGen = scopeGenerationRef.current;
+    const requestId = ++locationRequestIdRef.current;
+
     setLocationStatus('requesting');
     setLocationFeedback('Detecting local geographic coordinates...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (
+          !isMountedRef.current ||
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen ||
+          locationRequestIdRef.current !== requestId
+        ) {
+          return;
+        }
         setLocationCoords({
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -404,6 +504,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         setLocationFeedback('Location detected. Geographic context applied to your styling session.');
       },
       (err) => {
+        if (
+          !isMountedRef.current ||
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen ||
+          locationRequestIdRef.current !== requestId
+        ) {
+          return;
+        }
         if (err.code === 1) { // PERMISSION_DENIED
           setLocationStatus('denied');
           setLocationFeedback('Location access was declined. Manual destination will be used.');
@@ -420,6 +528,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   const handleClearLocation = () => {
+    locationRequestIdRef.current += 1;
     setLocationStatus('idle');
     setLocationCoords(null);
     setLocationFeedback(null);
@@ -435,15 +544,42 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [isWeatherSkipped, setIsWeatherSkipped] = useState(false);
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>(['Light & Breezy']);
 
+  const scheduleVibeFeedbackClear = () => {
+    if (vibeTimerRef.current !== null) {
+      window.clearTimeout(vibeTimerRef.current);
+    }
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
+    vibeTimerRef.current = window.setTimeout(() => {
+      vibeTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+      setVibeFeedback(null);
+    }, 3000);
+  };
+
   const handleToggleMood = (moodName: string) => {
     if (selectedMoods.includes(moodName)) {
+      if (vibeTimerRef.current !== null) {
+        window.clearTimeout(vibeTimerRef.current);
+        vibeTimerRef.current = null;
+      }
       setSelectedMoods((prev) => prev.filter((m) => m !== moodName));
       setVibeFeedback(null);
     } else {
       if (selectedMoods.length >= 2) {
         setVibeFeedback('Maximum 2 style vibes allowed. Deselect one to choose another.');
-        setTimeout(() => setVibeFeedback(null), 3000);
+        scheduleVibeFeedbackClear();
       } else {
+        if (vibeTimerRef.current !== null) {
+          window.clearTimeout(vibeTimerRef.current);
+          vibeTimerRef.current = null;
+        }
         setSelectedMoods((prev) => [...prev, moodName]);
         setVibeFeedback(null);
       }
@@ -455,7 +591,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     if (!clean) return;
     if (selectedMoods.length >= 2) {
       setVibeFeedback('Maximum 2 style vibes allowed. Deselect one first.');
-      setTimeout(() => setVibeFeedback(null), 3000);
+      scheduleVibeFeedbackClear();
       return;
     }
     if (!selectedMoods.some((m) => m.toLowerCase() === clean.toLowerCase())) {
@@ -522,22 +658,57 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     setPlannerStep(targetStep);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    activeScopeIdRef.current = workspaceScopeId;
+    scopeGenerationRef.current += 1;
+    locationRequestIdRef.current += 1;
     return () => {
+      scopeGenerationRef.current += 1;
+      locationRequestIdRef.current += 1;
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+      if (chatTimerRef.current !== null) {
+        window.clearTimeout(chatTimerRef.current);
+        chatTimerRef.current = null;
+      }
+      if (vibeTimerRef.current !== null) {
+        window.clearTimeout(vibeTimerRef.current);
+        vibeTimerRef.current = null;
       }
     };
+  }, [workspaceScopeId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      scopeGenerationRef.current += 1;
+      locationRequestIdRef.current += 1;
+    };
   }, []);
+
+  const effectiveRestoredLook = isScopeSynced ? restoredLook : null;
+  const effectiveSlotOverrides = isScopeSynced ? slotOverrides : EMPTY_SLOT_OVERRIDES;
 
   const triggerSwapToast = (message: string) => {
     setSwapToast(message);
     if (toastTimerRef.current !== null) {
       window.clearTimeout(toastTimerRef.current);
     }
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
     toastTimerRef.current = window.setTimeout(() => {
-      setSwapToast(null);
       toastTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+      setSwapToast(null);
     }, 3500);
   };
 
@@ -578,12 +749,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   ]);
 
   const restoredLookResolution = useMemo(() => {
-    if (!restoredLook) return null;
-    return restoreSavedLookSlots(restoredLook, closet);
-  }, [restoredLook, closet]);
+    if (!effectiveRestoredLook) return null;
+    return restoreSavedLookSlots(effectiveRestoredLook, closet);
+  }, [effectiveRestoredLook, closet]);
 
-  const activeOutfitTitle = restoredLook ? restoredLook.title : synthesizedOutfit.title;
-  const activeOutfitSubtitle = restoredLook ? restoredLook.subtitle : synthesizedOutfit.subtitle;
+  const activeOutfitTitle = effectiveRestoredLook ? effectiveRestoredLook.title : synthesizedOutfit.title;
+  const activeOutfitSubtitle = effectiveRestoredLook ? effectiveRestoredLook.subtitle : synthesizedOutfit.subtitle;
 
   // Effective slots applying individual garment overrides (resolved against live active closet) while preserving saved/restored slots
   const effectiveSlots: OutfitSlotItem[] = useMemo(() => {
@@ -609,7 +780,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     };
 
     const mapped = baseSlots.map((baseSlot) => {
-      const override = slotOverrides[baseSlot.slot];
+      const override = effectiveSlotOverrides[baseSlot.slot];
       const liveOverride = override ? activeClosetById.get(override.id) : undefined;
       if (!liveOverride) return baseSlot;
 
@@ -625,13 +796,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         imageUrl: liveOverride.imageUrl,
         icon: liveOverride.icon,
         status: 'owned' as const, // Strict verified owned status directly from closet
-        stylingNote: `Hand-selected substitution: ${liveOverride.brand || 'Bespoke'} ${liveOverride.name} in ${liveOverride.color}.`,
+        stylingNote: `Hand-selected substitution: ${liveOverride.brand ? `${liveOverride.brand} ` : ''}${liveOverride.name} in ${liveOverride.color}.`,
       };
     });
 
     const presentKeys = new Set(mapped.map((s) => s.slot));
     for (const slotKey of slotOrder) {
-      const override = slotOverrides[slotKey];
+      const override = effectiveSlotOverrides[slotKey];
       const liveOverride = override ? activeClosetById.get(override.id) : undefined;
       if (liveOverride && !presentKeys.has(slotKey)) {
         mapped.push({
@@ -647,13 +818,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           imageUrl: liveOverride.imageUrl,
           icon: liveOverride.icon,
           status: 'owned',
-          stylingNote: `Hand-selected substitution: ${liveOverride.brand || 'Bespoke'} ${liveOverride.name} in ${liveOverride.color}.`,
+          stylingNote: `Hand-selected substitution: ${liveOverride.brand ? `${liveOverride.brand} ` : ''}${liveOverride.name} in ${liveOverride.color}.`,
         });
       }
     }
 
     return mapped.sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
-  }, [restoredLookResolution, synthesizedOutfit.slots, slotOverrides, closet]);
+  }, [restoredLookResolution, synthesizedOutfit.slots, effectiveSlotOverrides, closet]);
 
   const activeSwapSlot = useMemo(() => {
     if (!activeSwapSlotKey) return null;
@@ -662,11 +833,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   const activeOverridesCount = useMemo(
     () =>
-      Object.values(slotOverrides).filter(
+      Object.values(effectiveSlotOverrides).filter(
         (override) =>
           Boolean(override && closet.some((item) => item.id === override.id && !item.isArchived)),
       ).length,
-    [slotOverrides, closet],
+    [effectiveSlotOverrides, closet],
   );
 
   const currentEnsembleCandidate = useMemo(
@@ -682,12 +853,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   );
 
   const matchingSavedLook = useMemo(() => {
-    if (restoredLook && activeOverridesCount === 0) {
-      const liveRestored = savedLooksList.find((l) => l.id === restoredLook.id);
+    if (effectiveRestoredLook && activeOverridesCount === 0) {
+      const liveRestored = savedLooksList.find((l) => l.id === effectiveRestoredLook.id);
       if (liveRestored) return liveRestored;
     }
     return findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
-  }, [restoredLook, activeOverridesCount, savedLooksList, currentEnsembleCandidate]);
+  }, [effectiveRestoredLook, activeOverridesCount, savedLooksList, currentEnsembleCandidate]);
 
   const isCurrentOutfitSaved = Boolean(matchingSavedLook?.isFavorite);
 
@@ -715,6 +886,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   // Open garment swap modal for a specific slot
   const handleOpenSwapModal = (slot: OutfitSlotItem) => {
+    if (!requireRegisteredUser('personalized-styling', '/stylist', `Swap ${slot.slotLabel}`)) {
+      return;
+    }
     setSelectedOutfitSlotKey(slot.slot);
     setActiveSwapSlotKey(slot.slot);
     setIsGarmentSwapOpen(true);
@@ -736,12 +910,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   const handleSaveCurrentLook = () => {
+    if (!requireRegisteredUser('save-outfit', '/saved', `Save "${activeOutfitTitle}"`)) {
+      return;
+    }
     const existingDuplicate =
       matchingSavedLook ??
       findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
     if (existingDuplicate) {
       if (!existingDuplicate.isFavorite) {
-        setSavedLooksList((prev) => toggleSavedLookFavorite(prev, existingDuplicate.id));
+        updateSavedLooksList((prev) => toggleSavedLookFavorite(prev, existingDuplicate.id));
         triggerSwapToast(`Re-added "${existingDuplicate.title}" to Favorites.`);
       } else {
         triggerSwapToast(`"${existingDuplicate.title}" is already saved in your Favorites.`);
@@ -750,8 +927,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     }
 
     const preservedTemplateId =
-      restoredLook && activeOverridesCount === 0
-        ? restoredLook.sourceTemplateId
+      effectiveRestoredLook && activeOverridesCount === 0
+        ? effectiveRestoredLook.sourceTemplateId
         : undefined;
 
     const newSavedLook = buildSavedLookFromEnsemble({
@@ -770,20 +947,26 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       variationIndex: outfitVariationIndex,
     });
 
-    setSavedLooksList((prev) => [newSavedLook, ...prev]);
+    updateSavedLooksList((prev) => [newSavedLook, ...prev]);
     triggerSwapToast(
       `Saved "${newSavedLook.title}" (${newSavedLook.garmentIds.length} pieces) to Favorites.`,
     );
   };
 
   const handleToggleFavoriteSavedLook = (lookId: string) => {
-    setSavedLooksList((prev) => toggleSavedLookFavorite(prev, lookId));
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Favorite This Saved Look')) {
+      return;
+    }
+    updateSavedLooksList((prev) => toggleSavedLookFavorite(prev, lookId));
   };
 
   const handleDeleteSavedLook = (lookId: string) => {
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Remove Saved Look')) {
+      return;
+    }
     const targetLook = savedLooksList.find((l) => l.id === lookId);
-    setSavedLooksList((prev) => deleteSavedLookById(prev, lookId));
-    if (restoredLook?.id === lookId) {
+    updateSavedLooksList((prev) => deleteSavedLookById(prev, lookId));
+    if (effectiveRestoredLook?.id === lookId) {
       setRestoredLook(null);
     }
     if (
@@ -799,6 +982,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   const handleWearSavedLook = (look: SavedLook) => {
+    if (!isAuthenticated && look.sourceKind !== 'curated-default') {
+      requireRegisteredUser('personalized-styling', '/stylist', `Wear "${look.title}"`);
+      return;
+    }
     const resolution = restoreSavedLookSlots(look, closet);
     setRestoredLook(look);
     setSlotOverrides({});
@@ -856,7 +1043,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   const handleToggleTemplateFavorite = (templateId: string) => {
-    setSavedLooksList((prev) => toggleTemplateCardFavorite(prev, templateId).nextLooks);
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Save Curated Look to Favorites')) {
+      return;
+    }
+    updateSavedLooksList((prev) => toggleTemplateCardFavorite(prev, templateId).nextLooks);
   };
 
   const handleOpenSuggestionTemplate = (template: HomeSuggestionTemplate) => {
@@ -866,13 +1056,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     handleWearSavedLook(existingSaved ?? createSavedLookFromTemplate(template));
   };
 
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(() => [
-    {
-      sender: 'ai',
-      text: "Welcome to your AI Stylist Concierge. Ask me to refine silhouettes, adapt garments to weather shifts, or optimize formality for your venue.",
-      time: 'Just now',
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(
+    createInitialConciergeMessages,
+  );
   const [chatInput, setChatInput] = useState('');
 
   // Digital closet filter, archive & sort state
@@ -882,6 +1068,64 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [closetViewMode, setClosetViewMode] = useState<'active' | 'archived'>('active');
   const [closetSortOption, setClosetSortOption] = useState<'recent' | 'oldest' | 'formality-desc' | 'formality-asc' | 'name-asc'>('recent');
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  // Synchronously reset transient Studio & Saved Looks state whenever workspace scope changes
+  if (scopedSavedLooks.scopeId !== workspaceScopeId) {
+    setScopedSavedLooks({
+      scopeId: workspaceScopeId,
+      looks: savedLooksList,
+    });
+    setPlannerStep(1);
+    setSelectedOccasion('Date');
+    setIsOccasionModalOpen(false);
+    setSelectedVenue(CURATED_VENUES[0]);
+    setDestinationSearch("L'amore, Banjara Hills, Hyderabad");
+    setSelectedVenueCategory('Restaurant');
+    setIsVenueCategoryModalOpen(false);
+    setSelectedDate(dynamicDateOptions[0] || getDynamicDateOptions()[0]);
+    setSelectedTime('8:00 PM');
+    setVenueInfoTab('about');
+    setLocationStatus('idle');
+    setLocationCoords(null);
+    setLocationFeedback(null);
+    setSelectedMoods(['Confident']);
+    setVibeFeedback(null);
+    setCustomVibeInput('');
+    setIsCustomVibeActive(false);
+    setSelectedWeatherCond('Partly Cloudy');
+    setWeatherNote('24°C • Mild & comfortable conditions');
+    setIsWeatherSkipped(false);
+    setSelectedPreferences(['Light & Breezy']);
+    setMustInclude([]);
+    setAvoidItems([]);
+    setRestoredLook(null);
+    setSlotOverrides({});
+    setCurrentOutfitTitle(null);
+    setOutfitVariationIndex(0);
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    setIsSynthesizingOutfit(false);
+    setSelectedClosetItem(null);
+    setItemToDelete(null);
+    setItemToEdit(null);
+    setSelectedCalendarDay(null);
+    setIsNotificationsOpen(false);
+    setIsSettingsOpen(false);
+    setIsHelpOpen(false);
+    setMobileMenuOpen(false);
+    setHomeSearchQuery('');
+    setSwapToast(null);
+    setChatMessages(createInitialConciergeMessages());
+    setChatInput('');
+    setClosetSearch('');
+    setClosetCategoryFilter('all');
+    setClosetFormalityFilter('all');
+    setClosetViewMode('active');
+    setClosetSortOption('recent');
+    setStorageWarning(null);
+    setGuestPromptState(null);
+  }
 
   // Storage quota warning listener
   useEffect(() => {
@@ -919,13 +1163,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const handleSendChat = (textToSend?: string) => {
     const text = textToSend || chatInput;
     if (!text.trim()) return;
+    if (!requireRegisteredUser('personalized-styling', '/stylist', 'Refine Look with AI Stylist')) {
+      return;
+    }
 
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
     const userMsg = { sender: 'user' as const, text, time: 'Just now' };
     setChatMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setChatInput('');
 
+    if (chatTimerRef.current !== null) {
+      window.clearTimeout(chatTimerRef.current);
+      chatTimerRef.current = null;
+    }
+
     // Intelligent local stylist refinement with transparent simulation labeling (Part 4)
-    setTimeout(() => {
+    chatTimerRef.current = window.setTimeout(() => {
+      chatTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+
       let reply = "I've recalibrated your silhouette. Updated garment selections to align with your styling preferences.";
       const lower = text.toLowerCase();
       const activeCloset = closet.filter((c) => !c.isArchived);
@@ -982,7 +1245,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         const nextShoe = shoes[(currentIndex + 1) % shoes.length] || shoes[0];
         if (nextShoe) {
           setSlotOverrides((prev) => ({ ...prev, footwear: nextShoe }));
-          reply = `Substituted footwear for ${nextShoe.brand} ${nextShoe.name} in ${nextShoe.color}.`;
+          reply = `Substituted footwear for ${nextShoe.brand ? `${nextShoe.brand} ` : ''}${nextShoe.name} in ${nextShoe.color}.`;
         }
       } else {
         reply = `Understood: "${text}". Calibrated silhouette nuances from your active wardrobe.`;
@@ -1206,6 +1469,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             <button
               type="button"
               onClick={() => {
+                if (!requireRegisteredUser('upload', '/closet/add', 'Upload & Digitize Your Closet')) {
+                  return;
+                }
                 if (onNavigateToUpload) {
                   onNavigateToUpload();
                 } else {
@@ -1247,12 +1513,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
+                maxLength={200}
                 placeholder="Search for outfits, occasions, or ask anything..."
                 aria-label="Search outfits, occasions, or ask stylist"
                 value={homeSearchQuery}
                 onChange={(e) => setHomeSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && homeSearchQuery.trim()) {
+                    if (
+                      !requireRegisteredUser(
+                        'personalized-styling',
+                        '/stylist',
+                        'Personalize Look from Prompt',
+                      )
+                    ) {
+                      return;
+                    }
                     resetStylistSession(3);
                     handleSendChat(homeSearchQuery);
                     setActiveTab('stylist');
@@ -1378,11 +1654,21 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <Sparkles className="w-4 h-4 text-[#A67C1E] mr-2 shrink-0" />
                           <input
                             type="text"
+                            maxLength={200}
                             placeholder="Ask OTD anything..."
                             value={homeSearchQuery}
                             onChange={(e) => setHomeSearchQuery(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && homeSearchQuery.trim()) {
+                                if (
+                                  !requireRegisteredUser(
+                                    'personalized-styling',
+                                    '/stylist',
+                                    'Personalize Look with AI Stylist',
+                                  )
+                                ) {
+                                  return;
+                                }
                                 resetStylistSession(3);
                                 handleSendChat(homeSearchQuery);
                                 setActiveTab('stylist');
@@ -1393,6 +1679,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <button
                             onClick={() => {
                               if (homeSearchQuery.trim()) {
+                                if (
+                                  !requireRegisteredUser(
+                                    'personalized-styling',
+                                    '/stylist',
+                                    'Personalize Look with AI Stylist',
+                                  )
+                                ) {
+                                  return;
+                                }
                                 resetStylistSession(3);
                                 handleSendChat(homeSearchQuery);
                                 setActiveTab('stylist');
@@ -1417,6 +1712,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <button
                             key={chip}
                             onClick={() => {
+                              if (
+                                !requireRegisteredUser(
+                                  'personalized-styling',
+                                  '/stylist',
+                                  `Style "${chip}"`,
+                                )
+                              ) {
+                                return;
+                              }
                               resetStylistSession(3);
                               handleSendChat(chip);
                               setActiveTab('stylist');
@@ -1442,7 +1746,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           subtitle: 'Add to your closet',
                           icon: Plus,
                           img: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=300&q=80',
-                          action: () => (onNavigateToUpload ? onNavigateToUpload() : onOpenAddPiece()),
+                          action: () => {
+                            if (!requireRegisteredUser('upload', '/closet/add', 'Upload New Wardrobe Item')) {
+                              return;
+                            }
+                            if (onNavigateToUpload) {
+                              onNavigateToUpload();
+                            } else {
+                              onOpenAddPiece();
+                            }
+                          },
                         },
                         {
                           title: 'Get Outfit Ideas',
@@ -2628,6 +2941,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       <button
                         type="button"
                         onClick={() => {
+                          if (!requireRegisteredUser('personalized-styling', '/stylist', 'Generate Curated Outfit')) {
+                            return;
+                          }
                           resetStylistSession(3);
                           setIsSynthesizingOutfit(true);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2671,6 +2987,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         window.scrollTo({ top: 600, behavior: 'smooth' });
                       }}
                       onGenerate={() => {
+                        if (!requireRegisteredUser('personalized-styling', '/stylist', 'Generate Curated Outfit')) {
+                          return;
+                        }
                         resetStylistSession(3);
                         setIsSynthesizingOutfit(true);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2683,6 +3002,39 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
               {/* STEP 3: AVATAR-FIRST OUTFIT RESULT EXPERIENCE */}
               {plannerStep === 3 && (
+                !isAuthenticated && effectiveRestoredLook?.sourceKind !== 'curated-default' ? (
+                  <div className="max-w-xl mx-auto my-8 rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-card)] p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] mx-auto">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="font-playfair text-2xl font-bold text-[var(--text-heading)]">
+                        Sign in for personalized outfit curation
+                      </h3>
+                      <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
+                        Guest Demo lets you explore sample saved looks and curated venue plans. Create a free account to generate and refine outfits from your own closet.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requireRegisteredUser('personalized-styling', '/stylist', 'Generate Personalized Outfits')
+                        }
+                        className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                      >
+                        Create Free Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resetStylistSession(1)}
+                        className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                      >
+                        Back to Planner
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="max-w-7xl mx-auto w-full space-y-6 pb-12 animate-fadeIn">
                   {isSynthesizingOutfit ? (
                     <OutfitGenerationLoader
@@ -2693,6 +3045,27 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     />
                   ) : (
                     <>
+                      {!isAuthenticated && effectiveRestoredLook?.sourceKind === 'curated-default' && (
+                        <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)]/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 text-[var(--text-body)]">
+                            <Eye className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
+                            <span>
+                              <strong className="text-[var(--text-heading)]">Sample Look Preview:</strong>{' '}
+                              Explore how OTD structures garments across five slots. Create an account to save favorites or customize pieces from your own closet.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              requireRegisteredUser('personalized-styling', '/stylist', 'Customize Outfits with Your Closet')
+                            }
+                            className="px-3.5 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[11px] font-bold shrink-0 cursor-pointer hover:opacity-90 transition-opacity self-start sm:self-center"
+                          >
+                            Create Free Account
+                          </button>
+                        </div>
+                      )}
+
                       {/* Toast Feedback for Garment Swap */}
                       {swapToast && (
                         <div className="p-3 rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs font-semibold text-center flex items-center justify-center gap-2 shadow-lg animate-fadeIn border border-[var(--border-gold)]">
@@ -2728,7 +3101,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             isLoading={isSynthesizingOutfit}
                             selectedSlotKey={selectedOutfitSlotKey}
                             onActiveSlotChange={setSelectedOutfitSlotKey}
-                            onSlotSelect={handleOpenSwapModal}
+                            onSlotSelect={isAuthenticated ? handleOpenSwapModal : undefined}
                             onChangeSlotItem={handleOpenSwapModal}
                           />
 
@@ -2750,9 +3123,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         {/* Right Column (5 cols): Actions Toolbar, 5 Standardized Slots & Preserved Stylist Concierge */}
                         <div className="lg:col-span-5 space-y-6">
                           <OutfitActionToolbar
-                            isSaved={isCurrentOutfitSaved}
+                            isSaved={isAuthenticated && isCurrentOutfitSaved}
+                            isGuestPreview={!isAuthenticated}
                             onSave={handleSaveCurrentLook}
                             onRegenerate={() => {
+                              if (
+                                !requireRegisteredUser(
+                                  'personalized-styling',
+                                  '/stylist',
+                                  'Generate Another Outfit Variation',
+                                )
+                              ) {
+                                return;
+                              }
                               resetStylistSession(3, { keepVariation: true });
                               setIsSynthesizingOutfit(true);
                               setOutfitVariationIndex((prev) => prev + 1);
@@ -2774,7 +3157,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             slots={effectiveSlots}
                             closet={closet}
                             selectedSlotKey={selectedOutfitSlotKey}
-                            onSlotClick={handleOpenSwapModal}
+                            onSlotClick={
+                              isAuthenticated
+                                ? handleOpenSwapModal
+                                : (slot) => setSelectedOutfitSlotKey(slot.slot)
+                            }
                             onSlotChangeClick={handleOpenSwapModal}
                             outfitContext={{
                               occasion: selectedOccasion,
@@ -2782,6 +3169,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               outfitTitle: activeOutfitTitle,
                             }}
                             onNavigateToShopping={() => setActiveTab('shopping')}
+                            onRequireRegistration={(action, actionTitle) =>
+                              requireRegisteredUser(action, '/stylist', actionTitle)
+                            }
                           />
 
                           {/* Preserved Stylist Concierge Chat Box with Responsive Height (DEF-05) */}
@@ -2904,6 +3294,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </>
                   )}
                 </div>
+                )
               )}
 
             </div>
@@ -2914,10 +3305,49 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* ========================================================================= */}
           {activeTab === 'closet' && (
             isUploadRoute ? (
-              <ClosetUploadView
-                onBack={onBackFromUpload || (() => setActiveTab('closet'))}
-                onComplete={onBackFromUpload || (() => setActiveTab('closet'))}
-              />
+              isAuthenticated ? (
+                <ClosetUploadView
+                  onBack={onBackFromUpload || (() => setActiveTab('closet'))}
+                  onComplete={onBackFromUpload || (() => setActiveTab('closet'))}
+                />
+              ) : (
+                <div className="p-5 lg:p-7 max-w-2xl mx-auto w-full my-8">
+                  <div className="rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-card)] p-8 text-center space-y-4 shadow-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] mx-auto">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--gold-primary)] font-bold block">
+                        Account Required
+                      </span>
+                      <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
+                        Register to Upload Your Garments
+                      </h2>
+                      <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+                        Guest mode includes a sample wardrobe to explore. Create a free account or sign in to upload personal clothing photos and build your digital closet.
+                      </p>
+                    </div>
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requireRegisteredUser('upload', '/closet/add', 'Upload Personal Clothing Items')
+                        }
+                        className="px-6 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                      >
+                        Create Free Account / Sign In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onBackFromUpload || (() => setActiveTab('closet'))}
+                        className="px-5 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                      >
+                        Explore Sample Closet
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
             ) : (
             <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               {/* Storage Quota Warning Banner */}
@@ -2993,7 +3423,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
 
                   <button
-                    onClick={onNavigateToUpload || onOpenAddPiece}
+                    onClick={() => {
+                      if (!requireRegisteredUser('upload', '/closet/add', 'Upload Personal Garment')) return;
+                      if (onNavigateToUpload) {
+                        onNavigateToUpload();
+                      } else {
+                        onOpenAddPiece();
+                      }
+                    }}
                     className="px-4 sm:px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
                   >
                     <Plus className="w-4 h-4" />
@@ -3028,6 +3465,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                       type="text"
+                      maxLength={CLOSET_SEARCH_MAX_LENGTH}
                       placeholder="Search garments by name, brand, color, or fabric..."
                       value={closetSearch}
                       onChange={(e) => setClosetSearch(e.target.value)}
@@ -3126,7 +3564,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
                   <div className="pt-2 flex justify-center">
                     <button
-                      onClick={onNavigateToUpload || onOpenAddPiece}
+                      onClick={() => {
+                        if (!requireRegisteredUser('upload', '/closet/add', 'Upload Your First Garment')) return;
+                        if (onNavigateToUpload) {
+                          onNavigateToUpload();
+                        } else {
+                          onOpenAddPiece();
+                        }
+                      }}
                       className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
                     >
                       <Plus className="w-4 h-4" />
@@ -3230,7 +3675,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         </div>
                         <div className="flex items-center justify-between pt-1">
                           <span className="text-[10px] text-[var(--gold-primary)] font-mono font-semibold truncate">
-                            {piece.brand}
+                            {piece.brand || 'Personal Piece'}
                           </span>
                           <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-[var(--pill-bg)] text-[var(--text-muted)] border border-[var(--border-card)]">
                             Tier {piece.formality}
@@ -3495,6 +3940,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </p>
                       <button
                         onClick={() => {
+                          if (
+                            !requireRegisteredUser(
+                              'personalized-styling',
+                              '/stylist',
+                              `Recreate "${idea.title}" with Your Closet`,
+                            )
+                          ) {
+                            return;
+                          }
                           resetStylistSession(3);
                           setActiveTab('stylist');
                           setCurrentOutfitTitle(idea.title);
@@ -3720,7 +4174,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 if (searchTerm) setClosetSearch(searchTerm);
                 setActiveTab('closet');
               }}
-              onOpenAddPiece={onOpenAddPiece}
+              onOpenAddPiece={() => {
+                if (!requireRegisteredUser('upload', '/closet/add', 'Add Garment to Your Closet')) return;
+                if (onNavigateToUpload) {
+                  onNavigateToUpload();
+                } else {
+                  onOpenAddPiece();
+                }
+              }}
+              onRequireRegistration={(action, actionTitle) =>
+                requireRegisteredUser(action, '/shopping', actionTitle)
+              }
             />
           )}
 
@@ -3950,7 +4414,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 {selectedClosetItem.name}
               </h4>
               <p className="text-[11px] text-[var(--gold-primary)] font-mono font-semibold">
-                {selectedClosetItem.brand} • {selectedClosetItem.subType}
+                {formatGarmentMetaParts([selectedClosetItem.brand, selectedClosetItem.subType]) || 'Personal Collection'}
               </p>
               {selectedClosetItem.description && (
                 <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-relaxed bg-[var(--pill-bg)] p-2 rounded-lg border border-[var(--border-card)]">
@@ -3985,8 +4449,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      restoreClosetItem(selectedClosetItem.id);
+                      const itemName = selectedClosetItem.name;
+                      const itemId = selectedClosetItem.id;
                       setSelectedClosetItem(null);
+                      if (
+                        !requireRegisteredUser(
+                          'manage-closet',
+                          '/closet',
+                          `Restore "${itemName}"`,
+                        )
+                      ) {
+                        return;
+                      }
+                      restoreClosetItem(itemId);
                     }}
                     className="flex-1 py-2.5 px-3 rounded-xl border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                   >
@@ -3997,7 +4472,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <>
                     <button
                       type="button"
-                      onClick={() => setItemToEdit(selectedClosetItem)}
+                      onClick={() => {
+                        const target = selectedClosetItem;
+                        if (!isAuthenticated) {
+                          setSelectedClosetItem(null);
+                          requireRegisteredUser(
+                            'manage-closet',
+                            '/closet',
+                            `Edit "${target.name}"`,
+                          );
+                          return;
+                        }
+                        setItemToEdit(target);
+                      }}
                       className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--border-gold)] text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Edit className="w-3.5 h-3.5" />
@@ -4007,8 +4494,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        archiveClosetItem(selectedClosetItem.id);
+                        const itemName = selectedClosetItem.name;
+                        const itemId = selectedClosetItem.id;
                         setSelectedClosetItem(null);
+                        if (
+                          !requireRegisteredUser(
+                            'manage-closet',
+                            '/closet',
+                            `Archive "${itemName}"`,
+                          )
+                        ) {
+                          return;
+                        }
+                        archiveClosetItem(itemId);
                       }}
                       className="flex-1 py-2.5 px-3 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
@@ -4023,8 +4521,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setItemToDelete(selectedClosetItem);
+                    const target = selectedClosetItem;
                     setSelectedClosetItem(null);
+                    if (!isAuthenticated) {
+                      requireRegisteredUser(
+                        'manage-closet',
+                        '/closet',
+                        `Remove "${target.name}"`,
+                      );
+                      return;
+                    }
+                    setItemToDelete(target);
                   }}
                   className="flex-1 py-2 px-3 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors text-[11px]"
                 >
@@ -4085,8 +4592,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    archiveClosetItem(itemToDelete.id);
+                    const itemName = itemToDelete.name;
+                    const itemId = itemToDelete.id;
                     setItemToDelete(null);
+                    if (!requireRegisteredUser('manage-closet', '/closet', `Archive "${itemName}"`)) {
+                      return;
+                    }
+                    archiveClosetItem(itemId);
                   }}
                   className="flex-1 py-2.5 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold cursor-pointer transition-colors"
                 >
@@ -4096,8 +4608,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  deleteClosetItem(itemToDelete.id);
+                  const itemName = itemToDelete.name;
+                  const itemId = itemToDelete.id;
                   setItemToDelete(null);
+                  if (!requireRegisteredUser('manage-closet', '/closet', `Delete "${itemName}"`)) {
+                    return;
+                  }
+                  deleteClosetItem(itemId);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 cursor-pointer shadow-md transition-colors"
               >
@@ -4285,6 +4802,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           </div>
         </div>
       )}
+
+      {/* Registration Prompt Modal for Guest Personal-Data Actions */}
+      <GuestRegistrationPromptModal
+        isOpen={!isAuthenticated && guestPromptState !== null}
+        action={guestPromptState?.action || 'manage-closet'}
+        actionTitle={guestPromptState?.actionTitle}
+        redirectTo={guestPromptState?.redirectTo || '/closet'}
+        onClose={() => setGuestPromptState(null)}
+      />
 
     </div>
   );

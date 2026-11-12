@@ -120,8 +120,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const refreshSession = useCallback(async (): Promise<AuthResult<AuthSession>> => {
+    const epochAtStart = getSessionEpoch();
     const result = await authService.refresh();
-    if (!mountedRef.current) return result;
+    if (!mountedRef.current || epochAtStart !== getSessionEpoch()) {
+      return result;
+    }
 
     if (result.success && result.data) {
       setGuestDemoSessionActive(false);

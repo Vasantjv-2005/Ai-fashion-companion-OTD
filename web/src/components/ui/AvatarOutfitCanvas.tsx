@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Layers, Info, ChevronRight, ArrowLeftRight } from 'lucide-react';
 import type { UserProfile } from '../../context/ClosetContext';
+import { formatGarmentMetaParts } from '../../utils/garmentValidation';
 
 export interface OutfitSlotItem {
   slot: 'top' | 'outerwear' | 'bottom' | 'footwear' | 'accessory';
@@ -520,7 +521,7 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
                     </div>
                     <p className="text-xs font-semibold text-white truncate">{activePiece.name}</p>
                     <p className="text-[10px] text-neutral-400 truncate">
-                      {activePiece.color} • {activePiece.brand || 'Bespoke'}
+                      {formatGarmentMetaParts([activePiece.color, activePiece.brand])}
                     </p>
                   </div>
                 </div>
@@ -614,7 +615,7 @@ export const AvatarOutfitCanvas: React.FC<AvatarOutfitCanvasProps> = ({
                       </span>
                       <h5 className="font-semibold text-xs text-white truncate">{item.name}</h5>
                       <p className="text-[10px] text-neutral-400 truncate mt-0.5">
-                        {item.color} • {item.brand || 'Bespoke'}
+                        {formatGarmentMetaParts([item.color, item.brand])}
                       </p>
                     </div>
 

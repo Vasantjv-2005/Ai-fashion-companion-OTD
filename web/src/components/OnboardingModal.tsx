@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   X,
   Check,
@@ -15,7 +15,17 @@ import {
   Info,
 } from 'lucide-react';
 import { useCloset, type WardrobeFocus } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  ACCEPTED_GARMENT_IMAGE_ACCEPT,
+  validateGarmentImageFile,
+} from '../utils/garmentValidation';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 
 export interface OnboardingModalProps {
   isOpen: boolean;
@@ -23,13 +33,17 @@ export interface OnboardingModalProps {
   onComplete?: (destination?: 'closet' | 'home') => void;
 }
 
-export const OnboardingModal: React.FC<OnboardingModalProps> = ({
-  isOpen,
+const OnboardingModalDialog: React.FC<Omit<OnboardingModalProps, 'isOpen'>> = ({
   onClose,
   onComplete,
 }) => {
+  const { isAuthenticated, enterGuestMode } = useAuth();
   const { profile, updateProfile } = useCloset();
+  const [guestPromptAction, setGuestPromptAction] = useState<GuestRestrictedAction | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+  const activeReaderRef = useRef<FileReader | null>(null);
+  const photoRequestIdRef = useRef<number>(0);
 
   // Stepper state: 1 (Style Focus), 2 (Measurements - Optional), 3 (Avatar Setup - Optional)
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -73,10 +87,37 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   );
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Focus trap, restoration & Escape key dismiss
-  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      photoRequestIdRef.current += 1;
+      if (activeReaderRef.current) {
+        try {
+          activeReaderRef.current.abort();
+        } catch {
+          // Ignore FileReader abort errors
+        }
+        activeReaderRef.current = null;
+      }
+    };
+  }, []);
 
-  if (!isOpen) return null;
+  if (isAuthenticated && guestPromptAction !== null) {
+    setGuestPromptAction(null);
+  }
+
+  const isGuestPromptOpen = !isAuthenticated && guestPromptAction !== null;
+  const handleCloseGuestPrompt = useCallback(() => {
+    setGuestPromptAction(null);
+  }, []);
+
+  // Focus trap, restoration & Escape key dismiss (paused while sibling guest registration modal is open)
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    isPaused: isGuestPromptOpen,
+    onClose,
+  });
 
   // Toggle helper for style chips
   const toggleStyle = (style: string) => {
@@ -112,27 +153,67 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setPhotoError('Please select a valid image file (JPEG, PNG, WebP).');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoError('Photo size exceeds 5MB limit. Please choose a smaller file.');
+    if (!isAuthenticated) {
+      e.target.value = '';
+      setGuestPromptAction('upload');
       return;
     }
 
+    const validationError = validateGarmentImageFile(file);
+    if (validationError) {
+      setPhotoError(validationError);
+      return;
+    }
+
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      activeReaderRef.current = null;
+    }
+
+    const requestId = ++photoRequestIdRef.current;
     const reader = new FileReader();
+    activeReaderRef.current = reader;
+
     reader.onload = (ev) => {
-      setReferencePhotoUrl(ev.target?.result as string);
-      setAvatarChoice('custom_photo');
+      if (activeReaderRef.current === reader) {
+        activeReaderRef.current = null;
+      }
+      if (!isMountedRef.current || photoRequestIdRef.current !== requestId) {
+        return;
+      }
+      if (typeof ev.target?.result === 'string') {
+        setReferencePhotoUrl(ev.target.result);
+        setAvatarChoice('custom_photo');
+      } else {
+        setPhotoError('Failed to read image. Please try another file.');
+      }
     };
     reader.onerror = () => {
+      if (activeReaderRef.current === reader) {
+        activeReaderRef.current = null;
+      }
+      if (!isMountedRef.current || photoRequestIdRef.current !== requestId) {
+        return;
+      }
       setPhotoError('Failed to read image. Please try another file.');
     };
     reader.readAsDataURL(file);
   };
 
   const handleRemovePhoto = () => {
+    photoRequestIdRef.current += 1;
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      activeReaderRef.current = null;
+    }
     setReferencePhotoUrl(null);
     setPhotoError(null);
     if (fileInputRef.current) {
@@ -145,6 +226,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const saveProfileData = (overrides?: {
     avatarChoice?: 'archetype' | 'custom_photo' | 'skipped';
   }) => {
+    if (!isAuthenticated) return;
     const finalName = fullName.trim() || 'Curator';
     const finalHeight = heightValue ? `${heightValue} ${heightUnit}` : profile.height || '';
     const finalWeight = weightValue ? `${weightValue} ${weightUnit}` : profile.weight || '';
@@ -171,50 +253,84 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       return;
     }
     setNameError(null);
-    saveProfileData();
+    if (isAuthenticated) {
+      saveProfileData();
+    }
     setCurrentStep(2);
   };
 
   const handleSkipMeasurements = () => {
-    saveProfileData();
+    if (isAuthenticated) {
+      saveProfileData();
+    }
     setCurrentStep(3);
   };
 
   const handleNextFromStep2 = () => {
-    saveProfileData();
+    if (isAuthenticated) {
+      saveProfileData();
+    }
     setCurrentStep(3);
   };
 
   const handleSkipAvatar = () => {
+    if (!isAuthenticated) {
+      setGuestPromptAction('profile');
+      return;
+    }
     saveProfileData({ avatarChoice: 'skipped' });
-    if (onComplete) onComplete('closet');
-    onClose();
+    if (onComplete) {
+      onComplete('closet');
+    } else {
+      onClose();
+    }
   };
 
   const handleFinish = () => {
+    if (!isAuthenticated) {
+      setGuestPromptAction('profile');
+      return;
+    }
     saveProfileData();
-    if (onComplete) onComplete('closet');
-    onClose();
+    if (onComplete) {
+      onComplete('closet');
+    } else {
+      onClose();
+    }
   };
 
   const handleSkipDirectlyToCloset = () => {
+    if (!isAuthenticated) {
+      enterGuestMode();
+      if (onComplete) {
+        onComplete('closet');
+      } else {
+        onClose();
+      }
+      return;
+    }
     saveProfileData({ avatarChoice: 'skipped' });
-    if (onComplete) onComplete('closet');
-    onClose();
+    if (onComplete) {
+      onComplete('closet');
+    } else {
+      onClose();
+    }
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="onboarding-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
+    <>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={isGuestPromptOpen ? true : undefined}
+        aria-labelledby="onboarding-modal-title"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+        onClick={(e) => {
+          if (!isGuestPromptOpen && e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      >
       <div ref={modalRef} className="relative w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl bg-[var(--bg-card)] text-[var(--text-body)] border border-[var(--border-card)] flex flex-col lg:flex-row my-auto max-h-[94vh]">
         
         {/* Top-Right Modal Close Button */}
@@ -397,6 +513,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <input
                     id="onboarding-name"
                     type="text"
+                    maxLength={100}
                     value={fullName}
                     onChange={(e) => {
                       setFullName(e.target.value);
@@ -617,6 +734,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   </div>
                   <input
                     type="text"
+                    maxLength={20}
                     value={heightValue}
                     onChange={(e) => setHeightValue(e.target.value)}
                     placeholder={heightUnit === 'cm' ? 'e.g. 178' : `e.g. 5'10"`}
@@ -658,6 +776,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   </div>
                   <input
                     type="text"
+                    maxLength={20}
                     value={weightValue}
                     onChange={(e) => setWeightValue(e.target.value)}
                     placeholder={weightUnit === 'kg' ? 'e.g. 68' : 'e.g. 150'}
@@ -932,7 +1051,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   </div>
                 ) : (
                   <div
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        setGuestPromptAction('upload');
+                        return;
+                      }
+                      fileInputRef.current?.click();
+                    }}
                     className="p-4 rounded-2xl border border-dashed border-[var(--border-card)] hover:border-[var(--gold-primary)] bg-[var(--bg-card-inner)]/50 text-center cursor-pointer transition-colors space-y-1.5"
                   >
                     <Upload className="w-5 h-5 mx-auto text-[var(--gold-primary)]" />
@@ -940,12 +1065,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       Click to upload an optional reference photo
                     </p>
                     <p className="text-[10px] text-[var(--text-muted)]">
-                      PNG, JPEG, or WebP. This is strictly optional and can be skipped.
+                      PNG, JPEG, or WebP (up to 5MB). This is strictly optional and can be skipped.
                     </p>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={ACCEPTED_GARMENT_IMAGE_ACCEPT}
                       onChange={handlePhotoSelect}
                       className="hidden"
                     />
@@ -1072,8 +1197,33 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           </div>
 
         </div>
-
+        </div>
       </div>
-    </div>
+
+      <GuestRegistrationPromptModal
+        isOpen={isGuestPromptOpen}
+        action={guestPromptAction || 'profile'}
+        redirectTo="/closet"
+        onClose={handleCloseGuestPrompt}
+      />
+    </>
+  );
+};
+
+export const OnboardingModal: React.FC<OnboardingModalProps> = ({
+  isOpen,
+  onClose,
+  onComplete,
+}) => {
+  const { status, user } = useAuth();
+  if (!isOpen) return null;
+
+  const workspaceScopeId = getWorkspaceScopeId(resolveWorkspaceScope(status, user?.id));
+  return (
+    <OnboardingModalDialog
+      key={workspaceScopeId}
+      onClose={onClose}
+      onComplete={onComplete}
+    />
   );
 };

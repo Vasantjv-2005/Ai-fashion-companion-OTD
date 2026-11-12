@@ -16,6 +16,7 @@ const FOCUSABLE_SELECTOR = [
 
 export interface UseFocusTrapOptions {
   isOpen: boolean;
+  isPaused?: boolean;
   onClose?: () => void;
   autoFocus?: boolean;
   returnFocus?: boolean;
@@ -27,12 +28,23 @@ export interface UseFocusTrapOptions {
  */
 export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
   isOpen,
+  isPaused = false,
   onClose,
   autoFocus = true,
   returnFocus = true,
 }: UseFocusTrapOptions): RefObject<T | null> {
   const containerRef = useRef<T | null>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const isPausedRef = useRef<boolean>(isPaused);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,6 +58,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
 
     // 3. Move initial focus into the container after mounting
     const timer = setTimeout(() => {
+      if (isPausedRef.current) return;
       const container = containerRef.current;
       if (!container) return;
 
@@ -75,9 +88,11 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
 
     // 4. Trap Tab and Shift+Tab + handle Escape
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
+      if (isPausedRef.current) return;
+
+      if (e.key === 'Escape' && onCloseRef.current) {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -134,7 +149,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
         previousActiveElement.current?.focus?.();
       }
     };
-  }, [isOpen, onClose, autoFocus, returnFocus]);
+  }, [isOpen, autoFocus, returnFocus]);
 
   return containerRef;
 }

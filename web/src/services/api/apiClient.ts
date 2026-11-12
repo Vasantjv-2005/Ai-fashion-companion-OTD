@@ -400,6 +400,8 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
     options: InternalRequestOptions | undefined,
     hasRetried: boolean
   ): Promise<ApiClientResponse<TResponse>> {
+    const epochAtDispatch = getSessionEpoch();
+
     try {
       return await executeSingleAttempt<TResponse, TBody>(method, path, body, options);
     } catch (error: unknown) {
@@ -408,13 +410,13 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
         error.statusCode === 401 &&
         !options?.skipAuthRefresh &&
         !hasRetried &&
-        !options?.signal?.aborted;
+        !options?.signal?.aborted &&
+        epochAtDispatch === getSessionEpoch();
 
       if (!canAttemptRefresh) {
         throw error;
       }
 
-      const epochBeforeRefresh = getSessionEpoch();
       const refreshResult = await refreshSessionViaCookie();
 
       if (!refreshResult.success || !refreshResult.data?.accessToken) {
@@ -424,7 +426,7 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
             refreshResult.statusCode === 401 ||
             refreshResult.statusCode === 403);
 
-        if (isTerminalAuthRejection && epochBeforeRefresh === getSessionEpoch()) {
+        if (isTerminalAuthRejection && epochAtDispatch === getSessionEpoch()) {
           notifySessionInvalidated();
         }
 
@@ -432,8 +434,8 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
         throw error;
       }
 
-      // If logout/login/guest switch happened while refresh was in flight, do not replay
-      if (epochBeforeRefresh !== getSessionEpoch()) {
+      // If logout/login/guest switch happened while request or refresh was in flight, do not replay
+      if (epochAtDispatch !== getSessionEpoch()) {
         throw error;
       }
 

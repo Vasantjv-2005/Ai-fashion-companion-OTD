@@ -1,8 +1,21 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { X, Edit, Upload, Trash2, Check, AlertCircle } from 'lucide-react';
 import type { ClosetItem } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { compressImageFile } from '../utils/imageCompressor';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  ACCEPTED_GARMENT_IMAGE_ACCEPT,
+  GARMENT_BRAND_MAX_LENGTH,
+  GARMENT_COLOR_MAX_LENGTH,
+  GARMENT_NAME_MAX_LENGTH,
+  GARMENT_NOTES_MAX_LENGTH,
+  GARMENT_SUBTYPE_MAX_LENGTH,
+  validateGarmentImageFile,
+  validateGarmentMetadata,
+  type GarmentMetadataErrors,
+} from '../utils/garmentValidation';
 
 export interface EditPieceModalProps {
   isOpen: boolean;
@@ -40,6 +53,30 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
   onSave,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+  const fileRequestIdRef = useRef<number>(0);
+  const activeReaderRef = useRef<FileReader | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      fileRequestIdRef.current += 1;
+      if (activeReaderRef.current) {
+        try {
+          activeReaderRef.current.abort();
+        } catch {
+          // Ignore FileReader abort errors
+        }
+        activeReaderRef.current = null;
+      }
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Form fields initialized directly from item
   const [name, setName] = useState(item.name || '');
@@ -59,11 +96,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   // Validation & status state
-  const [fieldErrors, setFieldErrors] = useState<{
-    name?: string;
-    brand?: string;
-    color?: string;
-  }>({});
+  const [fieldErrors, setFieldErrors] = useState<GarmentMetadataErrors>({});
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -90,42 +123,83 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
     }
   }, [isDirty, onClose]);
 
-  // Focus trap, restoration & ESC key handling
+  // Focus trap, restoration & ESC key handling (ref-backed so typing does not reset focus)
+  const showDiscardConfirmRef = useRef(showDiscardConfirm);
+  const handleAttemptCloseRef = useRef(handleAttemptClose);
+  useEffect(() => {
+    showDiscardConfirmRef.current = showDiscardConfirm;
+  }, [showDiscardConfirm]);
+  useEffect(() => {
+    handleAttemptCloseRef.current = handleAttemptClose;
+  }, [handleAttemptClose]);
+
+  const handleTrapClose = useCallback(() => {
+    if (showDiscardConfirmRef.current) {
+      setShowDiscardConfirm(false);
+    } else {
+      handleAttemptCloseRef.current();
+    }
+  }, []);
+
   const modalRef = useFocusTrap<HTMLDivElement>({
     isOpen: true,
-    onClose: () => {
-      if (showDiscardConfirm) {
-        setShowDiscardConfirm(false);
-      } else {
-        handleAttemptClose();
-      }
-    },
+    onClose: handleTrapClose,
   });
 
   const handleFile = async (file: File) => {
     setFileError(null);
-    if (!file.type.startsWith('image/')) {
-      setFileError('Please select a valid image file (JPEG, PNG, WebP).');
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      setFileError('Image size exceeds 15MB limit. Please choose a smaller file.');
+    const validationError = validateGarmentImageFile(file);
+    if (validationError) {
+      setFileError(validationError);
       return;
     }
 
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      activeReaderRef.current = null;
+    }
+
+    const requestId = ++fileRequestIdRef.current;
     setSelectedFile(file);
     try {
       // Compress the image before storing to prevent localStorage QuotaExceededError
       const compressedDataUrl = await compressImageFile(file, 800, 0.82);
+      if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+        return;
+      }
       setPreviewUrl(compressedDataUrl);
     } catch {
+      if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+        return;
+      }
       // Fallback to raw FileReader if canvas compression fails
       const reader = new FileReader();
+      activeReaderRef.current = reader;
       reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        setPreviewUrl(dataUrl);
+        if (activeReaderRef.current === reader) {
+          activeReaderRef.current = null;
+        }
+        if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+          return;
+        }
+        const dataUrl = e.target?.result;
+        if (typeof dataUrl === 'string') {
+          setPreviewUrl(dataUrl);
+        } else {
+          setFileError('Unable to read selected file. Please try again.');
+        }
       };
       reader.onerror = () => {
+        if (activeReaderRef.current === reader) {
+          activeReaderRef.current = null;
+        }
+        if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+          return;
+        }
         setFileError('Unable to read selected file. Please try again.');
       };
       reader.readAsDataURL(file);
@@ -150,6 +224,15 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
   };
 
   const handleRemoveImage = () => {
+    fileRequestIdRef.current += 1;
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      activeReaderRef.current = null;
+    }
     setPreviewUrl(null);
     setSelectedFile(null);
     setFileError(null);
@@ -166,23 +249,19 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
   };
 
   const validate = (): boolean => {
-    const errors: { name?: string; brand?: string; color?: string } = {};
-    if (!name.trim()) {
-      errors.name = 'Garment name is required.';
-    }
-    if (!brand.trim()) {
-      errors.brand = 'Brand or maker is required.';
-    }
-    if (!color.trim()) {
-      errors.color = 'Color family is required.';
-    }
+    const errors = validateGarmentMetadata({
+      name,
+      brand,
+      color,
+      description,
+    });
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (isSaving || !validate()) return;
 
     setIsSaving(true);
 
@@ -192,7 +271,10 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
       name: name.trim(),
       brand: brand.trim(),
       category,
-      subType: subType.trim() || item.subType || 'Garment Piece',
+      subType:
+        subType.trim().slice(0, GARMENT_SUBTYPE_MAX_LENGTH) ||
+        item.subType ||
+        'Garment Piece',
       color: color.trim(),
       fit,
       formality,
@@ -201,8 +283,13 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
       description: description.trim() ? description.trim() : undefined,
     };
 
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
     setIsSuccess(true);
-    setTimeout(() => {
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      if (!isMountedRef.current) return;
       setIsSaving(false);
       setIsSuccess(false);
       onSave(updatedItem);
@@ -254,7 +341,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic"
+          accept={ACCEPTED_GARMENT_IMAGE_ACCEPT}
           className="hidden"
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
@@ -333,7 +420,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
 
             {/* Drag & Drop Hint */}
             <div className="mt-2.5 pt-2 border-t border-[var(--border-card)]/60 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-              <span>Supports JPG, PNG, WebP up to 10MB</span>
+              <span>Supports JPG, PNG, WebP up to 5MB</span>
               <span className="hidden sm:inline">Drag & drop photo directly to replace</span>
             </div>
           </div>
@@ -354,6 +441,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_NAME_MAX_LENGTH}
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
@@ -377,10 +465,11 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
 
             <div>
               <label className="block text-[10px] uppercase font-semibold text-[var(--text-muted)] mb-1">
-                Brand / Maker <span className="text-rose-500">*</span>
+                Brand / Maker <span className="font-normal lowercase">(optional)</span>
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_BRAND_MAX_LENGTH}
                 value={brand}
                 onChange={(e) => {
                   setBrand(e.target.value);
@@ -388,7 +477,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
                     setFieldErrors((prev) => ({ ...prev, brand: undefined }));
                   }
                 }}
-                placeholder="e.g. Loro Piana, Zegna, Bespoke"
+                placeholder="e.g. Loro Piana, Zegna, or leave blank"
                 className={`w-full bg-[var(--bg-card)] border rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none transition-colors ${
                   fieldErrors.brand
                     ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
@@ -428,6 +517,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_SUBTYPE_MAX_LENGTH}
                 value={subType}
                 onChange={(e) => setSubType(e.target.value)}
                 placeholder="e.g. Overcoat, Flannel Trousers, Oxford Shirt"
@@ -444,6 +534,7 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={GARMENT_COLOR_MAX_LENGTH}
                 value={color}
                 onChange={(e) => {
                   setColor(e.target.value);
@@ -505,12 +596,27 @@ const EditFormContent: React.FC<EditFormContentProps> = ({
               Garment Notes / Description (Optional)
             </label>
             <textarea
+              maxLength={GARMENT_NOTES_MAX_LENGTH}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (fieldErrors.description) {
+                  setFieldErrors((prev) => ({ ...prev, description: undefined }));
+                }
+              }}
               placeholder="e.g. 6-ply undyed Scottish cashmere, ideal for crisp autumn layering and formal date ensembles..."
               rows={2}
-              className="w-full bg-[var(--bg-card)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none focus:border-[var(--gold-primary)] resize-none"
+              className={`w-full bg-[var(--bg-card)] border rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none resize-none transition-colors ${
+                fieldErrors.description
+                  ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-200'
+                  : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+              }`}
             />
+            {fieldErrors.description && (
+              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                {fieldErrors.description}
+              </p>
+            )}
           </div>
 
           {/* Action Buttons: Cancel and Save Changes */}
@@ -599,11 +705,13 @@ export const EditPieceModal: React.FC<EditPieceModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const { status, user } = useAuth();
   if (!isOpen || !item) return null;
 
+  const workspaceScopeId = getWorkspaceScopeId(resolveWorkspaceScope(status, user?.id));
   return (
     <EditFormContent
-      key={item.id}
+      key={`${workspaceScopeId}:${item.id}`}
       item={item}
       onClose={onClose}
       onSave={onSave}

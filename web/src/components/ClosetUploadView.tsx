@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   Camera,
   Upload,
@@ -23,6 +23,8 @@ import {
   Copy,
 } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { compressImageFile } from '../utils/imageCompressor';
 import {
   saveDraftSession,
@@ -35,6 +37,19 @@ import {
   type DraftSessionData,
 } from '../utils/draftStorage';
 import { detectDuplicateGarment, type DuplicateMatchResult } from '../utils/duplicateDetector';
+import {
+  ACCEPTED_GARMENT_IMAGE_ACCEPT,
+  GARMENT_BRAND_MAX_LENGTH,
+  GARMENT_COLOR_MAX_LENGTH,
+  GARMENT_NAME_MAX_LENGTH,
+  GARMENT_NOTES_MAX_LENGTH,
+  GARMENT_PATTERN_MAX_LENGTH,
+  GARMENT_SUBTYPE_MAX_LENGTH,
+  validateGarmentImageFile,
+  validateGarmentMetadata,
+  deriveDefaultGarmentName,
+  formatGarmentMetaParts,
+} from '../utils/garmentValidation';
 
 export interface ClosetUploadViewProps {
   onBack: () => void;
@@ -177,10 +192,25 @@ let draftCounter = 0;
 const generateDraftId = () => `draft_${Date.now()}_${++draftCounter}`;
 
 export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onComplete }) => {
+  const { status, user } = useAuth();
   const { closet, addClosetItem, updateClosetItem } = useCloset();
+  const workspaceScope = useMemo(
+    () => resolveWorkspaceScope(status, user?.id),
+    [status, user?.id]
+  );
+  const workspaceScopeId = getWorkspaceScopeId(workspaceScope);
+  const activeScopeIdRef = useRef<string>(workspaceScopeId);
+  const scopeGenerationRef = useRef<number>(0);
+  const cameraRequestIdRef = useRef<number>(0);
+  const compressionRunIdRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+  const saveCompletionTimerRef = useRef<number | null>(null);
+  const trackedBlobUrlsRef = useRef<Set<string>>(new Set());
+  const [activeScopeIdState, setActiveScopeIdState] = useState<string>(workspaceScopeId);
 
   // Screen stage
   const [stage, setStage] = useState<'select' | 'camera' | 'library' | 'form'>('select');
+  const stageRef = useRef<'select' | 'camera' | 'library' | 'form'>(stage);
 
   // Multi-item drafts
   const [drafts, setDrafts] = useState<GarmentDraft[]>([]);
@@ -230,6 +260,88 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   // Developer / QA Simulation Tools Drawer
   const [showTestingControls, setShowTestingControls] = useState(false);
 
+  // Synchronously reset transient upload drafts & UI state if auth scope changes
+  if (activeScopeIdState !== workspaceScopeId) {
+    setActiveScopeIdState(workspaceScopeId);
+    setStage('select');
+    setDrafts([]);
+    setActiveDraftIndex(0);
+    setPersistedDraftSession(null);
+    setShowDiscardConfirmModal(false);
+    setIsRestoringDraft(false);
+    setPendingReplacementMatch(null);
+    setIsCameraActive(false);
+    setCameraError(null);
+    setCapturedPhotoUrl(null);
+    setIsCapturing(false);
+    setCameraFacingMode('environment');
+    setAvailableVideoDevices([]);
+    setSelectedDeviceId(null);
+    setStagedFiles([]);
+    setFileError(null);
+    setIsCompressingBatch(false);
+    setBatchProgressSummary(null);
+    setIsDragging(false);
+    setValidationError(null);
+    setIsSaving(false);
+    setSuccessMessage(null);
+    setQuotaExceededNotice(null);
+    setShowTestingControls(false);
+  }
+
+  const isScopeAttemptActive = useCallback((scopeId: string, scopeGen: number) => {
+    return (
+      isMountedRef.current &&
+      activeScopeIdRef.current === scopeId &&
+      scopeGenerationRef.current === scopeGen
+    );
+  }, []);
+
+  // Clean up camera stream and hardware tracks
+  const stopCameraStream = useCallback(() => {
+    cameraRequestIdRef.current += 1;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // ignore cleanup errors
+        }
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    if (isMountedRef.current) {
+      setIsCameraActive(false);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+
+  useLayoutEffect(() => {
+    activeScopeIdRef.current = workspaceScopeId;
+    scopeGenerationRef.current += 1;
+    cameraRequestIdRef.current += 1;
+    compressionRunIdRef.current += 1;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    return () => {
+      scopeGenerationRef.current += 1;
+      cameraRequestIdRef.current += 1;
+      compressionRunIdRef.current += 1;
+      stopCameraStream();
+      if (saveCompletionTimerRef.current !== null) {
+        window.clearTimeout(saveCompletionTimerRef.current);
+        saveCompletionTimerRef.current = null;
+      }
+    };
+  }, [workspaceScopeId, stopCameraStream]);
+
   // Listen for storage quota events dispatched by the application
   useEffect(() => {
     const handleQuotaExceeded = (e: Event) => {
@@ -244,63 +356,109 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     return () => window.removeEventListener('otd:storage-quota-exceeded', handleQuotaExceeded);
   }, []);
 
-  // Check for existing recoverable drafts in IndexedDB or fallback on mount
+  // Check for existing recoverable drafts in IndexedDB or fallback for the active workspace scope
   useEffect(() => {
-    let isMounted = true;
-    loadDraftSession()
+    let cancelled = false;
+    const requestedScope = workspaceScope;
+    const requestedScopeId = workspaceScopeId;
+    const requestedScopeGen = scopeGenerationRef.current;
+
+    loadDraftSession(requestedScope)
       .then((session) => {
-        if (isMounted && session && session.drafts.length > 0) {
+        if (
+          !cancelled &&
+          isScopeAttemptActive(requestedScopeId, requestedScopeGen) &&
+          session &&
+          session.drafts.length > 0
+        ) {
           setPersistedDraftSession(session);
         }
       })
       .catch((err) => {
-        console.warn('Draft session recovery check failed:', err);
+        if (!cancelled && isScopeAttemptActive(requestedScopeId, requestedScopeGen)) {
+          console.warn('Draft session recovery check failed:', err);
+        }
       });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, []);
+  }, [workspaceScope, workspaceScopeId, isScopeAttemptActive]);
 
-  // Debounced auto-save of active drafts to IndexedDB
+  // Debounced auto-save of active drafts to scoped IndexedDB / fallback storage
   useEffect(() => {
-    if (drafts.length === 0 || stage === 'select') return;
+    if (drafts.length === 0 || stage === 'select' || workspaceScope.kind === 'none') return;
 
     // Do not save drafts if all are marked as 'saved'
     const hasUnsaved = drafts.some((d) => d.status !== 'saved');
     if (!hasUnsaved) return;
 
+    const dispatchedScope = workspaceScope;
+    const dispatchedScopeId = workspaceScopeId;
+    const dispatchedScopeGen = scopeGenerationRef.current;
     const timer = setTimeout(() => {
-      saveDraftSession(drafts, stage, activeDraftIndex).catch((err) => {
+      if (!isScopeAttemptActive(dispatchedScopeId, dispatchedScopeGen)) return;
+      saveDraftSession(drafts, stage, activeDraftIndex, dispatchedScope).catch((err) => {
         console.warn('Auto-save to IndexedDB encountered an issue:', err);
       });
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [drafts, stage, activeDraftIndex]);
+  }, [drafts, stage, activeDraftIndex, workspaceScope, workspaceScopeId, isScopeAttemptActive]);
 
-  // Clean up camera stream and hardware tracks
-  const stopCameraStream = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
+  // Revoke any tracked blob: URLs that are no longer referenced by staged files, active drafts, or persisted recovery
+  useEffect(() => {
+    const activeBlobUrls = new Set<string>();
+    stagedFiles.forEach((item) => {
+      if (item.previewUrl.startsWith('blob:')) {
+        activeBlobUrls.add(item.previewUrl);
+      }
+    });
+    drafts.forEach((draft) => {
+      if (draft.imageUrl?.startsWith('blob:')) {
+        activeBlobUrls.add(draft.imageUrl);
+      }
+    });
+    persistedDraftSession?.drafts.forEach((draft) => {
+      if (draft.imageUrl?.startsWith('blob:')) {
+        activeBlobUrls.add(draft.imageUrl);
+      }
+    });
+
+    trackedBlobUrlsRef.current.forEach((trackedUrl) => {
+      if (!activeBlobUrls.has(trackedUrl)) {
         try {
-          track.stop();
+          URL.revokeObjectURL(trackedUrl);
         } catch {
-          // ignore cleanup errors
+          // Ignore revocation errors
+        }
+        trackedBlobUrlsRef.current.delete(trackedUrl);
+      }
+    });
+  }, [stagedFiles, drafts, persistedDraftSession]);
+
+  // Unmount cleanup: stop camera tracks, clear timers, and revoke remaining temporary blob URLs
+  useEffect(() => {
+    isMountedRef.current = true;
+    const trackedUrls = trackedBlobUrlsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      scopeGenerationRef.current += 1;
+      cameraRequestIdRef.current += 1;
+      compressionRunIdRef.current += 1;
+      stopCameraStream();
+      if (saveCompletionTimerRef.current !== null) {
+        window.clearTimeout(saveCompletionTimerRef.current);
+        saveCompletionTimerRef.current = null;
+      }
+      trackedUrls.forEach((trackedUrl) => {
+        try {
+          URL.revokeObjectURL(trackedUrl);
+        } catch {
+          // Ignore revocation errors
         }
       });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraActive(false);
-  }, []);
-
-  // Stop camera tracks on unmount
-  useEffect(() => {
-    return () => {
-      stopCameraStream();
+      trackedUrls.clear();
     };
   }, [stopCameraStream]);
 
@@ -316,6 +474,9 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           stopCameraStream();
           setStage('select');
         } else if (stage === 'library') {
+          compressionRunIdRef.current += 1;
+          setIsCompressingBatch(false);
+          setBatchProgressSummary(null);
           setStage('select');
         } else if (stage === 'form') {
           setStage('select');
@@ -347,8 +508,13 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   };
 
   const handleConfirmDiscardDraft = async () => {
+    const scopeAtAction = workspaceScope;
+    const scopeIdAtAction = workspaceScopeId;
+    const scopeGenAtAction = scopeGenerationRef.current;
+    compressionRunIdRef.current += 1;
     setShowDiscardConfirmModal(false);
-    await clearDraftSession();
+    await clearDraftSession(scopeAtAction);
+    if (!isScopeAttemptActive(scopeIdAtAction, scopeGenAtAction)) return;
     setPersistedDraftSession(null);
     setDrafts([]);
     setActiveDraftIndex(0);
@@ -360,13 +526,23 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   // =========================================================================
   const startCameraStream = useCallback(
     async (facing: 'environment' | 'user' = 'environment', deviceId?: string) => {
+      const initiatingScopeId = activeScopeIdRef.current;
+      const initiatingScopeGen = scopeGenerationRef.current;
+
       stopCameraStream();
+      const requestId = ++cameraRequestIdRef.current;
       setCameraError(null);
       setCapturedPhotoUrl(null);
+      stageRef.current = 'camera';
       setStage('camera');
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError('Camera API is not supported in this browser. Please use library upload instead.');
+        if (
+          isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) &&
+          cameraRequestIdRef.current === requestId
+        ) {
+          setCameraError('Camera API is not supported in this browser. Please use library upload instead.');
+        }
         return;
       }
 
@@ -387,6 +563,21 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           audio: false,
         });
 
+        if (
+          !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+          cameraRequestIdRef.current !== requestId ||
+          stageRef.current !== 'camera'
+        ) {
+          stream.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {
+              // ignore cleanup errors
+            }
+          });
+          return;
+        }
+
         streamRef.current = stream;
         setIsCameraActive(true);
         setCameraFacingMode(facing);
@@ -398,13 +589,29 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
+          if (
+            !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+            cameraRequestIdRef.current !== requestId ||
+            stageRef.current !== 'camera'
+          ) {
+            return;
+          }
           const videoInputs = devices.filter((d) => d.kind === 'videoinput');
           setAvailableVideoDevices(videoInputs);
         } catch {
           // ignore enumeration error
         }
       } catch (err: unknown) {
+        if (
+          !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+          cameraRequestIdRef.current !== requestId
+        ) {
+          return;
+        }
         stopCameraStream();
+        if (stageRef.current !== 'camera') {
+          return;
+        }
         const error = err as { name?: string; message?: string };
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
           setCameraError('Camera access was declined. You can upload an image from your library or enter details manually.');
@@ -415,7 +622,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         }
       }
     },
-    [stopCameraStream]
+    [stopCameraStream, isScopeAttemptActive]
   );
 
   const handleStartCamera = () => {
@@ -476,7 +683,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       name: 'Captured Garment',
       category: 'tops',
       subType: 'Dress Shirt',
-      brand: 'Bespoke Atelier',
+      brand: '',
       color: 'Classic Neutral',
       secondaryColor: '',
       fit: 'Regular',
@@ -514,6 +721,9 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   // =========================================================================
   const handleOpenLibrary = () => {
     stopCameraStream();
+    compressionRunIdRef.current += 1;
+    setIsCompressingBatch(false);
+    setBatchProgressSummary(null);
     setFileError(null);
     setStagedFiles([]);
     setStage('library');
@@ -523,21 +733,18 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     if (!fileList || fileList.length === 0) return;
     setFileError(null);
 
-    const validExtensions = ['image/jpeg', 'image/png', 'image/webp'];
     const newStaged: Array<{ file: File; previewUrl: string }> = [];
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
-      if (!validExtensions.includes(file.type)) {
-        setFileError(`File "${file.name}" has an unsupported format. Please upload JPEG, PNG, or WebP images only.`);
-        continue;
-      }
-      if (file.size > 15 * 1024 * 1024) {
-        setFileError(`File "${file.name}" exceeds the 15MB limit. Please upload a smaller image.`);
+      const err = validateGarmentImageFile(file);
+      if (err) {
+        setFileError(`File "${file.name}": ${err}`);
         continue;
       }
 
       const preview = URL.createObjectURL(file);
+      trackedBlobUrlsRef.current.add(preview);
       newStaged.push({ file, previewUrl: preview });
     }
 
@@ -545,29 +752,37 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
   };
 
   const handleRemoveStagedFile = (index: number) => {
-    setStagedFiles((prev) => {
-      const item = prev[index];
-      if (item && item.previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(item.previewUrl);
-      }
-      return prev.filter((_, i) => i !== index);
-    });
+    setStagedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleProceedFromLibrary = async () => {
+    if (isCompressingBatch) return;
     if (stagedFiles.length === 0) {
       setFileError('Please select at least one garment photo from your library to proceed.');
       return;
     }
 
+    const initiatingScopeId = activeScopeIdRef.current;
+    const initiatingScopeGen = scopeGenerationRef.current;
+    const runId = ++compressionRunIdRef.current;
+    const filesToProcess = [...stagedFiles];
+    const closetSnapshot = closet;
+
     setIsCompressingBatch(true);
     setFileError(null);
 
-    const total = stagedFiles.length;
+    const total = filesToProcess.length;
     const createdDrafts: GarmentDraft[] = [];
 
     for (let i = 0; i < total; i++) {
-      const { file, previewUrl } = stagedFiles[i];
+      if (
+        !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+        compressionRunIdRef.current !== runId
+      ) {
+        return;
+      }
+
+      const { file, previewUrl } = filesToProcess[i];
       setBatchProgressSummary(`Preparing image ${i + 1} of ${total} (${Math.round(((i + 1) / total) * 100)}%)`);
 
       let compressedDataUrl = previewUrl;
@@ -577,9 +792,22 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       try {
         compressedDataUrl = await compressImageFile(file, 800, 0.82);
       } catch (err) {
+        if (
+          !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+          compressionRunIdRef.current !== runId
+        ) {
+          return;
+        }
         console.warn(`Local compression failed for ${file.name}:`, err);
         hasError = true;
         errorMsg = 'Local image processing encountered an issue. You can retry or switch to manual entry.';
+      }
+
+      if (
+        !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+        compressionRunIdRef.current !== runId
+      ) {
+        return;
       }
 
       // Format default clean name
@@ -587,7 +815,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         .replace(/\.[^/.]+$/, '')
         .replace(/[-_]/g, ' ')
         .trim();
-      const formattedName = cleanName ? cleanName.charAt(0).toUpperCase() + cleanName.slice(1) : `Garment ${i + 1}`;
+      const formattedName = deriveDefaultGarmentName(file.name, `Garment ${i + 1}`);
 
       // Infer default category/subtype based on file name if possible
       const lowerName = cleanName.toLowerCase();
@@ -613,7 +841,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         name: formattedName,
         category: cat,
         subType: sub,
-        brand: 'Bespoke Atelier',
+        brand: '',
         color: 'Neutral',
         secondaryColor: '',
         fit: 'Regular',
@@ -635,7 +863,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
       // Heuristic duplicate detection
       if (!hasError) {
-        const duplicateMatch = detectDuplicateGarment(draft, closet);
+        const duplicateMatch = detectDuplicateGarment(draft, closetSnapshot);
         if (duplicateMatch) {
           draft.status = 'needs_attention';
           draft.duplicateOfId = duplicateMatch.existingItem.id;
@@ -646,7 +874,15 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       createdDrafts.push(draft);
     }
 
+    if (
+      !isScopeAttemptActive(initiatingScopeId, initiatingScopeGen) ||
+      compressionRunIdRef.current !== runId
+    ) {
+      return;
+    }
+
     setDrafts(createdDrafts);
+    setStagedFiles([]);
     setActiveDraftIndex(0);
     setIsCompressingBatch(false);
     setBatchProgressSummary(null);
@@ -658,10 +894,22 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
     const targetDraft = drafts.find((d) => d.id === draftId);
     if (!targetDraft) return;
 
+    const initiatingScopeId = activeScopeIdRef.current;
+    const initiatingScopeGen = scopeGenerationRef.current;
+    const closetSnapshot = closet;
+
     // Set draft to preparing
-    setDrafts((prev) =>
-      prev.map((d) => (d.id === draftId ? { ...d, status: 'preparing', progress: 40, errorMessage: undefined } : d))
-    );
+    setDrafts((prev) => {
+      if (
+        activeScopeIdRef.current !== initiatingScopeId ||
+        scopeGenerationRef.current !== initiatingScopeGen
+      ) {
+        return prev;
+      }
+      return prev.map((d) =>
+        d.id === draftId ? { ...d, status: 'preparing', progress: 40, errorMessage: undefined } : d
+      );
+    });
 
     try {
       let compressedUrl = targetDraft.imageUrl;
@@ -669,9 +917,19 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         compressedUrl = await compressImageFile(targetDraft.rawFile, 800, 0.82);
       }
 
-      setDrafts((prev) =>
-        prev.map((d) => {
-          if (d.id !== draftId) return d;
+      if (!isScopeAttemptActive(initiatingScopeId, initiatingScopeGen)) {
+        return;
+      }
+
+      setDrafts((prev) => {
+        if (
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen
+        ) {
+          return prev;
+        }
+        return prev.map((d) => {
+          if (d.id !== draftId || d.status !== 'preparing') return d;
           const updated: GarmentDraft = {
             ...d,
             imageUrl: compressedUrl,
@@ -681,27 +939,36 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             errorMessage: undefined,
             errorCode: undefined,
           };
-          const dup = detectDuplicateGarment(updated, closet);
+          const dup = detectDuplicateGarment(updated, closetSnapshot);
           if (dup) {
             updated.status = 'needs_attention';
             updated.duplicateOfId = dup.existingItem.id;
             updated.duplicateReason = dup.explanation;
           }
           return updated;
-        })
-      );
+        });
+      });
     } catch {
-      setDrafts((prev) =>
-        prev.map((d) =>
-          d.id === draftId
+      if (!isScopeAttemptActive(initiatingScopeId, initiatingScopeGen)) {
+        return;
+      }
+      setDrafts((prev) => {
+        if (
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen
+        ) {
+          return prev;
+        }
+        return prev.map((d) =>
+          d.id === draftId && d.status === 'preparing'
             ? {
                 ...d,
                 status: 'failed',
                 errorMessage: 'Retry failed. You can proceed with manual entry or select another image.',
               }
             : d
-        )
-      );
+        );
+      });
     }
   };
 
@@ -837,16 +1104,15 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
   // Remove a draft from multi-draft queue
   const handleRemoveDraft = (draftIndex: number) => {
-    setDrafts((prev) => {
-      const next = prev.filter((_, idx) => idx !== draftIndex);
-      if (next.length === 0) {
-        setStage('select');
-        clearDraftSession();
-        return [];
-      }
+    const scopeAtAction = workspaceScope;
+    const next = drafts.filter((_, idx) => idx !== draftIndex);
+    setDrafts(next);
+    if (next.length === 0) {
+      setStage('select');
+      void clearDraftSession(scopeAtAction);
+    } else {
       setActiveDraftIndex((current) => Math.min(current, next.length - 1));
-      return next;
-    });
+    }
   };
 
   const activeDraft = drafts[activeDraftIndex] || null;
@@ -893,9 +1159,19 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
 
   // Save all drafts to ClosetContext
   const handleSaveAll = async () => {
+    if (isSaving) return;
     setValidationError(null);
 
-    // Validate that every draft has at least a Name and Primary Color
+    const scopeAtSave = workspaceScope;
+    const scopeIdAtSave = workspaceScopeId;
+    const scopeGenAtSave = scopeGenerationRef.current;
+
+    if (scopeAtSave.kind === 'none') {
+      setValidationError('Active workspace session ended. Please sign in or enter Guest Demo before saving.');
+      return;
+    }
+
+    // Validate that every draft passes metadata checks before saving
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (d.status === 'failed') {
@@ -903,27 +1179,38 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
         setValidationError(`Garment #${i + 1} has a processing error. Please retry, convert to manual entry, or remove it.`);
         return;
       }
-      if (!d.name.trim()) {
+      const fieldErrors = validateGarmentMetadata({
+        name: d.name,
+        brand: d.brand,
+        color: d.color,
+        description: d.description,
+      });
+      const firstError =
+        fieldErrors.name ||
+        fieldErrors.color ||
+        fieldErrors.brand ||
+        fieldErrors.description;
+      if (firstError) {
         setActiveDraftIndex(i);
-        setValidationError(`Please provide a garment name for piece #${i + 1}.`);
-        return;
-      }
-      if (!d.color.trim()) {
-        setActiveDraftIndex(i);
-        setValidationError(`Please specify a primary color for "${d.name || `piece #${i + 1}`}".`);
+        setValidationError(`Piece #${i + 1}: ${firstError}`);
         return;
       }
     }
 
     setIsSaving(true);
+    const draftsSnapshot = [...drafts];
+    const closetSnapshot = closet;
 
     try {
-      drafts.forEach((draft) => {
+      draftsSnapshot.forEach((draft) => {
         const pieceData = {
           name: draft.name.trim(),
           category: draft.category,
-          subType: draft.subType || CATEGORY_SUBTYPES[draft.category][0],
-          brand: draft.brand.trim() || 'Bespoke Atelier',
+          subType:
+            (draft.subType || CATEGORY_SUBTYPES[draft.category][0])
+              .trim()
+              .slice(0, GARMENT_SUBTYPE_MAX_LENGTH),
+          brand: draft.brand.trim(),
           color: draft.color.trim(),
           secondaryColor: draft.secondaryColor?.trim() || undefined,
           fit: draft.fit,
@@ -931,8 +1218,10 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
           icon: draft.icon || CATEGORY_DEFAULT_ICONS[draft.category],
           imageUrl: draft.imageUrl || undefined,
           season: draft.season,
-          pattern: draft.pattern || 'Solid',
-          description: draft.description.trim() || undefined,
+          pattern:
+            draft.pattern.trim().slice(0, GARMENT_PATTERN_MAX_LENGTH) || 'Solid',
+          description:
+            draft.description.trim().slice(0, GARMENT_NOTES_MAX_LENGTH) || undefined,
         };
 
         if (draft.replaceTargetId) {
@@ -945,32 +1234,46 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
       });
 
       // Mark all as saved
+      if (!isScopeAttemptActive(scopeIdAtSave, scopeGenAtSave)) {
+        return;
+      }
       setDrafts((prev) => prev.map((d) => ({ ...d, status: 'saved' })));
 
       // Clear the temporary draft session from storage so it does not reappear
-      await clearDraftSession();
+      await clearDraftSession(scopeAtSave);
+      if (!isScopeAttemptActive(scopeIdAtSave, scopeGenAtSave)) {
+        return;
+      }
 
-      const replacedDrafts = drafts.filter((d) => Boolean(d.replaceTargetId));
+      const replacedDrafts = draftsSnapshot.filter((d) => Boolean(d.replaceTargetId));
       const replacedCount = replacedDrafts.length;
       let msg = '';
-      if (replacedCount > 0 && drafts.length === 1) {
-        const targetName = closet.find((i) => i.id === drafts[0].replaceTargetId)?.name || drafts[0].name;
+      if (replacedCount > 0 && draftsSnapshot.length === 1) {
+        const targetName =
+          closetSnapshot.find((i) => i.id === draftsSnapshot[0].replaceTargetId)?.name ||
+          draftsSnapshot[0].name;
         msg = `"${targetName}" successfully updated in your Digital Closet (original ID preserved).`;
       } else if (replacedCount > 0) {
-        msg = `${drafts.length} garments processed (${replacedCount} replaced, ${drafts.length - replacedCount} added).`;
+        msg = `${draftsSnapshot.length} garments processed (${replacedCount} replaced, ${draftsSnapshot.length - replacedCount} added).`;
       } else {
         msg =
-          drafts.length === 1
-            ? `"${drafts[0].name}" successfully cataloged into your Digital Closet.`
-            : `${drafts.length} garments successfully cataloged into your Digital Closet.`;
+          draftsSnapshot.length === 1
+            ? `"${draftsSnapshot[0].name}" successfully cataloged into your Digital Closet.`
+            : `${draftsSnapshot.length} garments successfully cataloged into your Digital Closet.`;
       }
       setSuccessMessage(msg);
 
-      setTimeout(() => {
+      if (saveCompletionTimerRef.current !== null) {
+        window.clearTimeout(saveCompletionTimerRef.current);
+      }
+      saveCompletionTimerRef.current = window.setTimeout(() => {
+        saveCompletionTimerRef.current = null;
+        if (!isScopeAttemptActive(scopeIdAtSave, scopeGenAtSave)) return;
         setIsSaving(false);
         onComplete();
       }, 700);
     } catch {
+      if (!isScopeAttemptActive(scopeIdAtSave, scopeGenAtSave)) return;
       setIsSaving(false);
       setValidationError('Failed to save to closet. Please check browser storage capacity or try again.');
     }
@@ -995,7 +1298,12 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               if (stage === 'camera') {
                 stopCameraStream();
                 setStage('select');
-              } else if (stage === 'library' || stage === 'form') {
+              } else if (stage === 'library') {
+                compressionRunIdRef.current += 1;
+                setIsCompressingBatch(false);
+                setBatchProgressSummary(null);
+                setStage('select');
+              } else if (stage === 'form') {
                 setStage('select');
               } else {
                 onBack();
@@ -1521,7 +1829,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp"
+            accept={ACCEPTED_GARMENT_IMAGE_ACCEPT}
             className="hidden"
             onChange={(e) => handleAddFiles(e.target.files)}
           />
@@ -1552,7 +1860,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
               Choose Garment Photos from Device
             </h3>
             <p className="text-xs text-[var(--text-muted)] mt-1.5 max-w-sm mx-auto">
-              Select one or multiple images (JPEG, PNG, WebP up to 15MB each). Each photo creates a distinct garment entry.
+              Select one or multiple images (JPEG, PNG, WebP up to 5MB each). Each photo creates a distinct garment entry.
             </p>
             <button
               type="button"
@@ -1808,7 +2116,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                     </span>
                     <p className="font-bold truncate text-[var(--text-heading)]">{activeDuplicateItem.name}</p>
                     <p className="text-[11px] text-[var(--text-muted)] truncate">
-                      {activeDuplicateItem.brand} • {activeDuplicateItem.color} • {activeDuplicateItem.subType}
+                      {formatGarmentMetaParts([activeDuplicateItem.brand, activeDuplicateItem.color, activeDuplicateItem.subType])}
                     </p>
                   </div>
                 </div>
@@ -1834,7 +2142,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                       {activeDraft.name || 'Unnamed Piece'}
                     </p>
                     <p className="text-[11px] text-[var(--text-muted)] truncate">
-                      {activeDraft.brand || 'Bespoke Atelier'} • {activeDraft.color || 'No color'} • {activeDraft.subType}
+                      {formatGarmentMetaParts([activeDraft.brand, activeDraft.color || 'No color', activeDraft.subType])}
                     </p>
                   </div>
                 </div>
@@ -2021,6 +2329,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   <input
                     type="text"
                     required
+                    maxLength={GARMENT_NAME_MAX_LENGTH}
                     placeholder="e.g., Silk-Cashmere Knit Sweater"
                     value={activeDraft.name}
                     onChange={(e) => updateActiveDraft({ name: e.target.value })}
@@ -2043,7 +2352,8 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g., Loro Piana, Zegna, Bespoke"
+                    maxLength={GARMENT_BRAND_MAX_LENGTH}
+                    placeholder="e.g., Loro Piana, Zegna"
                     value={activeDraft.brand}
                     onChange={(e) => updateActiveDraft({ brand: e.target.value })}
                     className="w-full bg-[var(--pill-bg)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] font-medium"
@@ -2104,6 +2414,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   <input
                     type="text"
                     required
+                    maxLength={GARMENT_COLOR_MAX_LENGTH}
                     placeholder="e.g., Vicuna Camel, Charcoal"
                     value={activeDraft.color}
                     onChange={(e) => updateActiveDraft({ color: e.target.value })}
@@ -2126,6 +2437,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   </label>
                   <input
                     type="text"
+                    maxLength={GARMENT_COLOR_MAX_LENGTH}
                     placeholder="e.g., Antique Brass, Sand"
                     value={activeDraft.secondaryColor || ''}
                     onChange={(e) => updateActiveDraft({ secondaryColor: e.target.value })}
@@ -2213,6 +2525,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   </label>
                   <input
                     type="text"
+                    maxLength={GARMENT_PATTERN_MAX_LENGTH}
                     placeholder="e.g., Solid, Chalkstripe, Houndstooth"
                     value={activeDraft.pattern}
                     onChange={(e) => updateActiveDraft({ pattern: e.target.value })}
@@ -2226,6 +2539,7 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                   </label>
                   <input
                     type="text"
+                    maxLength={GARMENT_NOTES_MAX_LENGTH}
                     placeholder="e.g., Pair with flannel trousers"
                     value={activeDraft.description}
                     onChange={(e) => updateActiveDraft({ description: e.target.value })}
@@ -2303,7 +2617,12 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                 Target: {pendingReplacementMatch.existingItem.name}
               </p>
               <p className="text-[11px] text-[var(--text-muted)]">
-                Brand: {pendingReplacementMatch.existingItem.brand} • Category: {pendingReplacementMatch.existingItem.category}
+                {formatGarmentMetaParts([
+                  pendingReplacementMatch.existingItem.brand
+                    ? `Brand: ${pendingReplacementMatch.existingItem.brand}`
+                    : null,
+                  `Category: ${pendingReplacementMatch.existingItem.category}`,
+                ])}
               </p>
             </div>
 
@@ -2459,8 +2778,8 @@ export const ClosetUploadView: React.FC<ClosetUploadViewProps> = ({ onBack, onCo
                     const currentSim = getSimulateIndexedDBFailure();
                     setSimulateIndexedDBFailure(!currentSim);
                     setIsIndexedDBRestricted(!currentSim);
-                    if (!currentSim && drafts.length > 0) {
-                      saveDraftSession(drafts, stage, activeDraftIndex);
+                    if (!currentSim && drafts.length > 0 && workspaceScope.kind !== 'none') {
+                      void saveDraftSession(drafts, stage, activeDraftIndex, workspaceScope);
                     }
                   }}
                   className="px-3 py-1.5 rounded-xl border border-[var(--border-card)] text-[10px] font-semibold text-[var(--text-heading)] hover:bg-[var(--bg-card)] transition-colors cursor-pointer"

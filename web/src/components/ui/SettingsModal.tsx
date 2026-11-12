@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Moon, Sun, Ruler, Bell, RotateCcw, LogOut, Check, Sliders, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { clearAllOtdWorkspaceStorage } from '../../utils/authStorage';
-import { clearDraftSession } from '../../utils/draftStorage';
+import {
+  clearAllOtdWorkspaceStorage,
+  waitForPendingPrivateDraftPurge,
+} from '../../utils/authStorage';
+import { clearAllDraftSessions } from '../../utils/draftStorage';
 import { useFocusTrap } from '../../utils/focusTrap';
 
 export interface UserSettings {
@@ -62,6 +65,30 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
   const [isResetting, setIsResetting] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
+  const isMountedRef = useRef(true);
+  const saveTimerRef = useRef<number | null>(null);
+  const reloadTimerRef = useRef<number | null>(null);
+  const deleteFallbackTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (reloadTimerRef.current !== null) {
+        window.clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = null;
+      }
+      if (deleteFallbackTimerRef.current !== null) {
+        window.clearTimeout(deleteFallbackTimerRef.current);
+        deleteFallbackTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Focus trap, restoration & Escape key dismissal with confirmation shield
   const modalRef = useFocusTrap<HTMLDivElement>({
     isOpen: true,
@@ -82,32 +109,48 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
       // 1. Purge all OTD-owned client-side storage keys explicitly (preserve otd_theme and unrelated storage)
       clearAllOtdWorkspaceStorage({ includeSettings: true });
 
-      // 2. Clear IndexedDB wardrobe drafts via draftStorage
-      await clearDraftSession();
+      // 2. Wait for any queued private IndexedDB draft purge before clearing or deleting the DB
+      await waitForPendingPrivateDraftPurge();
 
-      // 3. Delete native IndexedDB database with explicit event status monitoring
+      // 3. Clear IndexedDB wardrobe drafts via draftStorage without re-creating a missing DB
+      await clearAllDraftSessions();
+
+      // 4. Delete native IndexedDB database with explicit event status monitoring
       let idbStatus: 'cleared' | 'blocked' | 'failed' = 'cleared';
       if ('indexedDB' in window && window.indexedDB) {
         idbStatus = await new Promise<'cleared' | 'blocked' | 'failed'>((resolve) => {
+          let settled = false;
+          const finish = (status: 'cleared' | 'blocked' | 'failed') => {
+            if (settled) return;
+            settled = true;
+            if (deleteFallbackTimerRef.current !== null) {
+              window.clearTimeout(deleteFallbackTimerRef.current);
+              deleteFallbackTimerRef.current = null;
+            }
+            resolve(status);
+          };
+
           try {
             const req = window.indexedDB.deleteDatabase('otd_intake_db');
-            req.onsuccess = () => resolve('cleared');
+            req.onsuccess = () => finish('cleared');
             req.onerror = () => {
               console.warn('IndexedDB deletion error:', req.error);
-              resolve('failed');
+              finish('failed');
             };
             req.onblocked = () => {
               console.warn('IndexedDB deletion blocked by an open connection in another tab.');
-              resolve('blocked');
+              finish('blocked');
             };
             // Fallback timeout in case browser does not dispatch event
-            setTimeout(() => resolve('cleared'), 600);
+            deleteFallbackTimerRef.current = window.setTimeout(() => finish('cleared'), 600);
           } catch (idbErr) {
             console.warn('Error initiating IndexedDB deletion:', idbErr);
-            resolve('failed');
+            finish('failed');
           }
         });
       }
+
+      if (!isMountedRef.current) return;
 
       // Honest advisory feedback without falsely reporting success
       if (idbStatus === 'blocked') {
@@ -118,13 +161,18 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
         setStatusMessage('All wardrobe, profile, and draft caches cleared. Reloading defaults...');
       }
 
-      setTimeout(() => {
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null;
+        if (!isMountedRef.current) return;
         window.location.reload();
       }, 1100);
     } catch (err) {
       console.error('Reset cache error:', err);
+      if (!isMountedRef.current) return;
       setStatusMessage('Notice: Cache reset encountered an unexpected issue. Reloading defaults...');
-      setTimeout(() => {
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null;
+        if (!isMountedRef.current) return;
         window.location.reload();
       }, 1100);
     }
@@ -140,7 +188,12 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toSave));
       setStatusMessage('Preferences saved successfully.');
-      setTimeout(() => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        if (!isMountedRef.current) return;
         setStatusMessage(null);
         onClose();
       }, 600);
@@ -183,7 +236,7 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
                 Studio Settings
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
-                Calibrate appearance, telemetry, and account preferences
+                Calibrate appearance, smart alerts, and account preferences
               </p>
             </div>
           </div>
@@ -271,11 +324,11 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
             </div>
           </div>
 
-          {/* Telemetry & Notifications */}
+          {/* Smart Alerts & Notification Preferences */}
           <div className="space-y-3 pt-3 border-t border-[var(--border-card)]">
             <h4 className="font-semibold text-[var(--text-heading)] text-sm flex items-center gap-1.5">
               <Bell className="w-4 h-4 text-[var(--gold-primary)]" />
-              <span>Smart Alerts & Telemetry</span>
+              <span>Smart Alerts & Notifications</span>
             </h4>
             <div className="space-y-2">
               <label className="flex items-center justify-between cursor-pointer">
@@ -376,7 +429,9 @@ const SettingsModalDialog: React.FC<Omit<SettingsModalProps, 'isOpen'>> = ({
                 try {
                   await onSignOut();
                 } finally {
-                  setIsSigningOut(false);
+                  if (isMountedRef.current) {
+                    setIsSigningOut(false);
+                  }
                 }
               }}
               className="text-xs font-bold text-[var(--text-muted)] hover:text-rose-600 flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"

@@ -3,6 +3,7 @@ import { Bookmark, RotateCcw, MessageSquare, Share2, Edit3, ArrowLeft, Check } f
 
 interface OutfitActionToolbarProps {
   isSaved: boolean;
+  isGuestPreview?: boolean;
   onSave: () => void;
   onRegenerate: () => void;
   onRefineWithChat: () => void;
@@ -15,6 +16,7 @@ interface OutfitActionToolbarProps {
 
 export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
   isSaved,
+  isGuestPreview = false,
   onSave,
   onRegenerate,
   onRefineWithChat,
@@ -25,6 +27,7 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
   occasion,
 }) => {
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const showSavedState = isSaved && !isGuestPreview;
 
   const handleShare = async () => {
     const shareText = `Check out my curated OTD outfit "${outfitTitle}" for ${occasion}! Powered by OTD Fashion Companion.`;
@@ -76,13 +79,19 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
             type="button"
             onClick={onSave}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-xs ${
-              isSaved
+              showSavedState
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-500/30'
                 : 'bg-black text-white dark:bg-white dark:text-black hover:scale-101 hover:shadow-md'
             }`}
           >
-            <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current text-white' : 'text-[var(--gold-primary)]'}`} />
-            <span>{isSaved ? 'Saved to Favorites' : 'Save This Look'}</span>
+            <Bookmark className={`w-4 h-4 ${showSavedState ? 'fill-current text-white' : 'text-[var(--gold-primary)]'}`} />
+            <span>
+              {isGuestPreview
+                ? 'Sign Up to Save Look'
+                : showSavedState
+                  ? 'Saved to Favorites'
+                  : 'Save This Look'}
+            </span>
           </button>
 
           {/* Primary Action 2: Try Another Variation (Regenerate) */}

@@ -1,8 +1,21 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { X, Camera, Upload, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { getWorkspaceScopeId, resolveWorkspaceScope } from '../utils/authStorage';
 import { compressImageFile } from '../utils/imageCompressor';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  ACCEPTED_GARMENT_IMAGE_ACCEPT,
+  GARMENT_BRAND_MAX_LENGTH,
+  GARMENT_COLOR_MAX_LENGTH,
+  GARMENT_NAME_MAX_LENGTH,
+  GARMENT_SUBTYPE_MAX_LENGTH,
+  validateGarmentImageFile,
+  validateGarmentMetadata,
+  deriveDefaultGarmentName,
+  type GarmentMetadataErrors,
+} from '../utils/garmentValidation';
 
 interface AddPieceModalProps {
   isOpen: boolean;
@@ -45,85 +58,162 @@ const PRESET_SAMPLES = [
   },
 ];
 
-export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose }) => {
+const AddPieceModalDialog: React.FC<Omit<AddPieceModalProps, 'isOpen'>> = ({ onClose }) => {
   const { addClosetItem } = useCloset();
+  const { isAuthenticated } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+  const fileRequestIdRef = useRef<number>(0);
+  const activeReaderRef = useRef<FileReader | null>(null);
+  const analyzeTimerRef = useRef<number | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
 
   const [stage, setStage] = useState<'upload' | 'analyzing' | 'confirm'>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewIcon, setPreviewIcon] = useState('🧥');
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<GarmentMetadataErrors>({});
 
   // Form fields
-  const [name, setName] = useState('Double-Faced Camel Wool Overcoat');
-  const [brand, setBrand] = useState('Loro Piana');
+  const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
   const [category, setCategory] = useState<ClosetItem['category']>('outerwear');
   const [subType, setSubType] = useState('Overcoat');
-  const [color, setColor] = useState('Vicuna Camel');
+  const [color, setColor] = useState('Classic Tone');
   const [fit, setFit] = useState<ClosetItem['fit']>('Relaxed / Tailored');
   const [formality, setFormality] = useState<ClosetItem['formality']>(4);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const cancelPendingAsync = useCallback(() => {
+    fileRequestIdRef.current += 1;
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      activeReaderRef.current = null;
+    }
+    if (analyzeTimerRef.current !== null) {
+      window.clearTimeout(analyzeTimerRef.current);
+      analyzeTimerRef.current = null;
+    }
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      cancelPendingAsync();
+    };
+  }, [cancelPendingAsync]);
+
   const resetState = useCallback(() => {
+    cancelPendingAsync();
     setStage('upload');
     setSelectedFile(null);
     setPreviewUrl(null);
     setFileError(null);
+    setFieldErrors({});
+    setName('');
+    setBrand('');
+    setColor('Classic Tone');
+    setIsSuccess(false);
     setIsDragging(false);
-  }, []);
+  }, [cancelPendingAsync]);
 
   const handleClose = useCallback(() => {
     resetState();
     onClose();
   }, [resetState, onClose]);
 
-  // Focus trap, restoration & ESC key handling
-  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose: handleClose });
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  }, [handleClose]);
 
-  if (!isOpen) return null;
+  const handleTrapClose = useCallback(() => {
+    handleCloseRef.current();
+  }, []);
+
+  // Focus trap, restoration & ESC key handling
+  const modalRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onClose: handleTrapClose });
 
   const handleFile = async (file: File) => {
     setFileError(null);
-    if (!file.type.startsWith('image/')) {
-      setFileError('Please select a valid image file (JPEG, PNG, WebP).');
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      setFileError('Image size exceeds 15MB limit. Please choose a smaller file.');
+    setFieldErrors({});
+    const validationError = validateGarmentImageFile(file);
+    if (validationError) {
+      setFileError(validationError);
       return;
     }
 
+    cancelPendingAsync();
+    const requestId = fileRequestIdRef.current;
     setSelectedFile(file);
+    setBrand('');
     try {
       // Compress the image before storing to prevent localStorage QuotaExceededError
       const compressedDataUrl = await compressImageFile(file, 800, 0.82);
+      if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+        return;
+      }
       setPreviewUrl(compressedDataUrl);
 
       // Auto-detect a sensible default name from filename
-      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-      setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+      setName(deriveDefaultGarmentName(file.name));
 
       // Quick analyzing transition
       setStage('analyzing');
-      setTimeout(() => {
+      analyzeTimerRef.current = window.setTimeout(() => {
+        analyzeTimerRef.current = null;
+        if (!isMountedRef.current || fileRequestIdRef.current !== requestId) return;
         setStage('confirm');
       }, 700);
     } catch {
+      if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+        return;
+      }
       // Graceful fallback to raw FileReader if canvas compression fails
       const reader = new FileReader();
+      activeReaderRef.current = reader;
       reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
+        if (activeReaderRef.current === reader) {
+          activeReaderRef.current = null;
+        }
+        if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+          return;
+        }
+        const dataUrl = e.target?.result;
+        if (typeof dataUrl !== 'string') {
+          setFileError('Unable to read selected file. Please try again.');
+          return;
+        }
         setPreviewUrl(dataUrl);
 
-        const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+        setName(deriveDefaultGarmentName(file.name));
 
         setStage('analyzing');
-        setTimeout(() => {
+        analyzeTimerRef.current = window.setTimeout(() => {
+          analyzeTimerRef.current = null;
+          if (!isMountedRef.current || fileRequestIdRef.current !== requestId) return;
           setStage('confirm');
         }, 700);
+      };
+      reader.onerror = () => {
+        if (activeReaderRef.current === reader) {
+          activeReaderRef.current = null;
+        }
+        if (!isMountedRef.current || fileRequestIdRef.current !== requestId) {
+          return;
+        }
+        setFileError('Unable to read selected file. Please try again.');
       };
       reader.readAsDataURL(file);
     }
@@ -138,7 +228,11 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
   };
 
   const handlePresetSelect = (preset: typeof PRESET_SAMPLES[0]) => {
+    cancelPendingAsync();
+    const requestId = fileRequestIdRef.current;
+
     setFileError(null);
+    setFieldErrors({});
     setName(preset.name);
     setBrand(preset.brand);
     setCategory(preset.category);
@@ -151,26 +245,41 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
     setSelectedFile(null);
 
     setStage('analyzing');
-    setTimeout(() => {
+    analyzeTimerRef.current = window.setTimeout(() => {
+      analyzeTimerRef.current = null;
+      if (!isMountedRef.current || fileRequestIdRef.current !== requestId) return;
       setStage('confirm');
     }, 600);
   };
 
   const handleConfirmAdd = () => {
+    if (isSuccess || !isAuthenticated) return;
+
+    const errors = validateGarmentMetadata({ name, brand, color });
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
     addClosetItem({
       category,
-      subType,
-      name: name.trim() || 'Custom Garment',
-      brand: brand.trim() || 'Bespoke',
-      color: color.trim() || 'Classic Tone',
+      subType: subType.trim().slice(0, GARMENT_SUBTYPE_MAX_LENGTH) || 'Garment Piece',
+      name: name.trim(),
+      brand: brand.trim(),
+      color: color.trim(),
       fit,
       formality,
       icon: previewIcon,
       imageUrl: previewUrl || undefined,
     });
 
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
     setIsSuccess(true);
-    setTimeout(() => {
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      if (!isMountedRef.current) return;
       setIsSuccess(false);
       resetState();
       onClose();
@@ -218,7 +327,7 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic"
+          accept={ACCEPTED_GARMENT_IMAGE_ACCEPT}
           className="hidden"
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
@@ -252,7 +361,7 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
                 Choose Photo or Drag Garment Image Here
               </p>
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Supports JPG, PNG, WebP up to 10MB
+                Supports JPG, PNG, WebP up to 5MB
               </p>
               <button
                 type="button"
@@ -359,26 +468,60 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-semibold text-[var(--text-muted)] mb-1">
-                  Garment Name
+                  Garment Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
+                  maxLength={GARMENT_NAME_MAX_LENGTH}
+                  placeholder="e.g. Merino Crewneck"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none focus:border-[var(--gold-primary)]"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (fieldErrors.name) {
+                      setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                    }
+                  }}
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  className={`w-full bg-[var(--bg-card)] border rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none ${
+                    fieldErrors.name
+                      ? 'border-rose-400 focus:border-rose-500'
+                      : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                  }`}
                 />
+                {fieldErrors.name && (
+                  <p role="alert" className="text-[11px] text-rose-500 font-medium mt-1">
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-[10px] uppercase font-semibold text-[var(--text-muted)] mb-1">
-                  Brand / Maker
+                  Brand / Maker <span className="text-[9px] font-normal lowercase">(optional)</span>
                 </label>
                 <input
                   type="text"
+                  maxLength={GARMENT_BRAND_MAX_LENGTH}
+                  placeholder="e.g. Uniqlo, Zegna"
                   value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none focus:border-[var(--gold-primary)]"
+                  onChange={(e) => {
+                    setBrand(e.target.value);
+                    if (fieldErrors.brand) {
+                      setFieldErrors((prev) => ({ ...prev, brand: undefined }));
+                    }
+                  }}
+                  aria-invalid={Boolean(fieldErrors.brand)}
+                  className={`w-full bg-[var(--bg-card)] border rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none ${
+                    fieldErrors.brand
+                      ? 'border-rose-400 focus:border-rose-500'
+                      : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                  }`}
                 />
+                {fieldErrors.brand && (
+                  <p role="alert" className="text-[11px] text-rose-500 font-medium mt-1">
+                    {fieldErrors.brand}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -402,14 +545,31 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
 
               <div>
                 <label className="block text-[10px] uppercase font-semibold text-[var(--text-muted)] mb-1">
-                  Color Family
+                  Color Family <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
+                  maxLength={GARMENT_COLOR_MAX_LENGTH}
+                  placeholder="e.g. Camel, Charcoal"
                   value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none focus:border-[var(--gold-primary)]"
+                  onChange={(e) => {
+                    setColor(e.target.value);
+                    if (fieldErrors.color) {
+                      setFieldErrors((prev) => ({ ...prev, color: undefined }));
+                    }
+                  }}
+                  aria-invalid={Boolean(fieldErrors.color)}
+                  className={`w-full bg-[var(--bg-card)] border rounded-xl px-3 py-2 text-[var(--text-heading)] font-medium outline-none ${
+                    fieldErrors.color
+                      ? 'border-rose-400 focus:border-rose-500'
+                      : 'border-[var(--border-card)] focus:border-[var(--gold-primary)]'
+                  }`}
                 />
+                {fieldErrors.color && (
+                  <p role="alert" className="text-[11px] text-rose-500 font-medium mt-1">
+                    {fieldErrors.color}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -479,4 +639,12 @@ export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose })
       </div>
     </div>
   );
+};
+
+export const AddPieceModal: React.FC<AddPieceModalProps> = ({ isOpen, onClose }) => {
+  const { status, user } = useAuth();
+  if (!isOpen) return null;
+
+  const workspaceScopeId = getWorkspaceScopeId(resolveWorkspaceScope(status, user?.id));
+  return <AddPieceModalDialog key={workspaceScopeId} onClose={onClose} />;
 };

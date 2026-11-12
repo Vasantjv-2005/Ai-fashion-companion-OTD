@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { BrainCircuit, TrendingUp, Plus, Check, ArrowRight, ShoppingBag } from 'lucide-react';
 import { useCloset } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import { GuestRegistrationPromptModal } from './auth/GuestRegistrationPromptModal';
 
 interface GapItem {
   id: string;
@@ -15,7 +17,13 @@ interface GapItem {
 }
 
 export const GapIntelligence: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const { addToShoppingList, isItemInShoppingList } = useCloset();
+  const [guestPromptTitle, setGuestPromptTitle] = useState<string | null>(null);
+
+  if (isAuthenticated && guestPromptTitle !== null) {
+    setGuestPromptTitle(null);
+  }
   const [gaps, setGaps] = useState<GapItem[]>([
     {
       id: 'gap-1',
@@ -172,6 +180,10 @@ export const GapIntelligence: React.FC = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!isAuthenticated) {
+                              setGuestPromptTitle(`Save "${gap.title}" to Wishlist`);
+                              return;
+                            }
                             addToShoppingList({
                               name: gap.title,
                               category: gap.category.toLowerCase().includes('outerwear')
@@ -237,6 +249,14 @@ export const GapIntelligence: React.FC = () => {
         </div>
 
       </div>
+
+      <GuestRegistrationPromptModal
+        isOpen={!isAuthenticated && guestPromptTitle !== null}
+        action="wishlist"
+        actionTitle={guestPromptTitle || undefined}
+        redirectTo="/shopping"
+        onClose={() => setGuestPromptTitle(null)}
+      />
     </section>
   );
 };

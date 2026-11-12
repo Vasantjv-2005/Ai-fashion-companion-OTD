@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Sparkles, Plus, Tag } from 'lucide-react';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { formatGarmentMetaParts } from '../utils/garmentValidation';
 
 interface WardrobeStudioProps {
   onOpenAddPiece?: () => void;
@@ -10,6 +11,13 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
   const { closet } = useCloset();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [selectedItem, setSelectedItem] = useState<ClosetItem | null>(closet[0] || null);
+
+  const effectiveSelectedItem = useMemo(() => {
+    if (selectedItem && closet.some((item) => item.id === selectedItem.id)) {
+      return selectedItem;
+    }
+    return closet[0] || null;
+  }, [selectedItem, closet]);
 
   const filteredItems = activeTab === 'all'
     ? closet
@@ -97,10 +105,10 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                 type="button"
                 key={item.id}
                 onClick={() => setSelectedItem(item)}
-                aria-pressed={selectedItem?.id === item.id}
-                aria-label={`Inspect ${item.name}, ${item.brand} ${item.subType}`}
+                aria-pressed={effectiveSelectedItem?.id === item.id}
+                aria-label={`Inspect ${item.name}, ${formatGarmentMetaParts([item.brand, item.subType])}`}
                 className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer group flex flex-col justify-between text-left ${
-                  selectedItem?.id === item.id
+                  effectiveSelectedItem?.id === item.id
                     ? 'border-[var(--gold-primary)] bg-[var(--bg-card-elevated)] shadow-lg ring-1 ring-[var(--gold-primary)]/30'
                     : 'border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] hover:bg-[var(--bg-card-elevated)]'
                 }`}
@@ -120,7 +128,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                   </div>
 
                   <div className="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)] mb-0.5 font-medium">
-                    {item.brand}
+                    {item.brand || 'Personal Collection'}
                   </div>
                   <h4 className="text-sm font-semibold text-[var(--text-heading)] mb-1 group-hover:text-[var(--gold-primary)]">
                     {item.name}
@@ -142,7 +150,7 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
 
           {/* Detailed Item Inspection Panel (4 columns) */}
           <div className="lg:col-span-4 sticky top-28">
-            {selectedItem ? (
+            {effectiveSelectedItem ? (
               <div className="glass-card rounded-3xl p-6 sm:p-8 border border-[var(--border-card)] shadow-xl relative">
                 
                 <div className="flex items-center justify-between pb-4 border-b border-[var(--border-card)]">
@@ -150,25 +158,27 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                     <Tag className="w-3 h-3" />
                     AI CLOTHING ATTRIBUTES
                   </span>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)]">OTD-ID: {selectedItem.id}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">OTD-ID: {effectiveSelectedItem.id}</span>
                 </div>
 
                 <div className="my-6 text-center">
                   <div className="w-24 h-24 mx-auto rounded-3xl bg-[var(--bg-card-inner)] border border-[var(--border-gold)] flex items-center justify-center text-5xl shadow-md mb-4 overflow-hidden">
-                    {selectedItem.imageUrl ? (
-                      <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-full object-cover" />
+                    {effectiveSelectedItem.imageUrl ? (
+                      <img src={effectiveSelectedItem.imageUrl} alt={effectiveSelectedItem.name} className="w-full h-full object-cover" />
                     ) : (
-                      selectedItem.icon
+                      effectiveSelectedItem.icon
                     )}
                   </div>
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--gold-primary)] font-mono font-medium block">
-                    {selectedItem.brand}
-                  </span>
+                  {effectiveSelectedItem.brand && (
+                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--gold-primary)] font-mono font-medium block">
+                      {effectiveSelectedItem.brand}
+                    </span>
+                  )}
                   <h3 className="font-serif-luxury text-2xl text-[var(--text-heading)] mt-1">
-                    {selectedItem.name}
+                    {effectiveSelectedItem.name}
                   </h3>
                   <p className="text-xs text-[var(--text-body)] mt-1">
-                    {selectedItem.subType} · {selectedItem.color}
+                    {effectiveSelectedItem.subType} · {effectiveSelectedItem.color}
                   </p>
                 </div>
 
@@ -176,27 +186,27 @@ export const WardrobeStudio: React.FC<WardrobeStudioProps> = ({ onOpenAddPiece }
                 <div className="space-y-3 bg-[var(--bg-card-inner)] p-4 rounded-2xl border border-[var(--border-card)] text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-[var(--text-muted)]">Category:</span>
-                    <span className="font-medium text-[var(--text-heading)] capitalize">{selectedItem.category}</span>
+                    <span className="font-medium text-[var(--text-heading)] capitalize">{effectiveSelectedItem.category}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[var(--text-muted)]">Silhouette Cut:</span>
-                    <span className="font-medium text-[var(--text-heading)]">{selectedItem.fit}</span>
+                    <span className="font-medium text-[var(--text-heading)]">{effectiveSelectedItem.fit}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[var(--text-muted)]">Formality Tier:</span>
                     <span className="font-mono text-[var(--gold-primary)] font-bold">
-                      Tier {selectedItem.formality} ({getFormalityLabel(selectedItem.formality)})
+                      Tier {effectiveSelectedItem.formality} ({getFormalityLabel(effectiveSelectedItem.formality)})
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[var(--text-muted)]">Color Tone:</span>
-                    <span className="font-medium text-[var(--text-heading)]">{selectedItem.color}</span>
+                    <span className="font-medium text-[var(--text-heading)]">{effectiveSelectedItem.color}</span>
                   </div>
                 </div>
 
                 <div className="mt-5 text-[11px] text-[var(--text-body)] bg-[var(--bg-card-inner)] p-3 rounded-xl border border-[var(--border-card)] leading-relaxed">
                   <strong className="text-[var(--gold-primary)] block mb-1">AI Pairing Logic:</strong>
-                  "Eligible for instant pairing in {getFormalityLabel(selectedItem.formality)} contexts. Matches with your color preferences in ivory, charcoal, and warm earth tones."
+                  "Eligible for instant pairing in {getFormalityLabel(effectiveSelectedItem.formality)} contexts. Matches with your color preferences in ivory, charcoal, and warm earth tones."
                 </div>
 
                 {onOpenAddPiece && (

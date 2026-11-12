@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Sparkles, ArrowRight, Send, Bookmark, RefreshCw, Sun } from 'lucide-react';
 import { useCloset } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 
 interface HeroProps {
   onOpenProfile: () => void;
@@ -9,6 +14,7 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onExploreDemo }) => {
+  const { isAuthenticated } = useAuth();
   const { currentOutfit, generateOutfit, modifyOutfit, isGenerating, profile } = useCloset();
   
   // Context Form State (Matching Screenshots 2, 6, 7, 8)
@@ -21,9 +27,31 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
   // Chat Modification Input
   const [chatInput, setChatInput] = useState('');
   const [savedLook, setSavedLook] = useState(false);
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    actionTitle?: string;
+  } | null>(null);
+
+  if (isAuthenticated && guestPromptState !== null) {
+    setGuestPromptState(null);
+  }
+
+  const requireRegisteredHeroAction = (
+    action: GuestRestrictedAction,
+    actionTitle?: string,
+  ): boolean => {
+    if (isAuthenticated) {
+      return true;
+    }
+    setGuestPromptState({ action, actionTitle });
+    return false;
+  };
 
   const handleCurate = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!requireRegisteredHeroAction('personalized-styling', 'Curate a Personalized Outfit')) {
+      return;
+    }
     generateOutfit({
       venue,
       occasion,
@@ -41,11 +69,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
+    if (!requireRegisteredHeroAction('personalized-styling', 'Refine This Outfit with AI Stylist')) {
+      return;
+    }
     modifyOutfit(chatInput);
     setChatInput('');
   };
 
   const handleChipTweak = (instruction: string) => {
+    if (!requireRegisteredHeroAction('personalized-styling', `Refine Outfit: "${instruction}"`)) {
+      return;
+    }
     modifyOutfit(instruction);
   };
 
@@ -208,7 +242,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
 
                 <button
                   type="button"
-                  onClick={handleCurate}
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      if (onExploreDemo) {
+                        onExploreDemo();
+                      } else {
+                        document.getElementById('atelier')?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                      return;
+                    }
+                    handleCurate();
+                  }}
                   className="w-full py-2 rounded-xl bg-black text-white dark:bg-white dark:text-black text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
                 >
                   <span>View Look</span>
@@ -228,6 +272,9 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                     type="button"
                     key={dest.name}
                     onClick={() => {
+                      if (!requireRegisteredHeroAction('personalized-styling', `Curate ${dest.name} Look`)) {
+                        return;
+                      }
                       setVenue(dest.name);
                       handleCurate();
                     }}
@@ -338,7 +385,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
             </div>
 
             <h2 className="font-playfair text-3xl sm:text-5xl font-bold text-[var(--text-heading)]">
-              Good evening, {profile.name} 👋
+              Good evening, {isAuthenticated ? (profile.name || 'Curator') : 'Curator'} 👋
             </h2>
 
             <p className="text-sm sm:text-base text-[var(--text-body)]">
@@ -350,7 +397,11 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
               onClick={onOpenProfile}
               className="text-xs uppercase tracking-wider text-[var(--gold-primary)] hover:underline inline-flex items-center gap-1 font-semibold"
             >
-              <span>Style DNA: {profile.stylePersonas[0]} ({profile.preferredFit})</span>
+              <span>
+                {profile.stylePersonas.length > 0
+                  ? `Style DNA: ${profile.stylePersonas[0]} (${profile.preferredFit || 'Tailored'})`
+                  : 'Style DNA: Calibrate Your Profile'}
+              </span>
               <span className="text-[10px] bg-[var(--pill-bg)] px-2 py-0.5 rounded-full border border-[var(--border-gold)]">Calibrate</span>
             </button>
           </div>
@@ -366,6 +417,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <div className="relative">
                   <input
                     type="text"
+                    maxLength={200}
                     value={promptText}
                     onChange={e => setPromptText(e.target.value)}
                     placeholder="e.g. Rooftop cafe tonight for a date, or boardroom pitch..."
@@ -503,7 +555,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
 
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setSavedLook(!savedLook)}
+                    type="button"
+                    onClick={() => {
+                      if (!requireRegisteredHeroAction('save-outfit', 'Save This Curated Look')) {
+                        return;
+                      }
+                      setSavedLook(!savedLook);
+                    }}
                     className={`px-4 py-2.5 rounded-full border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                       savedLook
                         ? 'bg-[#10B981] text-white border-[#10B981]'
@@ -531,7 +589,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                         <span className="text-2xl">{piece.icon}</span>
                       </div>
                       <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">
-                        {piece.brand}
+                        {piece.brand || 'Personal Piece'}
                       </span>
                       <h4 className="text-xs font-bold text-[var(--text-heading)] line-clamp-2 mt-0.5">
                         {piece.name}
@@ -592,6 +650,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
                 <form onSubmit={handleSendChat} className="flex gap-2">
                   <input
                     type="text"
+                    maxLength={200}
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     placeholder="e.g. 'Make it more casual' or 'Change the shoes'..."
@@ -613,6 +672,14 @@ export const Hero: React.FC<HeroProps> = ({ onOpenProfile, onOpenOnboarding, onE
 
         </div>
       </section>
+
+      <GuestRegistrationPromptModal
+        isOpen={!isAuthenticated && guestPromptState !== null}
+        action={guestPromptState?.action || 'personalized-styling'}
+        actionTitle={guestPromptState?.actionTitle}
+        redirectTo="/stylist"
+        onClose={() => setGuestPromptState(null)}
+      />
 
     </div>
   );
