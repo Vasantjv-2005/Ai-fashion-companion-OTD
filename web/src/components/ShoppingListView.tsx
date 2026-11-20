@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ShoppingBag,
   CheckCircle2,
@@ -26,12 +26,25 @@ import {
   findOwnedAlternatives,
   type OwnedAlternative,
 } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  CLOSET_SEARCH_MAX_LENGTH,
+  GARMENT_COLOR_MAX_LENGTH,
+  GARMENT_NAME_MAX_LENGTH,
+  GARMENT_NOTES_MAX_LENGTH,
+  GARMENT_SUBTYPE_MAX_LENGTH,
+} from '../utils/garmentValidation';
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 
 interface ShoppingListViewProps {
   onNavigateToStylist: () => void;
   onNavigateToCloset?: (searchTerm?: string) => void;
   onOpenAddPiece?: () => void;
+  onRequireRegistration?: (action: GuestRestrictedAction, actionTitle?: string) => boolean;
 }
 
 type FilterStatus = 'all' | 'missing' | 'owned';
@@ -56,7 +69,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   onNavigateToStylist,
   onNavigateToCloset,
   onOpenAddPiece,
+  onRequireRegistration,
 }) => {
+  const { isAuthenticated } = useAuth();
   const {
     closet,
     shoppingList,
@@ -68,6 +83,33 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     isItemInShoppingList,
     addClosetItem,
   } = useCloset();
+
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    actionTitle?: string;
+  } | null>(null);
+  const intakeTimerRef = useRef<number | null>(null);
+  const wearTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (intakeTimerRef.current !== null) {
+        window.clearTimeout(intakeTimerRef.current);
+      }
+      if (wearTimerRef.current !== null) {
+        window.clearTimeout(wearTimerRef.current);
+      }
+    };
+  }, []);
+
+  const requireRegistered = (action: GuestRestrictedAction, actionTitle?: string): boolean => {
+    if (isAuthenticated) return true;
+    if (onRequireRegistration) {
+      return onRequireRegistration(action, actionTitle);
+    }
+    setGuestPromptState({ action, actionTitle });
+    return false;
+  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,6 +221,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
   // Quick action: Intake missing item directly into user's Digital Closet
   const handleIntakeToCloset = (item: ShoppingListItem) => {
+    if (!requireRegistered('upload', `Add "${item.name}" to Your Closet`)) {
+      return;
+    }
     const defaultCategory = (
       ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'].includes(item.category.toLowerCase())
         ? item.category.toLowerCase()
@@ -189,7 +234,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
       name: item.name,
       category: defaultCategory,
       subType: item.subType || item.name,
-      brand: item.brand || 'Wardrobe Acquisition',
+      brand: item.brand?.trim() || '',
       color: item.color || 'Classic Tone',
       fit: (item.fit as ClosetItem['fit']) || 'Regular',
       formality: (item.formality as ClosetItem['formality']) || 3,
@@ -199,13 +244,20 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
     });
 
     setIntakeSuccessId(item.id);
-    setTimeout(() => {
+    if (intakeTimerRef.current !== null) {
+      window.clearTimeout(intakeTimerRef.current);
+    }
+    intakeTimerRef.current = window.setTimeout(() => {
+      intakeTimerRef.current = null;
       setIntakeSuccessId((curr) => (curr === item.id ? null : curr));
     }, 3500);
   };
 
   // Start inline budget editing
   const handleStartBudgetEdit = (item: ShoppingListItem) => {
+    if (!requireRegistered('wishlist', `Set Budget for "${item.name}"`)) {
+      return;
+    }
     setEditingBudgetId(item.id);
     setEditingBudgetValue(item.estimatedBudget ? String(item.estimatedBudget) : '');
   };
@@ -232,6 +284,9 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
 
   // Clear budget directly
   const handleClearBudget = (itemId: string) => {
+    if (!requireRegistered('wishlist', 'Update Wishlist Budget')) {
+      return;
+    }
     updateShoppingListItem(itemId, { estimatedBudget: undefined });
   };
 
@@ -239,13 +294,17 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   const handleWearInstead = (itemId: string, altName: string) => {
     setWearInsteadNote({ itemId, altName });
     setActiveAlternativeItem(null);
-    setTimeout(() => {
+    if (wearTimerRef.current !== null) {
+      window.clearTimeout(wearTimerRef.current);
+    }
+    wearTimerRef.current = window.setTimeout(() => {
+      wearTimerRef.current = null;
       setWearInsteadNote((current) => (current?.itemId === itemId ? null : current));
     }, 4500);
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[var(--bg-canvas)] text-[var(--text-body)] p-4 sm:p-6 lg:p-8 space-y-8 select-none">
+    <div className="flex-1 overflow-y-auto bg-[var(--bg-canvas)] text-[var(--text-body)] p-4 sm:p-6 lg:p-8 pb-24 md:pb-8 space-y-8 select-none">
       
       {/* 1. Header & Context */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-card)] pb-6">
@@ -271,7 +330,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              if (!requireRegistered('wishlist', 'Add Item to Wardrobe Wishlist')) return;
+              setIsAddModalOpen(true);
+            }}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--gold-primary)] text-black hover:opacity-90 transition-all cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -290,7 +352,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           {totalCount > 0 && (
             <button
               type="button"
-              onClick={() => setConfirmClearOpen(true)}
+              onClick={() => {
+                if (!requireRegistered('wishlist', 'Clear Wardrobe Wishlist')) return;
+                setConfirmClearOpen(true);
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 border border-[var(--border-card)] transition-all cursor-pointer"
               title="Clear all wishlist items"
             >
@@ -436,10 +501,12 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
+                aria-label="Search wishlist"
+                maxLength={CLOSET_SEARCH_MAX_LENGTH}
                 placeholder="Search wishlist..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3 py-1.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3 py-1.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
           </div>
@@ -510,7 +577,10 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                if (!requireRegistered('wishlist', 'Add Item to Wardrobe Wishlist')) return;
+                setIsAddModalOpen(true);
+              }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold bg-[var(--gold-primary)] text-black hover:opacity-90 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -666,6 +736,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           </span>
                           <input
                             type="number"
+                            aria-label="Estimated budget in INR"
                             min="0"
                             step="100"
                             placeholder="Enter amount (e.g. 3500)"
@@ -676,7 +747,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                               if (e.key === 'Escape') handleCancelBudgetEdit();
                             }}
                             autoFocus
-                            className="w-full bg-[var(--bg-card)] text-xs text-[var(--text-heading)] pl-6 pr-2 py-1 rounded-lg border border-[var(--border-gold)] focus:outline-none"
+                            className="w-full bg-[var(--bg-card)] text-xs text-[var(--text-heading)] pl-6 pr-2 py-1 rounded-lg border border-[var(--border-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                           />
                         </div>
                         <button
@@ -684,6 +755,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           onClick={() => handleSaveBudget(item.id)}
                           className="p-1.5 rounded-lg bg-[var(--gold-primary)] text-black hover:opacity-90 cursor-pointer shadow-2xs"
                           title="Save budget"
+                          aria-label={`Save budget for ${item.name}`}
                         >
                           <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                         </button>
@@ -692,6 +764,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                           onClick={handleCancelBudgetEdit}
                           className="p-1.5 rounded-lg border border-[var(--border-card)] text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer"
                           title="Cancel"
+                          aria-label="Cancel budget editing"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -801,7 +874,12 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
                   {/* Remove Button */}
                   <button
                     type="button"
-                    onClick={() => removeFromShoppingList(item.id)}
+                    onClick={() => {
+                      if (!requireRegistered('wishlist', `Remove "${item.name}" from Wishlist`)) {
+                        return;
+                      }
+                      removeFromShoppingList(item.id);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                     title="Remove item from wishlist"
                   >
@@ -843,7 +921,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
         <div className="flex items-center gap-2">
           <Database className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
           <span>
-            Personal Wardrobe Ledger • Persisted in browser localStorage (Key: <code className="font-mono text-[10px] text-[var(--gold-primary)]">otd_shopping_list</code>).
+            Personal Wardrobe Ledger • Persisted in workspace-scoped browser storage.
           </span>
         </div>
         <div className="text-[11px] font-mono">
@@ -879,6 +957,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
           onWearInstead={handleWearInstead}
           onOpenAddPiece={() => {
             setActiveAlternativeItem(null);
+            if (!requireRegistered('upload', 'Add Personal Garment to Closet')) return;
             if (onOpenAddPiece) onOpenAddPiece();
           }}
         />
@@ -935,6 +1014,16 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {!onRequireRegistration && (
+        <GuestRegistrationPromptModal
+          isOpen={!isAuthenticated && guestPromptState !== null}
+          action={guestPromptState?.action || 'wishlist'}
+          actionTitle={guestPromptState?.actionTitle}
+          redirectTo="/shopping"
+          onClose={() => setGuestPromptState(null)}
+        />
       )}
 
     </div>
@@ -1096,31 +1185,34 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Garment Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
+            <label htmlFor="wishlist-name" className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
               <span>Garment Name *</span>
               <span className="text-[10px] text-[var(--text-muted)] font-mono">e.g. Charcoal Wool Trousers</span>
             </label>
             <input
+              id="wishlist-name"
               type="text"
               required
+              maxLength={GARMENT_NAME_MAX_LENGTH}
               placeholder="e.g., Italian Linen Overshirt, Cashmere Crewneck"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               autoFocus
             />
           </div>
 
           {/* Category Selector Chips */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)]">
+            <span className="block text-xs font-semibold text-[var(--text-heading)]">
               Category *
-            </label>
+            </span>
             <div className="grid grid-cols-5 gap-2">
               {CATEGORY_OPTIONS.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
+                  aria-pressed={category === cat.id}
                   onClick={() => setCategory(cat.id)}
                   className={`p-2 rounded-xl text-center text-xs flex flex-col items-center gap-1 border transition-all cursor-pointer ${
                     category === cat.id
@@ -1138,35 +1230,39 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
           {/* Subtype & Color (2 cols) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[var(--text-heading)]">
+              <label htmlFor="wishlist-subtype" className="block text-xs font-semibold text-[var(--text-heading)]">
                 Silhouette / Subtype
               </label>
               <input
+                id="wishlist-subtype"
                 type="text"
+                maxLength={GARMENT_SUBTYPE_MAX_LENGTH}
                 placeholder="e.g. Pleated Trouser, Blazer"
                 value={subType}
                 onChange={(e) => setSubType(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[var(--text-heading)]">
+              <label htmlFor="wishlist-color" className="block text-xs font-semibold text-[var(--text-heading)]">
                 Color Tone
               </label>
               <input
+                id="wishlist-color"
                 type="text"
+                maxLength={GARMENT_COLOR_MAX_LENGTH}
                 placeholder="e.g. Navy, Charcoal, Camel"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
           </div>
 
           {/* Estimated Budget (INR ₹) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
+            <label htmlFor="wishlist-budget" className="text-xs font-semibold text-[var(--text-heading)] flex items-center justify-between">
               <span className="flex items-center gap-1">
                 <IndianRupee className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                 <span>Estimated Budget (INR ₹, Optional)</span>
@@ -1178,28 +1274,31 @@ const AddWishlistItemModal: React.FC<AddWishlistItemModalProps> = ({
                 ₹
               </span>
               <input
+                id="wishlist-budget"
                 type="number"
                 min="0"
                 step="100"
                 placeholder="e.g., 4500"
                 value={estimatedBudgetStr}
                 onChange={(e) => setEstimatedBudgetStr(e.target.value)}
-                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors font-mono"
+                className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] pl-8 pr-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors font-mono"
               />
             </div>
           </div>
 
           {/* Styling Note / Need */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[var(--text-heading)]">
+            <label htmlFor="wishlist-note" className="block text-xs font-semibold text-[var(--text-heading)]">
               Styling Purpose / Reason (Optional)
             </label>
             <input
+              id="wishlist-note"
               type="text"
+              maxLength={GARMENT_NOTES_MAX_LENGTH}
               placeholder="e.g. Versatile layer for evening dinner & quarterly presentations"
               value={stylingNote}
               onChange={(e) => setStylingNote(e.target.value)}
-              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+              className="w-full bg-[var(--pill-bg)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] px-3.5 py-2.5 rounded-xl border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
             />
           </div>
 

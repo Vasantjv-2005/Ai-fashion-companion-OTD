@@ -12,6 +12,11 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local AI development skills
+.agents/skills/
+
+**/.agents/
+
 # IntelliJ related
 *.iml
 *.ipr

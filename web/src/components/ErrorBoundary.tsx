@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertCircle, RotateCcw, Home, RefreshCw, ChevronDown } from 'lucide-react';
+import { clearAllOtdWorkspaceStorage } from '../utils/authStorage';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -41,25 +42,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   handleClearCacheAndRecover = (): void => {
     try {
-      const otdKeys = [
-        'otd_closet_items',
-        'otd_user_profile',
-        'otd_shopping_list',
-        'otd_saved_looks',
-        'otd_liked_looks',
-        'otd_user_settings',
-        'otd_closet_upload_draft',
-        'otd_auth_token',
-        'otd_auth_user',
-      ];
-      otdKeys.forEach((key) => {
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          // Ignore individual removal errors
-        }
-      });
+      clearAllOtdWorkspaceStorage({ includeSettings: true });
       sessionStorage.clear();
+      if ('indexedDB' in window && window.indexedDB) {
+        window.indexedDB.deleteDatabase('otd_intake_db');
+      }
     } catch (e) {
       console.warn('Cache clearing partially failed:', e);
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, X, Check, Ban, Sparkles, ShieldAlert } from 'lucide-react';
 
 interface GarmentConstraintsSectionProps {
@@ -40,6 +40,19 @@ export const GarmentConstraintsSection: React.FC<GarmentConstraintsSectionProps>
   const [avoidInput, setAvoidInput] = useState('');
   const [includeFeedback, setIncludeFeedback] = useState<string | null>(null);
   const [avoidFeedback, setAvoidFeedback] = useState<string | null>(null);
+  const includeTimerRef = useRef<number | null>(null);
+  const avoidTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (includeTimerRef.current !== null) {
+        window.clearTimeout(includeTimerRef.current);
+      }
+      if (avoidTimerRef.current !== null) {
+        window.clearTimeout(avoidTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleIncludeSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -48,7 +61,11 @@ export const GarmentConstraintsSection: React.FC<GarmentConstraintsSectionProps>
 
     if (mustInclude.some((item) => item.toLowerCase() === clean.toLowerCase())) {
       setIncludeFeedback(`"${clean}" is already included`);
-      setTimeout(() => setIncludeFeedback(null), 2500);
+      if (includeTimerRef.current !== null) window.clearTimeout(includeTimerRef.current);
+      includeTimerRef.current = window.setTimeout(() => {
+        includeTimerRef.current = null;
+        setIncludeFeedback(null);
+      }, 2500);
       return;
     }
 
@@ -64,7 +81,11 @@ export const GarmentConstraintsSection: React.FC<GarmentConstraintsSectionProps>
 
     if (avoidItems.some((item) => item.toLowerCase() === clean.toLowerCase())) {
       setAvoidFeedback(`"${clean}" is already on avoid list`);
-      setTimeout(() => setAvoidFeedback(null), 2500);
+      if (avoidTimerRef.current !== null) window.clearTimeout(avoidTimerRef.current);
+      avoidTimerRef.current = window.setTimeout(() => {
+        avoidTimerRef.current = null;
+        setAvoidFeedback(null);
+      }, 2500);
       return;
     }
 
@@ -120,7 +141,7 @@ export const GarmentConstraintsSection: React.FC<GarmentConstraintsSectionProps>
               onChange={(e) => setIncludeInput(e.target.value)}
               placeholder="e.g. White sneakers, Black blazer..."
               aria-label="Piece to must include"
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] outline-none focus:border-emerald-500 transition-colors"
+              className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus:border-emerald-500 transition-colors"
             />
             <button
               type="submit"
@@ -218,7 +239,7 @@ export const GarmentConstraintsSection: React.FC<GarmentConstraintsSectionProps>
               onChange={(e) => setAvoidInput(e.target.value)}
               placeholder="e.g. Wool, Bright colours, Ties..."
               aria-label="Piece or fabric to avoid"
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] outline-none focus:border-rose-500 transition-colors"
+              className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus:border-rose-500 transition-colors"
             />
             <button
               type="submit"

@@ -7,16 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment variables (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
 node_modules
 dist
 dist-ssr
 *.local
+
+# Vite and TypeScript build caches
+.vite
+*.tsbuildinfo
+
+# Test and coverage output
+coverage
+.nyc_output
+test-results
+playwright-report
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+._*
 *.suo
 *.ntvs*
 *.njsproj

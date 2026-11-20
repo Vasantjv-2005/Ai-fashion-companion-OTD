@@ -147,25 +147,17 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
             {SECONDARY_OCCASIONS.map((occ) => {
               const isSelected = selectedOccasion === occ.name;
               return (
-                <div
+                <button
                   key={occ.id}
-                  role="button"
-                  tabIndex={0}
+                  type="button"
                   aria-pressed={isSelected}
                   onClick={() => {
                     onSelectOccasion(occ.name);
                     onClose();
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onSelectOccasion(occ.name);
-                      onClose();
-                    }
-                  }}
-                  className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer flex gap-3.5 text-left items-start ${
+                  className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer flex gap-3.5 text-left items-start w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                     isSelected
-                      ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-lg scale-[1.01]'
+                      ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black ring-2 ring-[var(--gold-primary)] shadow-lg scale-[1.01]'
                       : 'border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] hover:bg-[var(--pill-bg)]/40'
                   }`}
                 >
@@ -179,7 +171,7 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
                     />
                     {isSelected && (
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                        <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md">
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
                       </div>
@@ -191,13 +183,18 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
                     <div className="flex items-center justify-between gap-1">
                       <span
                         className={`text-[9px] uppercase font-mono font-bold tracking-wider ${
-                          isSelected ? 'text-[var(--gold-primary)]' : 'text-[var(--gold-primary)]'
+                          isSelected
+                            ? 'text-[var(--gold-light)] dark:text-[#6E4E0B]'
+                            : 'text-[var(--gold-dark)] dark:text-[var(--gold-primary)]'
                         }`}
                       >
                         {occ.category}
                       </span>
                       {isSelected && (
-                        <span className="text-[10px] font-bold text-emerald-400">Selected</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 dark:bg-emerald-100 dark:text-emerald-800 dark:border-emerald-700/40">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          Selected
+                        </span>
                       )}
                     </div>
                     <h4 className="font-playfair font-bold text-sm leading-tight truncate">
@@ -205,7 +202,7 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
                     </h4>
                     <p
                       className={`text-[11px] line-clamp-2 leading-relaxed ${
-                        isSelected ? 'text-neutral-300 dark:text-neutral-700' : 'text-[var(--text-muted)]'
+                        isSelected ? 'text-neutral-200 dark:text-neutral-700' : 'text-[var(--text-body)]'
                       }`}
                     >
                       {occ.description}
@@ -214,15 +211,15 @@ export const OccasionModal: React.FC<OccasionModalProps> = ({
                       <span
                         className={`inline-block text-[10px] px-2 py-0.5 rounded-md font-medium ${
                           isSelected
-                            ? 'bg-white/15 dark:bg-black/15 text-white dark:text-black'
-                            : 'bg-[var(--pill-bg)] text-[var(--text-muted)]'
+                            ? 'bg-white/15 dark:bg-black/10 text-white dark:text-black'
+                            : 'bg-[var(--pill-bg)] text-[var(--text-body)]'
                         }`}
                       >
                         {occ.dressCodeSuggestion}
                       </span>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

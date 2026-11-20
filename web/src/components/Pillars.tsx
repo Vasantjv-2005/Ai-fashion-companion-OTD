@@ -20,26 +20,26 @@ export const Pillars: React.FC = () => {
       title: 'Computer Vision Wardrobe Digitize',
       subtitle: 'Single-Snap Luxury Cataloging',
       icon: Camera,
-      desc: 'Instantly isolate clothing items with AI edge-detection, remove clutter backgrounds, detect fabric weave (cashmere, silk, linen), and catalog chromatic attributes.',
+      desc: 'Upload photos with guided review and planned AI background cleanup to organize fabric weave (cashmere, silk, linen) and color attributes.',
       features: [
-        'Automatic 4K silhouette extraction',
-        'Fabric & drape classification (Heavier/Draped/Structured)',
-        'Zero manual tag typing required'
+        'Guided silhouette capture & preview cropping',
+        'Fabric & drape tagging (Heavier/Draped/Structured)',
+        'User-verified smart tag suggestions (AI Cloud Roadmap)'
       ],
       tag: 'Effortless Digitization'
     },
     {
       num: '03',
       title: 'Virtual Fitting Studio',
-      subtitle: 'Photorealistic Silhouette Drape',
+      subtitle: '2D Drape Preview & 3D Roadmap',
       icon: Shirt,
-      desc: 'Preview how garments interact before stepping into them. Test proportions, hem lengths, and color balances on digital silhouettes with accurate fabric physics.',
+      desc: 'Preview how garments pair in 2D editorial flat-lays today. Full photorealistic drape physics and multi-angle 3D fitting are planned for Cloud Phase 2.',
       features: [
-        'Drape & layer interaction physics',
-        'Silhouette ratio balancing (1/3 vs 2/3 golden ratio)',
-        'Instant accessory pairing preview'
+        'Proportion ratio balancing (1/3 vs 2/3 silhouette)',
+        'Flat-lay & interactive mannequin preview',
+        'Real-time fabric drape & 3D fitting (Phase 2 Roadmap)'
       ],
-      tag: 'Zero-Friction Try-On'
+      tag: 'Preview Studio'
     },
     {
       num: '04',

@@ -1,5 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, CloudRain, Sparkles, Calendar, Check, Bell } from 'lucide-react';
+import { useFocusTrap } from '../../utils/focusTrap';
+import {
+  loadStoredSettings,
+  SETTINGS_UPDATED_EVENT,
+  type UserSettings,
+} from './SettingsModal';
 
 export interface NotificationItem {
   id: string;
@@ -13,8 +19,10 @@ export interface NotificationItem {
 interface NotificationPopoverProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenOccasion?: (occasionName: string) => void;
 }
+
+const NOTIF_READ_SESSION_KEY = 'otd_notifications_read_ids';
+const NOTIF_DISMISSED_SESSION_KEY = 'otd_notifications_dismissed_ids';
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
@@ -27,7 +35,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
   {
     id: 'notif-2',
-    title: 'Upcoming Occasion: Dinner at L\'amore',
+    title: "Upcoming Occasion: Dinner at L'amore",
     message: 'Scheduled for tonight at 8:00 PM. Your outfit "The Parisian Minimalist" is ready.',
     time: '2h ago',
     type: 'occasion',
@@ -43,38 +51,67 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
 ];
 
+function readSessionIdList(key: string): string[] {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [notifications, setNotifications] = React.useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [settings, setSettings] = useState<UserSettings>(() => loadStoredSettings());
+  const [readIds, setReadIds] = useState<string[]>(() => readSessionIdList(NOTIF_READ_SESSION_KEY));
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => readSessionIdList(NOTIF_DISMISSED_SESSION_KEY));
 
-  const previousActiveElement = React.useRef<HTMLElement | null>(null);
+  const popoverRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose });
 
-  React.useEffect(() => {
-    if (!isOpen) return;
-    previousActiveElement.current = document.activeElement as HTMLElement | null;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+  useEffect(() => {
+    const handleSettingsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<UserSettings>).detail;
+      setSettings(detail || loadStoredSettings());
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousActiveElement.current?.focus?.();
-    };
-  }, [isOpen, onClose]);
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+  }, []);
 
   if (!isOpen) return null;
 
+  const visibleNotifications = INITIAL_NOTIFICATIONS.filter((item) => {
+    if (dismissedIds.includes(item.id)) return false;
+    if (item.type === 'weather' && !settings.notifyWeather) return false;
+    if (item.type === 'occasion' && !settings.notifyOccasions) return false;
+    if (item.type === 'style' && !settings.notifySuggestions) return false;
+    return true;
+  }).map((item) => ({
+    ...item,
+    read: item.read || readIds.includes(item.id),
+  }));
+
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const nextRead = Array.from(new Set([...readIds, ...visibleNotifications.map((n) => n.id)]));
+    setReadIds(nextRead);
+    try {
+      sessionStorage.setItem(NOTIF_READ_SESSION_KEY, JSON.stringify(nextRead));
+    } catch {
+      // ignore sessionStorage failure
+    }
   };
 
   const clearNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    const nextDismissed = Array.from(new Set([...dismissedIds, id]));
+    setDismissedIds(nextDismissed);
+    try {
+      sessionStorage.setItem(NOTIF_DISMISSED_SESSION_KEY, JSON.stringify(nextDismissed));
+    } catch {
+      // ignore sessionStorage failure
+    }
   };
 
   const getIcon = (type: NotificationItem['type']) => {
@@ -103,6 +140,7 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
       }}
     >
       <div
+        ref={popoverRef}
         className="w-full max-w-sm rounded-3xl bg-[var(--bg-card)] border border-[var(--border-card)] shadow-2xl p-5 text-[var(--text-body)] mt-16 animate-in slide-in-from-top-3 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -118,12 +156,14 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={markAllAsRead}
               className="text-[11px] font-semibold text-[var(--gold-primary)] hover:underline cursor-pointer"
             >
               Mark read
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 rounded-full hover:bg-[var(--pill-bg)] text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors cursor-pointer"
               aria-label="Close notifications"
@@ -135,12 +175,12 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
 
         {/* Notifications List */}
         <div className="py-2 space-y-2 max-h-[380px] overflow-y-auto">
-          {notifications.length === 0 ? (
+          {visibleNotifications.length === 0 ? (
             <div className="py-8 text-center text-xs text-[var(--text-muted)]">
-              No new notifications
+              No active notifications for your current alert preferences
             </div>
           ) : (
-            notifications.map((notif) => (
+            visibleNotifications.map((notif) => (
               <div
                 key={notif.id}
                 className={`p-3 rounded-2xl border transition-all text-xs flex gap-3 ${
@@ -166,8 +206,10 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => clearNotification(notif.id)}
                   className="text-[var(--text-muted)] hover:text-rose-500 transition-colors p-1 self-start cursor-pointer"
+                  aria-label={`Dismiss ${notif.title}`}
                   title="Dismiss"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -179,7 +221,7 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
 
         {/* Footer */}
         <div className="pt-3 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-          <span>Synced with style telemetry</span>
+          <span>Local workspace alerts</span>
           <span className="flex items-center gap-1 text-emerald-600 font-medium">
             <Check className="w-3 h-3 stroke-[3]" /> Active
           </span>

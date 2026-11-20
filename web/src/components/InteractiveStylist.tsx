@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Heart } from 'lucide-react';
 
 
@@ -151,19 +151,40 @@ export const InteractiveStylist: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [savedCount, setSavedCount] = useState(142);
   const [hasLiked, setHasLiked] = useState(false);
+  const transitionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current !== null) {
+        window.clearTimeout(transitionTimerRef.current);
+      }
+    };
+  }, []);
 
   const currentLook = PRESETS[occasion]?.[aesthetic] || PRESETS['boardroom']['old-money'];
 
   const handleOccasionChange = (key: string) => {
     setIsGenerating(true);
     setOccasion(key);
-    setTimeout(() => setIsGenerating(false), 350);
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+    }
+    transitionTimerRef.current = window.setTimeout(() => {
+      transitionTimerRef.current = null;
+      setIsGenerating(false);
+    }, 350);
   };
 
   const handleAestheticChange = (key: string) => {
     setIsGenerating(true);
     setAesthetic(key);
-    setTimeout(() => setIsGenerating(false), 350);
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+    }
+    transitionTimerRef.current = window.setTimeout(() => {
+      transitionTimerRef.current = null;
+      setIsGenerating(false);
+    }, 350);
   };
 
   return (
@@ -178,7 +199,7 @@ export const InteractiveStylist: React.FC = () => {
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-[var(--border-gold)] bg-[var(--pill-bg)]">
             <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
             <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[var(--gold-primary)] font-mono">
-              LIVE ATELIER SIMULATOR
+              INTERACTIVE DEMO PREVIEW
             </span>
           </div>
 
@@ -188,8 +209,7 @@ export const InteractiveStylist: React.FC = () => {
           </h2>
 
           <p className="text-sm sm:text-base text-[var(--text-body)] font-light">
-            Select your scenario and aesthetic profile. Watch the OTD stylist engine cross-reference 
-            chromatic harmony, silhouettes, and fabric weights in milliseconds.
+            Select a sample scenario and aesthetic preset below to preview how OTD pairs chromatic harmony, silhouettes, and seasonal fabrics.
           </p>
         </div>
 
@@ -199,16 +219,17 @@ export const InteractiveStylist: React.FC = () => {
             
             {/* Occasion Selector */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--text-heading)] mb-2.5">
+              <span className="block text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--text-heading)] mb-2.5">
                 1. Select Occasion & Setting
-              </label>
-              <div className="grid grid-cols-3 gap-2">
+              </span>
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
                 {[
                   { id: 'boardroom', label: 'Executive Board', icon: '🏛️' },
                   { id: 'soiree', label: 'Evening Soirée', icon: '🍸' },
                   { id: 'weekend', label: 'Leisure Retreat', icon: '🏔️' },
                 ].map((item) => (
                   <button
+                    type="button"
                     key={item.id}
                     onClick={() => handleOccasionChange(item.id)}
                     className={`p-3 rounded-xl text-left border transition-all duration-200 cursor-pointer ${
@@ -226,15 +247,16 @@ export const InteractiveStylist: React.FC = () => {
 
             {/* Aesthetic Selector */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--text-heading)] mb-2.5">
+              <span className="block text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--text-heading)] mb-2.5">
                 2. Select Style DNA
-              </label>
+              </span>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: 'old-money', label: 'Old Money Heritage', desc: 'Loro Piana, Savile Row, Cashmere' },
                   { id: 'minimalist', label: 'Architectural Pure', desc: 'Monochrome, Jil Sander, Clean' },
                 ].map((item) => (
                   <button
+                    type="button"
                     key={item.id}
                     onClick={() => handleAestheticChange(item.id)}
                     className={`p-3 rounded-xl text-left border transition-all duration-200 cursor-pointer ${
@@ -370,9 +392,11 @@ export const InteractiveStylist: React.FC = () => {
             </div>
 
             {/* Like & Interaction Bar */}
-            <div className="mt-6 flex items-center justify-between text-xs text-[var(--text-muted)] pt-4 border-t border-[var(--border-card)]">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-muted)] pt-4 border-t border-[var(--border-card)]">
               <div className="flex items-center gap-4">
                 <button
+                  type="button"
+                  aria-pressed={hasLiked}
                   onClick={() => {
                     setHasLiked(!hasLiked);
                     setSavedCount(hasLiked ? savedCount - 1 : savedCount + 1);
@@ -384,12 +408,12 @@ export const InteractiveStylist: React.FC = () => {
                   }`}
                 >
                   <Heart className={`w-3.5 h-3.5 ${hasLiked ? 'fill-current text-[#E11D48]' : ''}`} />
-                  <span>{savedCount} Curators Saved</span>
+                  <span>{savedCount} Sample Likes (Demo)</span>
                 </button>
               </div>
 
               <div className="text-[11px] font-mono text-[var(--gold-primary)] font-medium">
-                AI Confidence: 99.7% · Weather Synchronized
+                Sample Preset Score: 99.7% · Demo Preview
               </div>
             </div>
 

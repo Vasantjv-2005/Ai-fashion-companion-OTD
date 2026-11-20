@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bookmark, RotateCcw, MessageSquare, Share2, Edit3, ArrowLeft, Check } from 'lucide-react';
 
 interface OutfitActionToolbarProps {
   isSaved: boolean;
+  isGuestPreview?: boolean;
   onSave: () => void;
   onRegenerate: () => void;
   onRefineWithChat: () => void;
@@ -15,6 +16,7 @@ interface OutfitActionToolbarProps {
 
 export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
   isSaved,
+  isGuestPreview = false,
   onSave,
   onRegenerate,
   onRefineWithChat,
@@ -25,6 +27,27 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
   occasion,
 }) => {
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const feedbackTimerRef = useRef<number | null>(null);
+  const showSavedState = isSaved && !isGuestPreview;
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showTimedFeedback = (msg: string) => {
+    setShareFeedback(msg);
+    if (feedbackTimerRef.current !== null) {
+      window.clearTimeout(feedbackTimerRef.current);
+    }
+    feedbackTimerRef.current = window.setTimeout(() => {
+      feedbackTimerRef.current = null;
+      setShareFeedback(null);
+    }, 3000);
+  };
 
   const handleShare = async () => {
     const shareText = `Check out my curated OTD outfit "${outfitTitle}" for ${occasion}! Powered by OTD Fashion Companion.`;
@@ -37,8 +60,7 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
           text: shareText,
           url: shareUrl,
         });
-        setShareFeedback('Shared successfully');
-        setTimeout(() => setShareFeedback(null), 3000);
+        showTimedFeedback('Shared successfully');
         return;
       } catch {
         // User cancelled share or share failed; fall back to clipboard
@@ -48,11 +70,9 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
     // Fallback: Copy to clipboard
     try {
       await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-      setShareFeedback('Ensemble summary copied to clipboard!');
-      setTimeout(() => setShareFeedback(null), 3000);
+      showTimedFeedback('Ensemble summary copied to clipboard!');
     } catch {
-      setShareFeedback('Could not copy link to clipboard');
-      setTimeout(() => setShareFeedback(null), 3000);
+      showTimedFeedback('Could not copy link to clipboard');
     }
   };
 
@@ -76,13 +96,19 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
             type="button"
             onClick={onSave}
             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-xs ${
-              isSaved
+              showSavedState
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-500/30'
                 : 'bg-black text-white dark:bg-white dark:text-black hover:scale-101 hover:shadow-md'
             }`}
           >
-            <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current text-white' : 'text-[var(--gold-primary)]'}`} />
-            <span>{isSaved ? 'Saved to Favorites' : 'Save This Look'}</span>
+            <Bookmark className={`w-4 h-4 ${showSavedState ? 'fill-current text-white' : 'text-[var(--gold-primary)]'}`} />
+            <span>
+              {isGuestPreview
+                ? 'Sign Up to Save Look'
+                : showSavedState
+                  ? 'Saved to Favorites'
+                  : 'Save This Look'}
+            </span>
           </button>
 
           {/* Primary Action 2: Try Another Variation (Regenerate) */}
@@ -99,7 +125,7 @@ export const OutfitActionToolbar: React.FC<OutfitActionToolbarProps> = ({
 
         {/* ROW 2: SECONDARY ACTIONS (Refine With Stylist, Adjust Plan, Share) */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[var(--border-hairline)]">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Refine With Stylist */}
             <button
               type="button"

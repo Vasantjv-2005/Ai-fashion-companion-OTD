@@ -2,15 +2,11 @@ import React from 'react';
 import { ArrowUp } from 'lucide-react';
 
 export interface FooterProps {
-  onAboutClick?: () => void;
-  onContactClick?: () => void;
   onPrivacyClick?: () => void;
   onTermsClick?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
-  onAboutClick,
-  onContactClick,
   onPrivacyClick,
   onTermsClick,
 }) => {
@@ -36,7 +32,7 @@ export const Footer: React.FC<FooterProps> = ({
                 e.preventDefault();
                 scrollToTop();
               }}
-              className="inline-flex items-center gap-3 group focus-visible:outline-none"
+              className="inline-flex items-center gap-3 group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
               aria-label="OTD - Outfit Of The Day Home"
             >
               <div className="h-10 w-9 rounded-lg overflow-hidden border border-[var(--border-gold)] bg-[#FAF5EC] p-0.5 shadow-2xs group-hover:scale-105 transition-transform duration-300">
@@ -130,7 +126,6 @@ export const Footer: React.FC<FooterProps> = ({
                 <li>
                   <a
                     href="#pillars"
-                    onClick={onAboutClick ? (e) => { e.preventDefault(); onAboutClick(); } : undefined}
                     className="hover:text-[var(--gold-primary)] transition-colors duration-200"
                   >
                     About The System
@@ -139,7 +134,6 @@ export const Footer: React.FC<FooterProps> = ({
                 <li>
                   <a
                     href="#download"
-                    onClick={onContactClick ? (e) => { e.preventDefault(); onContactClick(); } : undefined}
                     className="hover:text-[var(--gold-primary)] transition-colors duration-200"
                   >
                     Mobile Companion
@@ -178,7 +172,7 @@ export const Footer: React.FC<FooterProps> = ({
           <button
             type="button"
             onClick={scrollToTop}
-            className="group inline-flex items-center gap-1.5 text-xs text-[var(--text-body)] hover:text-[var(--gold-primary)] transition-colors duration-200 cursor-pointer focus-visible:outline-none"
+            className="group inline-flex items-center gap-1.5 text-xs text-[var(--text-body)] hover:text-[var(--gold-primary)] transition-colors duration-200 cursor-pointer rounded-lg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
             aria-label="Back to top of page"
           >
             <span>Back to Top</span>

@@ -37,7 +37,7 @@ const ALL_VENUE_CATEGORIES: VenueCategoryItem[] = [
     name: 'Mall',
     description: 'Flagship shopping arcades, luxury promenades and lifestyle centers.',
     ambienceTag: 'Walkable / Urban',
-    img: 'https://images.unsplash.com/photo-1567449303078-57ad995bd301?auto=format&fit=crop&w=600&q=80',
+    img: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'movie_theater',
@@ -203,14 +203,16 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Filter venue categories"
               placeholder="Filter categories (e.g. Rooftop, Gallery, Speakeasy, Resort...)"
-              className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] font-semibold outline-none focus:border-[var(--gold-primary)]"
+              className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)]"
             />
             {searchTerm && (
               <button
                 type="button"
+                aria-label="Clear venue category filter"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-heading)]"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-heading)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -230,25 +232,17 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
               {filteredCategories.map((cat) => {
                 const isSelected = selectedCategory === cat.name;
                 return (
-                  <div
+                  <button
                     key={cat.id}
-                    role="button"
-                    tabIndex={0}
+                    type="button"
                     aria-pressed={isSelected}
                     onClick={() => {
                       onSelectCategory(cat.name);
                       onClose();
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelectCategory(cat.name);
-                        onClose();
-                      }
-                    }}
-                    className={`group relative p-3 rounded-2xl border transition-all cursor-pointer flex gap-3 text-left items-start ${
+                    className={`group relative p-3 rounded-2xl border transition-all cursor-pointer flex gap-3 text-left items-start w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                       isSelected
-                        ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-lg scale-[1.01]'
+                        ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black ring-2 ring-[var(--gold-primary)] shadow-lg scale-[1.01]'
                         : 'border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--gold-primary)] hover:bg-[var(--pill-bg)]/40'
                     }`}
                   >
@@ -262,7 +256,7 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
                       />
                       {isSelected && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md">
                             <Check className="w-3 h-3 stroke-[3]" />
                           </div>
                         </div>
@@ -273,12 +267,15 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
                       <div className="flex items-center justify-between gap-1">
                         <h4 className="font-playfair font-bold text-sm truncate">{cat.name}</h4>
                         {isSelected && (
-                          <span className="text-[10px] font-bold text-emerald-400">Active</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 dark:bg-emerald-100 dark:text-emerald-800 dark:border-emerald-700/40 shrink-0">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                            Active
+                          </span>
                         )}
                       </div>
                       <p
                         className={`text-[11px] line-clamp-1 leading-snug ${
-                          isSelected ? 'text-neutral-300 dark:text-neutral-700' : 'text-[var(--text-muted)]'
+                          isSelected ? 'text-neutral-200 dark:text-neutral-700' : 'text-[var(--text-body)]'
                         }`}
                       >
                         {cat.description}
@@ -286,14 +283,14 @@ export const VenueCategoryModal: React.FC<VenueCategoryModalProps> = ({
                       <span
                         className={`inline-block text-[10px] px-2 py-0.5 rounded-md font-medium ${
                           isSelected
-                            ? 'bg-white/15 dark:bg-black/15 text-white dark:text-black'
-                            : 'bg-[var(--pill-bg)] text-[var(--text-muted)]'
+                            ? 'bg-white/15 dark:bg-black/10 text-white dark:text-black'
+                            : 'bg-[var(--pill-bg)] text-[var(--text-body)]'
                         }`}
                       >
                         {cat.ambienceTag}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

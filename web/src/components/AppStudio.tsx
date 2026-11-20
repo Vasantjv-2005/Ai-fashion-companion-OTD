@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, lazy, Suspense } from 'react';
 import {
   Home,
   Shirt,
@@ -40,10 +40,12 @@ import {
   ArchiveRestore,
   ArrowUpDown,
   AlertCircle,
-  ShoppingBag
+  ShoppingBag,
+  Lock
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useCloset, type ClosetItem } from '../context/ClosetContext';
+import { useAuth } from '../hooks/useAuth';
 import { NotificationPopover } from './ui/NotificationPopover';
 import { SettingsModal } from './ui/SettingsModal';
 import { MobileBottomNav } from './ui/MobileBottomNav';
@@ -60,13 +62,53 @@ import { OutfitActionToolbar } from './ui/OutfitActionToolbar';
 import { OutfitGenerationLoader } from './ui/OutfitGenerationLoader';
 import { GarmentSwapModal } from './ui/GarmentSwapModal';
 import { synthesizeOutfitResult } from '../utils/outfitSynthesizer';
-import { ClosetUploadView } from './ClosetUploadView';
-import { ShoppingListView } from './ShoppingListView';
+const ClosetUploadView = lazy(() =>
+  import('./ClosetUploadView').then((module) => ({ default: module.ClosetUploadView }))
+);
+const ShoppingListView = lazy(() =>
+  import('./ShoppingListView').then((module) => ({ default: module.ShoppingListView }))
+);
+import {
+  GuestRegistrationPromptModal,
+  type GuestRestrictedAction,
+} from './auth/GuestRegistrationPromptModal';
 import { useFocusTrap } from '../utils/focusTrap';
+import {
+  CLOSET_SEARCH_MAX_LENGTH,
+  formatGarmentMetaParts,
+} from '../utils/garmentValidation';
+import type { SavedLook } from '../types/domain';
+import { resolveSavedLookIdentifier } from '../adapters';
+import { deleteBackendOutfitForLook } from '../services/outfits.service';
+import {
+  getWorkspaceScopeId,
+  resolveWorkspaceScope,
+} from '../utils/authStorage';
+import {
+  HOME_SUGGESTION_TEMPLATES,
+  SAFE_LOOK_FALLBACK_IMAGE,
+  buildSavedLookFromEnsemble,
+  createSavedLookFromTemplate,
+  deleteSavedLookById,
+  deriveSyncedLikedLookIds,
+  extractOwnedSlotGarmentIds,
+  extractSlotAssignments,
+  findDuplicateSavedLook,
+  formatSavedLookDateLabel,
+  formatSavedLookPiecesSummary,
+  isTemplateFavorited,
+  loadStoredSavedLooks,
+  persistSavedLooks,
+  restoreSavedLookSlots,
+  toggleSavedLookFavorite,
+  toggleTemplateCardFavorite,
+  type HomeSuggestionTemplate,
+} from '../utils/savedLooksStorage';
 
 export interface AppStudioProps {
   onOpenAddPiece: () => void;
   onOpenProfile: () => void;
+  onOpenAuth?: () => void;
   onBackToLanding?: () => void;
   activeTab?: StudioTab;
   onTabChange?: (tab: StudioTab) => void;
@@ -181,85 +223,6 @@ function getDynamicDateOptions(): string[] {
   ];
 }
 
-export interface SavedLookItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  occasion: string;
-  venue: string;
-  weather: string;
-  img: string;
-  piecesSummary: string;
-  date: string;
-  isCustom?: boolean;
-}
-
-const DEFAULT_SAVED_LOOKS: SavedLookItem[] = [
-  {
-    id: 'smart-casual-1',
-    title: 'Smart Casual',
-    subtitle: "For Today's Weather",
-    occasion: 'Casual Evening',
-    venue: 'Olive Bistro',
-    weather: '28°C Breezy',
-    img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Linen Camp Shirt, Gurkha Chinos, Belgian Loafers',
-    date: 'Curated Ensemble',
-  },
-  {
-    id: 'date-night-1',
-    title: 'Date Night',
-    subtitle: 'Classy & Effortless',
-    occasion: 'Date Night',
-    venue: "L'amore, Banjara Hills",
-    weather: '27°C Partly Cloudy',
-    img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Silk-Cashmere Knit, Flannel Pleated Trousers, Suede Loafers',
-    date: 'Curated Ensemble',
-  },
-  {
-    id: 'office-ready-1',
-    title: 'Office Ready',
-    subtitle: 'Clean & Polished',
-    occasion: 'Executive Presentation',
-    venue: 'Executive Boardroom',
-    weather: '24°C Climate Controlled',
-    img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=500&q=80',
-    piecesSummary: 'Sea Island Cotton Shirt, Navy Hopsack Blazer, Oxford Shoes',
-    date: 'Curated Ensemble',
-  },
-];
-
-const loadStoredSavedLooks = (): SavedLookItem[] => {
-  try {
-    const raw = localStorage.getItem('otd_saved_looks');
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to parse otd_saved_looks from localStorage:', err);
-  }
-  return DEFAULT_SAVED_LOOKS;
-};
-
-const loadStoredLikedLooks = (): string[] => {
-  try {
-    const raw = localStorage.getItem('otd_liked_looks');
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to parse otd_liked_looks from localStorage:', err);
-  }
-  return ['smart-casual-1', 'date-night-1'];
-};
-
 export interface WeekScheduleDay {
   name: string;
   occasion: string;
@@ -304,16 +267,31 @@ function computeWeekScheduleDays(): WeekScheduleDay[] {
   });
 }
 
-function getTodayFormattedSaveDate(): string {
-  return new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+interface ScopedSavedLooksState {
+  scopeId: string;
+  looks: SavedLook[];
+}
+
+const EMPTY_SLOT_OVERRIDES: Partial<Record<OutfitSlotItem['slot'], ClosetItem>> = {};
+
+function createInitialConciergeMessages(): Array<{
+  sender: 'user' | 'ai';
+  text: string;
+  time: string;
+}> {
+  return [
+    {
+      sender: 'ai',
+      text: "Welcome to your AI Stylist Concierge. Ask me to refine silhouettes, adapt garments to weather shifts, or optimize formality for your venue.",
+      time: 'Just now',
+    },
+  ];
 }
 
 export const AppStudio: React.FC<AppStudioProps> = ({
   onOpenAddPiece,
   onOpenProfile,
+  onOpenAuth,
   onBackToLanding,
   activeTab: controlledActiveTab,
   onTabChange,
@@ -322,6 +300,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   onBackFromUpload,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { status, isAuthenticated, isGuest, user, logout, exitGuestMode } = useAuth();
   const {
     closet,
     profile,
@@ -333,15 +312,37 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     checkItemOwnership
   } = useCloset();
 
-  // Neutral name fallbacks eliminating hardcoded developer overrides
-  const userDisplayName =
-    profile.name && profile.name.trim() && profile.name !== 'Curator'
-      ? profile.name
-      : 'Guest Curator';
-  const userGreetingName =
-    profile.name && profile.name.trim() && profile.name !== 'Curator'
-      ? profile.name.split(' ')[0]
-      : 'Curator';
+  const workspaceScope = useMemo(
+    () => resolveWorkspaceScope(status, user?.id),
+    [status, user?.id]
+  );
+  const workspaceScopeId = getWorkspaceScopeId(workspaceScope);
+
+  // Prefer authenticated account name over local demo profile fallback
+  const userDisplayName = isAuthenticated
+    ? user?.name?.trim() || profile.name.trim() || 'Style Member'
+    : 'Guest Curator';
+  const userGreetingName = isAuthenticated
+    ? (user?.name?.trim() || profile.name.trim() || 'Stylist').split(' ')[0]
+    : 'Curator';
+
+  const [guestPromptState, setGuestPromptState] = useState<{
+    action: GuestRestrictedAction;
+    redirectTo?: string;
+    actionTitle?: string;
+  } | null>(null);
+
+  const requireRegisteredUser = (
+    action: GuestRestrictedAction,
+    redirectTo?: string,
+    actionTitle?: string,
+  ): boolean => {
+    if (isAuthenticated) {
+      return true;
+    }
+    setGuestPromptState({ action, redirectTo, actionTitle });
+    return false;
+  };
 
   // Live count of missing / unacquired shopping list items for badge indication
   const unacquiredShoppingCount = useMemo(() => {
@@ -386,30 +387,57 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Home search bar
   const [homeSearchQuery, setHomeSearchQuery] = useState('');
 
-  // Favorites / Saved Looks state (Task 9A Persistence)
-  const [likedLooks, setLikedLooks] = useState<string[]>(loadStoredLikedLooks);
-  const [savedLooksList, setSavedLooksList] = useState<SavedLookItem[]>(loadStoredSavedLooks);
+  // Favorites / Saved Looks state (Scope-isolated persistence with Guest-only demo seeding)
+  const [scopedSavedLooks, setScopedSavedLooks] = useState<ScopedSavedLooksState>(() => ({
+    scopeId: workspaceScopeId,
+    looks: loadStoredSavedLooks(workspaceScope),
+  }));
+  const [restoredLook, setRestoredLook] = useState<SavedLook | null>(null);
 
-  // Synchronize saved looks and likes to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('otd_saved_looks', JSON.stringify(savedLooksList));
-    } catch (err) {
-      console.warn('Failed to persist otd_saved_looks:', err);
-    }
-  }, [savedLooksList]);
+  const isScopeSynced = scopedSavedLooks.scopeId === workspaceScopeId;
+  const savedLooksList = useMemo(
+    () => (isScopeSynced ? scopedSavedLooks.looks : loadStoredSavedLooks(workspaceScope)),
+    [isScopeSynced, scopedSavedLooks.looks, workspaceScope],
+  );
 
+  const activeScopeIdRef = useRef<string>(workspaceScopeId);
+  const scopeGenerationRef = useRef<number>(0);
+  const locationRequestIdRef = useRef<number>(0);
+  const vibeTimerRef = useRef<number | null>(null);
+  const chatTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  const likedLooks = useMemo(
+    () => deriveSyncedLikedLookIds(savedLooksList),
+    [savedLooksList],
+  );
+  const favoriteLooksCount = likedLooks.length;
+
+  const updateSavedLooksList = (updater: (prev: SavedLook[]) => SavedLook[]) => {
+    const dispatchedScopeId = workspaceScopeId;
+    setScopedSavedLooks((prev) => {
+      if (prev.scopeId !== dispatchedScopeId) {
+        return prev;
+      }
+      return {
+        scopeId: prev.scopeId,
+        looks: updater(prev.looks),
+      };
+    });
+  };
+
+  // Synchronize normalized Saved Looks and synced Favorite IDs strictly to the active scope
   useEffect(() => {
-    try {
-      localStorage.setItem('otd_liked_looks', JSON.stringify(likedLooks));
-    } catch (err) {
-      console.warn('Failed to persist otd_liked_looks:', err);
+    if (scopedSavedLooks.scopeId !== workspaceScopeId) {
+      return;
     }
-  }, [likedLooks]);
+    persistSavedLooks(scopedSavedLooks.looks, workspaceScope);
+  }, [scopedSavedLooks, workspaceScope, workspaceScopeId]);
 
   // Focus traps & keyboard accessibility for Studio internal modals
   const inspectionModalRef = useFocusTrap<HTMLDivElement>({
     isOpen: Boolean(selectedClosetItem),
+    isPaused: Boolean(itemToEdit) || Boolean(itemToDelete),
     onClose: () => setSelectedClosetItem(null),
   });
 
@@ -432,10 +460,23 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [plannerStep, setPlannerStep] = useState<1 | 2 | 3>(1);
   const [selectedOccasion, setSelectedOccasion] = useState('Date');
   const [isOccasionModalOpen, setIsOccasionModalOpen] = useState(false);
-  const [selectedVenue, setSelectedVenue] = useState<Venue>(CURATED_VENUES[0]);
   const [destinationSearch, setDestinationSearch] = useState("L'amore, Banjara Hills, Hyderabad");
   const [selectedVenueCategory, setSelectedVenueCategory] = useState('Restaurant');
   const [isVenueCategoryModalOpen, setIsVenueCategoryModalOpen] = useState(false);
+
+  const trimmedDestinationSearch = destinationSearch.trim();
+  const matchedCuratedVenue = useMemo(() => {
+    if (!trimmedDestinationSearch) return undefined;
+    const normalized = trimmedDestinationSearch.toLowerCase();
+    return CURATED_VENUES.find(
+      (v) =>
+        v.name.toLowerCase() === normalized ||
+        `${v.name}, ${v.location}`.toLowerCase() === normalized,
+    );
+  }, [trimmedDestinationSearch]);
+  const resolvedDestinationName = matchedCuratedVenue
+    ? matchedCuratedVenue.name
+    : trimmedDestinationSearch;
   // Dynamic relative date options based on current date
   const [dynamicDateOptions] = useState<string[]>(() => getDynamicDateOptions());
   const [selectedDate, setSelectedDate] = useState<string>(() => getDynamicDateOptions()[0]);
@@ -453,10 +494,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       setLocationFeedback('Geolocation is not supported by your browser.');
       return;
     }
+    const initiatingScopeId = activeScopeIdRef.current;
+    const initiatingScopeGen = scopeGenerationRef.current;
+    const requestId = ++locationRequestIdRef.current;
+
     setLocationStatus('requesting');
     setLocationFeedback('Detecting local geographic coordinates...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (
+          !isMountedRef.current ||
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen ||
+          locationRequestIdRef.current !== requestId
+        ) {
+          return;
+        }
         setLocationCoords({
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -465,6 +518,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         setLocationFeedback('Location detected. Geographic context applied to your styling session.');
       },
       (err) => {
+        if (
+          !isMountedRef.current ||
+          activeScopeIdRef.current !== initiatingScopeId ||
+          scopeGenerationRef.current !== initiatingScopeGen ||
+          locationRequestIdRef.current !== requestId
+        ) {
+          return;
+        }
         if (err.code === 1) { // PERMISSION_DENIED
           setLocationStatus('denied');
           setLocationFeedback('Location access was declined. Manual destination will be used.');
@@ -481,6 +542,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   };
 
   const handleClearLocation = () => {
+    locationRequestIdRef.current += 1;
     setLocationStatus('idle');
     setLocationCoords(null);
     setLocationFeedback(null);
@@ -496,15 +558,42 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [isWeatherSkipped, setIsWeatherSkipped] = useState(false);
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>(['Light & Breezy']);
 
+  const scheduleVibeFeedbackClear = () => {
+    if (vibeTimerRef.current !== null) {
+      window.clearTimeout(vibeTimerRef.current);
+    }
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
+    vibeTimerRef.current = window.setTimeout(() => {
+      vibeTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+      setVibeFeedback(null);
+    }, 3000);
+  };
+
   const handleToggleMood = (moodName: string) => {
     if (selectedMoods.includes(moodName)) {
+      if (vibeTimerRef.current !== null) {
+        window.clearTimeout(vibeTimerRef.current);
+        vibeTimerRef.current = null;
+      }
       setSelectedMoods((prev) => prev.filter((m) => m !== moodName));
       setVibeFeedback(null);
     } else {
       if (selectedMoods.length >= 2) {
         setVibeFeedback('Maximum 2 style vibes allowed. Deselect one to choose another.');
-        setTimeout(() => setVibeFeedback(null), 3000);
+        scheduleVibeFeedbackClear();
       } else {
+        if (vibeTimerRef.current !== null) {
+          window.clearTimeout(vibeTimerRef.current);
+          vibeTimerRef.current = null;
+        }
         setSelectedMoods((prev) => [...prev, moodName]);
         setVibeFeedback(null);
       }
@@ -516,7 +605,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     if (!clean) return;
     if (selectedMoods.length >= 2) {
       setVibeFeedback('Maximum 2 style vibes allowed. Deselect one first.');
-      setTimeout(() => setVibeFeedback(null), 3000);
+      scheduleVibeFeedbackClear();
       return;
     }
     if (!selectedMoods.some((m) => m.toLowerCase() === clean.toLowerCase())) {
@@ -562,15 +651,134 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   // Individual Garment Swapping State (Task 4)
   const [slotOverrides, setSlotOverrides] = useState<Partial<Record<OutfitSlotItem['slot'], ClosetItem>>>({});
   const [isGarmentSwapOpen, setIsGarmentSwapOpen] = useState(false);
-  const [activeSwapSlot, setActiveSwapSlot] = useState<OutfitSlotItem | null>(null);
+  const [activeSwapSlotKey, setActiveSwapSlotKey] = useState<OutfitSlotItem['slot'] | null>(null);
+  const [selectedOutfitSlotKey, setSelectedOutfitSlotKey] = useState<OutfitSlotItem['slot']>('top');
   const [swapToast, setSwapToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const studioMainRef = useRef<HTMLElement | null>(null);
+
+  const scrollStudioSection = (sectionId?: string) => {
+    const mainEl = studioMainRef.current;
+    if (!mainEl) return;
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+    if (!sectionId) {
+      if (typeof mainEl.scrollTo === 'function') {
+        mainEl.scrollTo({ top: 0, behavior });
+      } else {
+        mainEl.scrollTop = 0;
+      }
+      return;
+    }
+
+    const targetEl = document.getElementById(sectionId);
+    if (!targetEl || !mainEl.contains(targetEl)) return;
+
+    const headerOffset = 80;
+    const targetTop =
+      targetEl.getBoundingClientRect().top -
+      mainEl.getBoundingClientRect().top +
+      mainEl.scrollTop -
+      headerOffset;
+
+    if (typeof mainEl.scrollTo === 'function') {
+      mainEl.scrollTo({ top: Math.max(0, targetTop), behavior });
+    } else {
+      mainEl.scrollTop = Math.max(0, targetTop);
+    }
+  };
+
+  const resetStylistSession = (
+    targetStep: 1 | 2 | 3 = 1,
+    options?: { keepVariation?: boolean; resetChat?: boolean },
+  ) => {
+    const shouldResetChat = options?.resetChat ?? targetStep === 1;
+    setRestoredLook(null);
+    setCurrentOutfitTitle(null);
+    setSlotOverrides({});
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    setIsSynthesizingOutfit(false);
+    if (!options?.keepVariation) {
+      setOutfitVariationIndex(0);
+    }
+    if (shouldResetChat) {
+      if (chatTimerRef.current !== null) {
+        window.clearTimeout(chatTimerRef.current);
+        chatTimerRef.current = null;
+      }
+      setChatMessages(createInitialConciergeMessages());
+      setChatInput('');
+    }
+    setPlannerStep(targetStep);
+  };
+
+  useLayoutEffect(() => {
+    activeScopeIdRef.current = workspaceScopeId;
+    scopeGenerationRef.current += 1;
+    locationRequestIdRef.current += 1;
+    return () => {
+      scopeGenerationRef.current += 1;
+      locationRequestIdRef.current += 1;
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+      if (chatTimerRef.current !== null) {
+        window.clearTimeout(chatTimerRef.current);
+        chatTimerRef.current = null;
+      }
+      if (vibeTimerRef.current !== null) {
+        window.clearTimeout(vibeTimerRef.current);
+        vibeTimerRef.current = null;
+      }
+    };
+  }, [workspaceScopeId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      scopeGenerationRef.current += 1;
+      locationRequestIdRef.current += 1;
+    };
+  }, []);
+
+  const effectiveRestoredLook = isScopeSynced ? restoredLook : null;
+  const effectiveSlotOverrides = isScopeSynced ? slotOverrides : EMPTY_SLOT_OVERRIDES;
+
+  const triggerSwapToast = (message: string) => {
+    setSwapToast(message);
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
+    toastTimerRef.current = window.setTimeout(() => {
+      toastTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+      setSwapToast(null);
+    }, 3500);
+  };
 
   // Memoized deterministic ensemble synthesis from active closet & context
   const synthesizedOutfit = useMemo(() => {
     const base = synthesizeOutfitResult({
       closet,
       occasion: selectedOccasion,
-      venueName: selectedVenue.name || destinationSearch,
+      venueName: resolvedDestinationName,
       venueCategory: selectedVenueCategory,
       weatherCondition: isWeatherSkipped ? 'Climate-Agnostic' : selectedWeatherCond,
       selectedPreferences,
@@ -587,8 +795,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   }, [
     closet,
     selectedOccasion,
-    selectedVenue.name,
-    destinationSearch,
+    resolvedDestinationName,
     selectedVenueCategory,
     isWeatherSkipped,
     selectedWeatherCond,
@@ -601,33 +808,130 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     currentOutfitTitle,
   ]);
 
-  // Effective slots applying individual garment overrides while strictly preserving all other 4 slots
+  const restoredLookResolution = useMemo(() => {
+    if (!effectiveRestoredLook) return null;
+    return restoreSavedLookSlots(effectiveRestoredLook, closet);
+  }, [effectiveRestoredLook, closet]);
+
+  const activeOutfitTitle = effectiveRestoredLook ? effectiveRestoredLook.title : synthesizedOutfit.title;
+  const activeOutfitSubtitle = effectiveRestoredLook ? effectiveRestoredLook.subtitle : synthesizedOutfit.subtitle;
+
+  // Effective slots applying individual garment overrides (resolved against live active closet) while preserving saved/restored slots
   const effectiveSlots: OutfitSlotItem[] = useMemo(() => {
-    return synthesizedOutfit.slots.map((baseSlot) => {
-      const override = slotOverrides[baseSlot.slot];
-      if (!override) return baseSlot;
+    const baseSlots = restoredLookResolution
+      ? restoredLookResolution.restoredSlots
+      : synthesizedOutfit.slots;
+    const activeClosetById = new Map(
+      closet.filter((item) => !item.isArchived).map((item) => [item.id, item] as const),
+    );
+    const slotOrder: OutfitSlotItem['slot'][] = [
+      'top',
+      'outerwear',
+      'bottom',
+      'footwear',
+      'accessory',
+    ];
+    const slotLabels: Record<OutfitSlotItem['slot'], string> = {
+      top: 'Base Top',
+      outerwear: 'Outerwear / Layer',
+      bottom: 'Bottoms',
+      footwear: 'Footwear',
+      accessory: 'Accessories',
+    };
+
+    const mapped = baseSlots.map((baseSlot) => {
+      const override = effectiveSlotOverrides[baseSlot.slot];
+      const liveOverride = override ? activeClosetById.get(override.id) : undefined;
+      if (!liveOverride) return baseSlot;
 
       return {
         ...baseSlot,
-        closetItemId: override.id,
-        name: override.name,
-        category: override.subType || override.category,
-        brand: override.brand,
-        color: override.color,
-        fit: override.fit,
-        formality: override.formality,
-        imageUrl: override.imageUrl,
-        icon: override.icon,
+        closetItemId: liveOverride.id,
+        name: liveOverride.name,
+        category: liveOverride.subType || liveOverride.category,
+        brand: liveOverride.brand,
+        color: liveOverride.color,
+        fit: liveOverride.fit,
+        formality: liveOverride.formality,
+        imageUrl: liveOverride.imageUrl,
+        icon: liveOverride.icon,
         status: 'owned' as const, // Strict verified owned status directly from closet
-        stylingNote: `Hand-selected substitution: ${override.brand || 'Bespoke'} ${override.name} in ${override.color}.`,
+        stylingNote: `Hand-selected substitution: ${liveOverride.brand ? `${liveOverride.brand} ` : ''}${liveOverride.name} in ${liveOverride.color}.`,
       };
     });
-  }, [synthesizedOutfit.slots, slotOverrides]);
 
-  // Transparently recomputed harmony score based on active slots
-  const effectiveHarmonyScore = useMemo(() => {
+    const presentKeys = new Set(mapped.map((s) => s.slot));
+    for (const slotKey of slotOrder) {
+      const override = effectiveSlotOverrides[slotKey];
+      const liveOverride = override ? activeClosetById.get(override.id) : undefined;
+      if (liveOverride && !presentKeys.has(slotKey)) {
+        mapped.push({
+          slot: slotKey,
+          slotLabel: slotLabels[slotKey],
+          closetItemId: liveOverride.id,
+          name: liveOverride.name,
+          category: liveOverride.subType || liveOverride.category,
+          brand: liveOverride.brand,
+          color: liveOverride.color,
+          fit: liveOverride.fit,
+          formality: liveOverride.formality,
+          imageUrl: liveOverride.imageUrl,
+          icon: liveOverride.icon,
+          status: 'owned',
+          stylingNote: `Hand-selected substitution: ${liveOverride.brand ? `${liveOverride.brand} ` : ''}${liveOverride.name} in ${liveOverride.color}.`,
+        });
+      }
+    }
+
+    return mapped.sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
+  }, [restoredLookResolution, synthesizedOutfit.slots, effectiveSlotOverrides, closet]);
+
+  const activeSwapSlot = useMemo(() => {
+    if (!activeSwapSlotKey) return null;
+    return effectiveSlots.find((s) => s.slot === activeSwapSlotKey) ?? null;
+  }, [activeSwapSlotKey, effectiveSlots]);
+
+  const activeOverridesCount = useMemo(
+    () =>
+      Object.values(effectiveSlotOverrides).filter(
+        (override) =>
+          Boolean(override && closet.some((item) => item.id === override.id && !item.isArchived)),
+      ).length,
+    [effectiveSlotOverrides, closet],
+  );
+
+  const currentEnsembleCandidate = useMemo(
+    () => ({
+      title: activeOutfitTitle,
+      occasion: selectedOccasion,
+      slots: effectiveSlots,
+      garmentIds: extractOwnedSlotGarmentIds(effectiveSlots),
+      garments: effectiveSlots.map((s) => s.name),
+      slotAssignments: extractSlotAssignments(effectiveSlots),
+    }),
+    [activeOutfitTitle, selectedOccasion, effectiveSlots],
+  );
+
+  const matchingSavedLook = useMemo(() => {
+    if (effectiveRestoredLook && activeOverridesCount === 0) {
+      const liveRestored = savedLooksList.find((l) => l.id === effectiveRestoredLook.id);
+      if (liveRestored) return liveRestored;
+    }
+    return findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
+  }, [effectiveRestoredLook, activeOverridesCount, savedLooksList, currentEnsembleCandidate]);
+
+  const isCurrentOutfitSaved = Boolean(matchingSavedLook?.isFavorite);
+
+  // Transparently recomputed harmony score based on active slots (returns null when 0 pieces are owned)
+  const effectiveHarmonyScore = useMemo<number | null>(() => {
+    if (effectiveSlots.length === 0) {
+      return null;
+    }
     const ownedCount = effectiveSlots.filter((s) => s.status === 'owned').length;
-    const wardrobeOwnershipPts = Math.round((ownedCount / Math.max(1, effectiveSlots.length)) * 60);
+    if (ownedCount === 0) {
+      return null;
+    }
+    const wardrobeOwnershipPts = Math.round((ownedCount / effectiveSlots.length) * 60);
 
     const occasionLower = selectedOccasion.toLowerCase();
     const isFormal =
@@ -643,55 +947,204 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     const formalityPts = isFormal ? 29 : isCasual ? 28 : 30;
     const climateComfortPts = isWeatherSkipped ? 8 : 9;
 
-    return Math.min(99, Math.max(70, wardrobeOwnershipPts + formalityPts + climateComfortPts));
+    return Math.min(99, Math.max(0, wardrobeOwnershipPts + formalityPts + climateComfortPts));
   }, [effectiveSlots, selectedOccasion, isWeatherSkipped]);
 
   // Open garment swap modal for a specific slot
   const handleOpenSwapModal = (slot: OutfitSlotItem) => {
-    setActiveSwapSlot(slot);
+    if (!requireRegisteredUser('personalized-styling', '/stylist', `Swap ${slot.slotLabel}`)) {
+      return;
+    }
+    setSelectedOutfitSlotKey(slot.slot);
+    setActiveSwapSlotKey(slot.slot);
     setIsGarmentSwapOpen(true);
+  };
+
+  const handleCloseSwapModal = () => {
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
   };
 
   // Apply a swapped garment to a single slot
   const handleApplySwap = (slotKey: OutfitSlotItem['slot'], newItem: ClosetItem) => {
+    setSelectedOutfitSlotKey(slotKey);
     setSlotOverrides((prev) => ({
       ...prev,
       [slotKey]: newItem,
     }));
-    setSwapToast(`Updated ${slotKey.toUpperCase()} with ${newItem.brand ? newItem.brand + ' ' : ''}${newItem.name}`);
-    setTimeout(() => setSwapToast(null), 3500);
+    triggerSwapToast(`Updated ${slotKey.toUpperCase()} with ${newItem.brand ? newItem.brand + ' ' : ''}${newItem.name}`);
   };
 
   const handleSaveCurrentLook = () => {
-    const lookId = `curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`;
-    toggleLike(lookId);
-    if (!savedLooksList.some((look) => look.id === lookId)) {
-      const todayFormatted = getTodayFormattedSaveDate();
-      setSavedLooksList((prev) => [
-        {
-          id: lookId,
-          title: synthesizedOutfit.title,
-          subtitle: synthesizedOutfit.subtitle,
-          occasion: selectedOccasion,
-          venue: selectedVenue.name || destinationSearch,
-          weather: isWeatherSkipped ? 'Climate-Agnostic' : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
-          img: effectiveSlots[0]?.imageUrl || 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=500&q=80',
-          piecesSummary: effectiveSlots.map((s) => s.name).slice(0, 3).join(', '),
-          date: `Saved ${todayFormatted}`,
-          isCustom: true,
-        },
-        ...prev,
-      ]);
+    if (!requireRegisteredUser('save-outfit', '/saved', `Save "${activeOutfitTitle}"`)) {
+      return;
+    }
+    const existingDuplicate =
+      matchingSavedLook ??
+      findDuplicateSavedLook(currentEnsembleCandidate, savedLooksList);
+    if (existingDuplicate) {
+      if (!existingDuplicate.isFavorite) {
+        updateSavedLooksList((prev) => toggleSavedLookFavorite(prev, existingDuplicate.id));
+        triggerSwapToast(`Re-added "${existingDuplicate.title}" to Favorites.`);
+      } else {
+        triggerSwapToast(`"${existingDuplicate.title}" is already saved in your Favorites.`);
+      }
+      return;
+    }
+
+    const preservedTemplateId =
+      effectiveRestoredLook && activeOverridesCount === 0
+        ? effectiveRestoredLook.sourceTemplateId
+        : undefined;
+
+    const newSavedLook = buildSavedLookFromEnsemble({
+      sourceTemplateId: preservedTemplateId,
+      title: activeOutfitTitle,
+      subtitle: activeOutfitSubtitle,
+      occasion: selectedOccasion,
+      venue: resolvedDestinationName,
+      weatherTag: isWeatherSkipped
+        ? 'Climate-Agnostic'
+        : `${selectedWeatherCond} (${weatherNote.split('•')[0].trim() || '24°C'})`,
+      vibe: selectedMoods[0] || profile.stylePersonas[0] || 'Refined',
+      preferences: selectedPreferences,
+      slots: effectiveSlots,
+      closet,
+      variationIndex: outfitVariationIndex,
+    });
+
+    updateSavedLooksList((prev) => [newSavedLook, ...prev]);
+    triggerSwapToast(
+      `Saved "${newSavedLook.title}" (${newSavedLook.garmentIds.length} pieces) to Favorites.`,
+    );
+  };
+
+  const handleToggleFavoriteSavedLook = (lookId: string) => {
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Favorite This Saved Look')) {
+      return;
+    }
+    updateSavedLooksList((prev) => toggleSavedLookFavorite(prev, lookId));
+  };
+
+  const handleDeleteSavedLook = (lookId: string) => {
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Remove Saved Look')) {
+      return;
+    }
+    const targetLook = savedLooksList.find((l) => l.id === lookId);
+    updateSavedLooksList((prev) => deleteSavedLookById(prev, lookId));
+    if (effectiveRestoredLook?.id === lookId) {
+      setRestoredLook(null);
+    }
+    if (
+      targetLook &&
+      isAuthenticated &&
+      !isGuest &&
+      resolveSavedLookIdentifier(targetLook).isPersistedOnBackend
+    ) {
+      void deleteBackendOutfitForLook(targetLook).catch(() => {
+        // Non-blocking remote cleanup; local state remains authoritative during WS3
+      });
     }
   };
 
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(() => [
-    {
-      sender: 'ai',
-      text: "Welcome to your AI Stylist Concierge. Ask me to refine silhouettes, adapt garments to weather shifts, or optimize formality for your venue.",
-      time: 'Just now',
-    },
-  ]);
+  const handleWearSavedLook = (look: SavedLook) => {
+    if (!isAuthenticated && look.sourceKind !== 'curated-default') {
+      requireRegisteredUser('personalized-styling', '/stylist', `Wear "${look.title}"`);
+      return;
+    }
+    const resolution = restoreSavedLookSlots(look, closet);
+    setRestoredLook(look);
+    setSlotOverrides({});
+    setCurrentOutfitTitle(null);
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    setIsSynthesizingOutfit(false);
+    setSelectedOccasion(look.occasion || 'Casual');
+
+    if (look.venue) {
+      const venueLower = look.venue.toLowerCase();
+      const matchedVenue = CURATED_VENUES.find(
+        (v) =>
+          v.name.toLowerCase() === venueLower ||
+          `${v.name}, ${v.location}`.toLowerCase() === venueLower,
+      );
+      if (matchedVenue) {
+        setSelectedVenueCategory(matchedVenue.category);
+      }
+      setDestinationSearch(look.venue);
+    } else {
+      setDestinationSearch('');
+    }
+
+    if (look.weatherTag) {
+      if (look.weatherTag === 'Climate-Agnostic') {
+        setIsWeatherSkipped(true);
+      } else {
+        setIsWeatherSkipped(false);
+        setWeatherNote(look.weatherTag);
+        const matchedWeather = [
+          'Partly Cloudy',
+          'Sunny',
+          'Cloudy',
+          'Rainy',
+          'Windy',
+          'Cold',
+          'Hot',
+        ].find((cond) => look.weatherTag!.toLowerCase().includes(cond.toLowerCase()));
+        if (matchedWeather) {
+          setSelectedWeatherCond(matchedWeather);
+        }
+      }
+    }
+
+    if (look.vibe?.trim()) {
+      setSelectedMoods([look.vibe.trim()]);
+    }
+
+    if (typeof look.variationIndex === 'number') {
+      setOutfitVariationIndex(look.variationIndex);
+    }
+
+    if (chatTimerRef.current !== null) {
+      window.clearTimeout(chatTimerRef.current);
+      chatTimerRef.current = null;
+    }
+    setChatMessages(createInitialConciergeMessages());
+    setChatInput('');
+
+    setActiveTab('stylist');
+    setPlannerStep(3);
+
+    if (resolution.missingGarmentNames.length > 0) {
+      const count = resolution.missingGarmentNames.length;
+      triggerSwapToast(
+        `Loaded "${look.title}". Notice: ${count} saved ${count === 1 ? 'piece is' : 'pieces are'} archived or removed from your active closet.`,
+      );
+    } else {
+      triggerSwapToast(
+        `Loaded "${look.title}" with ${resolution.matchedOwnedCount} wardrobe ${resolution.matchedOwnedCount === 1 ? 'piece' : 'pieces'} restored.`,
+      );
+    }
+  };
+
+  const handleToggleTemplateFavorite = (templateId: string) => {
+    if (!requireRegisteredUser('save-outfit', '/saved', 'Save Curated Look to Favorites')) {
+      return;
+    }
+    updateSavedLooksList((prev) => toggleTemplateCardFavorite(prev, templateId).nextLooks);
+  };
+
+  const handleOpenSuggestionTemplate = (template: HomeSuggestionTemplate) => {
+    const existingSaved = savedLooksList.find(
+      (look) => look.sourceTemplateId === template.id || look.id === template.defaultSavedId,
+    );
+    handleWearSavedLook(existingSaved ?? createSavedLookFromTemplate(template));
+  };
+
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>(
+    createInitialConciergeMessages,
+  );
   const [chatInput, setChatInput] = useState('');
 
   // Digital closet filter, archive & sort state
@@ -701,6 +1154,63 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   const [closetViewMode, setClosetViewMode] = useState<'active' | 'archived'>('active');
   const [closetSortOption, setClosetSortOption] = useState<'recent' | 'oldest' | 'formality-desc' | 'formality-asc' | 'name-asc'>('recent');
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  // Synchronously reset transient Studio & Saved Looks state whenever workspace scope changes
+  if (scopedSavedLooks.scopeId !== workspaceScopeId) {
+    setScopedSavedLooks({
+      scopeId: workspaceScopeId,
+      looks: savedLooksList,
+    });
+    setPlannerStep(1);
+    setSelectedOccasion('Date');
+    setIsOccasionModalOpen(false);
+    setDestinationSearch("L'amore, Banjara Hills, Hyderabad");
+    setSelectedVenueCategory('Restaurant');
+    setIsVenueCategoryModalOpen(false);
+    setSelectedDate(dynamicDateOptions[0] || getDynamicDateOptions()[0]);
+    setSelectedTime('8:00 PM');
+    setVenueInfoTab('about');
+    setLocationStatus('idle');
+    setLocationCoords(null);
+    setLocationFeedback(null);
+    setSelectedMoods(['Confident']);
+    setVibeFeedback(null);
+    setCustomVibeInput('');
+    setIsCustomVibeActive(false);
+    setSelectedWeatherCond('Partly Cloudy');
+    setWeatherNote('24°C • Mild & comfortable conditions');
+    setIsWeatherSkipped(false);
+    setSelectedPreferences(['Light & Breezy']);
+    setMustInclude([]);
+    setAvoidItems([]);
+    setRestoredLook(null);
+    setSlotOverrides({});
+    setCurrentOutfitTitle(null);
+    setOutfitVariationIndex(0);
+    setIsGarmentSwapOpen(false);
+    setActiveSwapSlotKey(null);
+    setSelectedOutfitSlotKey('top');
+    setIsSynthesizingOutfit(false);
+    setSelectedClosetItem(null);
+    setItemToDelete(null);
+    setItemToEdit(null);
+    setSelectedCalendarDay(null);
+    setIsNotificationsOpen(false);
+    setIsSettingsOpen(false);
+    setIsHelpOpen(false);
+    setMobileMenuOpen(false);
+    setHomeSearchQuery('');
+    setSwapToast(null);
+    setChatMessages(createInitialConciergeMessages());
+    setChatInput('');
+    setClosetSearch('');
+    setClosetCategoryFilter('all');
+    setClosetFormalityFilter('all');
+    setClosetViewMode('active');
+    setClosetSortOption('recent');
+    setStorageWarning(null);
+    setGuestPromptState(null);
+  }
 
   // Storage quota warning listener
   useEffect(() => {
@@ -716,6 +1226,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (itemToEdit || isOccasionModalOpen || isVenueCategoryModalOpen || isGarmentSwapOpen || selectedCalendarDay) {
+          return;
+        }
         if (itemToDelete) {
           setItemToDelete(null);
         } else if (selectedClosetItem) {
@@ -733,40 +1246,65 @@ export const AppStudio: React.FC<AppStudioProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [itemToDelete, selectedClosetItem, isHelpOpen, isNotificationsOpen, isSettingsOpen, mobileMenuOpen]);
-
-  // Toggle favorite
-  const toggleLike = (id: string) => {
-    setLikedLooks((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
+  }, [
+    itemToEdit,
+    isOccasionModalOpen,
+    isVenueCategoryModalOpen,
+    isGarmentSwapOpen,
+    selectedCalendarDay,
+    itemToDelete,
+    selectedClosetItem,
+    isHelpOpen,
+    isNotificationsOpen,
+    isSettingsOpen,
+    mobileMenuOpen,
+  ]);
 
   const handleSendChat = (textToSend?: string) => {
     const text = textToSend || chatInput;
     if (!text.trim()) return;
+    if (!requireRegisteredUser('personalized-styling', '/stylist', 'Refine Look with AI Stylist')) {
+      return;
+    }
 
+    const dispatchedScopeId = activeScopeIdRef.current;
+    const dispatchedScopeGen = scopeGenerationRef.current;
     const userMsg = { sender: 'user' as const, text, time: 'Just now' };
     setChatMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setChatInput('');
 
+    if (chatTimerRef.current !== null) {
+      window.clearTimeout(chatTimerRef.current);
+      chatTimerRef.current = null;
+    }
+
     // Intelligent local stylist refinement with transparent simulation labeling (Part 4)
-    setTimeout(() => {
+    chatTimerRef.current = window.setTimeout(() => {
+      chatTimerRef.current = null;
+      if (
+        !isMountedRef.current ||
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedScopeGen
+      ) {
+        return;
+      }
+
       let reply = "I've recalibrated your silhouette. Updated garment selections to align with your styling preferences.";
       const lower = text.toLowerCase();
+      const activeCloset = closet.filter((c) => !c.isArchived);
 
       if (lower.includes('casual')) {
         // Find casual footwear & relaxed top
-        const casualShoe = closet.find((c) => c.category === 'footwear' && (c.subType.includes('Sneaker') || c.name.includes('Sneaker'))) ||
-                           closet.find((c) => c.category === 'footwear' && c.formality <= 2);
+        const casualShoe = activeCloset.find((c) => c.category === 'footwear' && (c.subType.includes('Sneaker') || c.name.includes('Sneaker'))) ||
+                           activeCloset.find((c) => c.category === 'footwear' && c.formality <= 2);
         if (casualShoe) {
           setSlotOverrides((prev) => ({ ...prev, footwear: casualShoe }));
         }
         reply = "Adapted for elevated casual ease: Swapped formal leather shoes for clean minimalist sneakers and softened overall structure.";
       } else if (lower.includes('formal')) {
         // Find formal shoes & formal blazer
-        const formalShoe = closet.find((c) => c.category === 'footwear' && c.formality >= 4);
-        const formalBlazer = closet.find((c) => c.category === 'outerwear' && c.formality >= 4);
+        const formalShoe = activeCloset.find((c) => c.category === 'footwear' && c.formality >= 4);
+        const formalBlazer = activeCloset.find((c) => c.category === 'outerwear' && c.formality >= 4);
         setSlotOverrides((prev) => ({
           ...prev,
           ...(formalShoe ? { footwear: formalShoe } : {}),
@@ -776,22 +1314,24 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       } else if (lower.includes('colour') || lower.includes('color')) {
         setOutfitVariationIndex((prev) => prev + 1);
         setSlotOverrides({});
+        setIsGarmentSwapOpen(false);
+        setActiveSwapSlotKey(null);
         reply = "Explored a complementary chromatic palette: Re-balanced tones with earth and tonal neutral contrast.";
       } else if (lower.includes('comfort')) {
-        const relaxedBottom = closet.find((c) => c.category === 'bottoms' && (c.fit.includes('Relaxed') || c.name.includes('Linen') || c.name.includes('Gurkha')));
+        const relaxedBottom = activeCloset.find((c) => c.category === 'bottoms' && (c.fit.includes('Relaxed') || c.name.includes('Linen') || c.name.includes('Gurkha')));
         if (relaxedBottom) {
           setSlotOverrides((prev) => ({ ...prev, bottom: relaxedBottom }));
         }
         reply = "Prioritized ergonomic comfort: Swapped in relaxed-drape breathable trousers while keeping silhouettes clean.";
       } else if (lower.includes('minimal')) {
-        const minimalTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Crewneck') || c.name.includes('Pima')));
+        const minimalTop = activeCloset.find((c) => c.category === 'tops' && (c.name.includes('Crewneck') || c.name.includes('Pima')));
         if (minimalTop) {
           setSlotOverrides((prev) => ({ ...prev, top: minimalTop }));
         }
         reply = "Tuned to clean minimalism: Stripped back ornamentation in favor of monochrome lines and essential proportions.";
       } else if (lower.includes('elegant')) {
-        const elegantTop = closet.find((c) => c.category === 'tops' && (c.name.includes('Silk') || c.name.includes('Rollneck')));
-        const watch = closet.find((c) => c.category === 'accessories' && c.subType.includes('Watch'));
+        const elegantTop = activeCloset.find((c) => c.category === 'tops' && (c.name.includes('Silk') || c.name.includes('Rollneck')));
+        const watch = activeCloset.find((c) => c.category === 'accessories' && c.subType.includes('Watch'));
         setSlotOverrides((prev) => ({
           ...prev,
           ...(elegantTop ? { top: elegantTop } : {}),
@@ -799,13 +1339,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         }));
         reply = "Refined for timeless elegance: Accented with fine-gauge knitwear and rose gold horological detailing.";
       } else if (lower.includes('footwear') || lower.includes('shoes') || lower.includes('boot')) {
-        const shoes = closet.filter((c) => c.category === 'footwear');
+        const shoes = activeCloset.filter((c) => c.category === 'footwear');
         const currentShoeId = effectiveSlots.find((s) => s.slot === 'footwear')?.closetItemId;
         const currentIndex = shoes.findIndex((s) => s.id === currentShoeId);
         const nextShoe = shoes[(currentIndex + 1) % shoes.length] || shoes[0];
         if (nextShoe) {
           setSlotOverrides((prev) => ({ ...prev, footwear: nextShoe }));
-          reply = `Substituted footwear for ${nextShoe.brand} ${nextShoe.name} in ${nextShoe.color}.`;
+          reply = `Substituted footwear for ${nextShoe.brand ? `${nextShoe.brand} ` : ''}${nextShoe.name} in ${nextShoe.color}.`;
         }
       } else {
         reply = `Understood: "${text}". Calibrated silhouette nuances from your active wardrobe.`;
@@ -820,11 +1360,78 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
   // Switch to venue and launch wizard
   const handleSelectVenueForStyling = (venue: Venue) => {
-    setSelectedVenue(venue);
+    resetStylistSession(1);
     setDestinationSearch(`${venue.name}, ${venue.location}`);
     setSelectedVenueCategory(venue.category);
     setActiveTab('stylist');
-    setPlannerStep(1);
+  };
+
+  // Launch AI Stylist directly from header/home omnibar or quick prompt chip
+  const launchStylistFromOmnibar = (rawPrompt: string, gateTitle?: string) => {
+    const clean = rawPrompt.trim();
+    if (!clean) return;
+    if (
+      !requireRegisteredUser(
+        'personalized-styling',
+        '/stylist',
+        gateTitle || 'Personalize Look with AI Stylist',
+      )
+    ) {
+      return;
+    }
+
+    const lower = clean.toLowerCase();
+    const matchedVenue = CURATED_VENUES.find((v) =>
+      lower.includes(v.name.toLowerCase()),
+    );
+
+    if (matchedVenue) {
+      setDestinationSearch(`${matchedVenue.name}, ${matchedVenue.location}`);
+      setSelectedVenueCategory(matchedVenue.category);
+      setSelectedOccasion(matchedVenue.category === 'Office' ? 'Office' : 'Date');
+    } else if (
+      lower.includes('office') ||
+      lower.includes('work') ||
+      lower.includes('meeting') ||
+      lower.includes('interview')
+    ) {
+      setSelectedOccasion('Office');
+      setSelectedVenueCategory('Office / Workspace');
+      setDestinationSearch('');
+    } else if (lower.includes('wedding') || lower.includes('ceremony')) {
+      setSelectedOccasion('Wedding');
+      setSelectedVenueCategory('Outdoor');
+      setDestinationSearch('');
+    } else if (lower.includes('party') || lower.includes('club') || lower.includes('bar')) {
+      setSelectedOccasion('Party');
+      setSelectedVenueCategory('Bar / Club');
+      setDestinationSearch('');
+    } else if (lower.includes('travel') || lower.includes('flight') || lower.includes('airport')) {
+      setSelectedOccasion('Travel');
+      setSelectedVenueCategory('Outdoor');
+      setDestinationSearch('');
+    } else if (lower.includes('college') || lower.includes('campus')) {
+      setSelectedOccasion('College');
+      setSelectedVenueCategory('Café');
+      setDestinationSearch('');
+    } else if (lower.includes('restaurant') || lower.includes('dinner') || lower.includes('bistro')) {
+      setSelectedOccasion('Dinner');
+      setSelectedVenueCategory('Restaurant');
+      setDestinationSearch('');
+    } else if (lower.includes('date')) {
+      setSelectedOccasion('Date');
+      setSelectedVenueCategory('Restaurant');
+      setDestinationSearch('');
+    } else {
+      setSelectedOccasion('Casual Outing');
+      setSelectedVenueCategory('Outdoor');
+      setDestinationSearch('');
+    }
+
+    setHomeSearchQuery('');
+    resetStylistSession(3, { resetChat: true });
+    handleSendChat(clean);
+    setActiveTab('stylist');
   };
 
   // Partition active and archived closet items
@@ -957,7 +1564,6 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         onOpenProfile();
                       } else {
                         setActiveTab(item.id as StudioTab);
-                        if (item.id === 'stylist') setPlannerStep(1);
                       }
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 cursor-pointer ${
@@ -1027,6 +1633,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
             <button
               type="button"
               onClick={() => {
+                if (!requireRegisteredUser('upload', '/closet/add', 'Upload & Digitize Your Closet')) {
+                  return;
+                }
                 if (onNavigateToUpload) {
                   onNavigateToUpload();
                 } else {
@@ -1035,7 +1644,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 }
               }}
               aria-label="Build a Smarter Wardrobe, digitize closet"
-              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+              className="relative rounded-2xl overflow-hidden aspect-[16/9] border border-[var(--border-gold)]/60 cursor-pointer group shadow-sm hidden lg:block text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
             >
               <img
                 src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80"
@@ -1059,32 +1668,53 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         {/* ========================================================================= */}
         {/* MAIN VIEWPORT (Independently Scrolling, Sticky Header) */}
         {/* ========================================================================= */}
-        <main id="studio-main" className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
+        <main
+          ref={studioMainRef}
+          id="studio-main"
+          className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto"
+        >
           
           {/* Top Bar (Matching Screenshot 3) */}
-          <header className="h-16 px-6 border-b border-[var(--border-card)] bg-[var(--bg-header)] backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
+          <header className="h-16 px-3 sm:px-6 border-b border-[var(--border-card)] bg-[var(--bg-header)] backdrop-blur-md flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30 shrink-0">
             {/* Search Omnibar */}
-            <div className="flex-1 max-w-xl relative">
+            <div className="flex-1 min-w-0 max-w-xl relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
-                placeholder="Search for outfits, occasions, or ask anything..."
+                maxLength={200}
+                placeholder="Search outfits, occasions, or ask..."
                 aria-label="Search outfits, occasions, or ask stylist"
                 value={homeSearchQuery}
                 onChange={(e) => setHomeSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && homeSearchQuery.trim()) {
-                    handleSendChat(homeSearchQuery);
-                    setActiveTab('stylist');
-                    setPlannerStep(3);
+                    launchStylistFromOmnibar(homeSearchQuery, 'Personalize Look from Prompt');
                   }
                 }}
-                className="w-full pl-10 pr-4 py-2 rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] text-xs placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+                className="w-full min-w-0 pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] text-xs placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] transition-colors"
               />
             </div>
 
-            {/* Right Header Actions: Theme Toggle, Notifications, User Profile (Screenshot 3) */}
-            <div className="flex items-center gap-3">
+            {/* Right Header Actions: Guest Badge, Theme Toggle, Notifications, User Profile */}
+            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+              {isGuest && (
+                <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--pill-bg)] border border-[var(--border-gold)] text-[10px] font-mono uppercase tracking-wider text-[var(--gold-primary)] font-semibold">
+                  <span>Guest Demo</span>
+                  {onOpenAuth && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <button
+                        type="button"
+                        onClick={onOpenAuth}
+                        className="underline hover:text-[var(--text-heading)] cursor-pointer font-bold"
+                      >
+                        Sign In
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -1115,7 +1745,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 type="button"
                 onClick={onOpenProfile}
                 aria-label={`Open profile for ${userDisplayName}`}
-                className="flex items-center gap-2.5 pl-2 border-l border-[var(--border-card)] cursor-pointer group bg-transparent border-t-0 border-r-0 border-b-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+                className="flex items-center gap-2.5 pl-2 border-l border-[var(--border-card)] cursor-pointer group bg-transparent border-t-0 border-r-0 border-b-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
               >
                 <img
                   src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80"
@@ -1134,7 +1764,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 1: HOME DASHBOARD (Exact Match to Screenshot 3) */}
           {/* ========================================================================= */}
           {activeTab === 'home' && (
-            <div className="p-5 lg:p-7 max-w-[1600px] mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-[1600px] mx-auto w-full space-y-6">
               
               {/* Desktop 3-Column Layout: Center Content (8 cols) + Right Information (4 cols) */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1181,24 +1811,28 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <Sparkles className="w-4 h-4 text-[#A67C1E] mr-2 shrink-0" />
                           <input
                             type="text"
+                            maxLength={200}
+                            aria-label="Ask OTD AI Stylist anything"
                             placeholder="Ask OTD anything..."
                             value={homeSearchQuery}
                             onChange={(e) => setHomeSearchQuery(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && homeSearchQuery.trim()) {
-                                handleSendChat(homeSearchQuery);
-                                setActiveTab('stylist');
-                                setPlannerStep(3);
+                                launchStylistFromOmnibar(
+                                  homeSearchQuery,
+                                  'Personalize Look with AI Stylist',
+                                );
                               }
                             }}
-                            className="w-full bg-transparent text-xs sm:text-[13px] placeholder:text-[#84796C] text-[#1C1612] outline-none"
+                            className="w-full bg-transparent text-xs sm:text-[13px] placeholder:text-[#84796C] text-[#1C1612] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A67C1E] rounded-md"
                           />
                           <button
                             onClick={() => {
                               if (homeSearchQuery.trim()) {
-                                handleSendChat(homeSearchQuery);
-                                setActiveTab('stylist');
-                                setPlannerStep(3);
+                                launchStylistFromOmnibar(
+                                  homeSearchQuery,
+                                  'Personalize Look with AI Stylist',
+                                );
                               }
                             }}
                             className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shrink-0 ml-2"
@@ -1219,11 +1853,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         ].map((chip) => (
                           <button
                             key={chip}
-                            onClick={() => {
-                              handleSendChat(chip);
-                              setActiveTab('stylist');
-                              setPlannerStep(3);
-                            }}
+                            onClick={() => launchStylistFromOmnibar(chip, `Style "${chip}"`)}
                             className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-[11px] font-medium transition-colors cursor-pointer border border-white/20"
                           >
                             {chip}
@@ -1245,7 +1875,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           subtitle: 'Add to your closet',
                           icon: Plus,
                           img: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=300&q=80',
-                          action: () => (onNavigateToUpload ? onNavigateToUpload() : onOpenAddPiece()),
+                          action: () => {
+                            if (!requireRegisteredUser('upload', '/closet/add', 'Upload New Wardrobe Item')) {
+                              return;
+                            }
+                            if (onNavigateToUpload) {
+                              onNavigateToUpload();
+                            } else {
+                              onOpenAddPiece();
+                            }
+                          },
                         },
                         {
                           title: 'Get Outfit Ideas',
@@ -1286,19 +1925,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       ].map((item, i) => {
                         const Icon = item.icon;
                         return (
-                          <div
+                          <button
                             key={i}
-                            role="button"
-                            tabIndex={0}
+                            type="button"
                             aria-label={`${item.title} — ${item.subtitle}`}
                             onClick={item.action}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                item.action();
-                              }
-                            }}
-                            className="group rounded-2xl overflow-hidden border border-[var(--border-card)] bg-[var(--bg-card)] p-2.5 flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
+                            className="group rounded-2xl overflow-hidden border border-[var(--border-card)] bg-[var(--bg-card)] p-2.5 flex flex-col justify-between text-left hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                           >
                             <div className="h-20 w-full rounded-xl overflow-hidden relative mb-2 bg-neutral-900">
                               <img
@@ -1307,7 +1939,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
                             </div>
-                            <div>
+                            <div className="w-full">
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 <Icon className="w-3.5 h-3.5 text-[var(--gold-primary)] shrink-0" />
                                 <h4 className="font-semibold text-xs text-[var(--text-heading)] truncate">
@@ -1318,7 +1950,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 {item.subtitle}
                               </p>
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -1341,87 +1973,62 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                      {[
-                        {
-                          id: 'sug-1',
-                          title: 'Smart Casual',
-                          subtitle: "For Today's Weather",
-                          img: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-2',
-                          title: 'Date Night',
-                          subtitle: 'Classy & Effortless',
-                          img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-3',
-                          title: 'Office Ready',
-                          subtitle: 'Clean & Polished',
-                          img: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&w=400&q=80',
-                        },
-                        {
-                          id: 'sug-4',
-                          title: 'Travel Look',
-                          subtitle: 'Comfort Meets Style',
-                          img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=400&q=80',
-                        },
-                      ].map((look) => (
-                        <div
-                          key={look.id}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`View outfit suggestion: ${look.title}, ${look.subtitle}`}
-                          onClick={() => {
-                            setActiveTab('stylist');
-                            setPlannerStep(3);
-                            setCurrentOutfitTitle(look.title);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setActiveTab('stylist');
-                              setPlannerStep(3);
-                              setCurrentOutfitTitle(look.title);
-                            }
-                          }}
-                          className="group rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all cursor-pointer shadow-xs hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
-                        >
-                          <div className="h-44 bg-neutral-900 relative overflow-hidden">
-                            <img
-                              src={look.img}
-                              alt={look.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                            {/* Favorite Heart Button */}
+                      {HOME_SUGGESTION_TEMPLATES.map((template) => {
+                        const isFavorited = isTemplateFavorited(template.id, savedLooksList);
+                        return (
+                          <div
+                            key={template.id}
+                            className="group relative rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden flex flex-col justify-between hover:border-[var(--gold-primary)] transition-all shadow-xs hover:shadow-md"
+                          >
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleLike(look.id);
-                              }}
-                              aria-label={likedLooks.includes(look.id) ? `Remove ${look.title} from favorites` : `Save ${look.title} to favorites`}
-                              className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
+                              aria-label={`View outfit suggestion: ${template.title}, ${template.subtitle}`}
+                              onClick={() => handleOpenSuggestionTemplate(template)}
+                              className="w-full text-left flex flex-col flex-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--gold-primary)]"
+                            >
+                              <div className="h-44 w-full bg-neutral-900 relative overflow-hidden">
+                                <img
+                                  src={template.imageUrl || SAFE_LOOK_FALLBACK_IMAGE}
+                                  alt={template.title}
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    if (target.dataset.fallbackApplied === 'true') return;
+                                    target.dataset.fallbackApplied = 'true';
+                                    target.src = SAFE_LOOK_FALLBACK_IMAGE;
+                                  }}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              </div>
+                              <div className="p-3">
+                                <h4 className="font-semibold text-xs sm:text-[13px] text-[var(--text-heading)]">
+                                  {template.title}
+                                </h4>
+                                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                  {template.subtitle}
+                                </p>
+                              </div>
+                            </button>
+                            {/* Favorite Heart Button (Sibling to avoid nested interactive controls) */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTemplateFavorite(template.id)}
+                              aria-label={
+                                isFavorited
+                                  ? `Remove ${template.title} from favorites`
+                                  : `Save ${template.title} to favorites`
+                              }
+                              aria-pressed={isFavorited}
+                              className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                             >
                               <Heart
                                 className={`w-3.5 h-3.5 ${
-                                  likedLooks.includes(look.id)
-                                    ? 'fill-rose-500 text-rose-500'
-                                    : 'text-white'
+                                  isFavorited ? 'fill-rose-500 text-rose-500' : 'text-white'
                                 }`}
                               />
                             </button>
                           </div>
-                          <div className="p-3">
-                            <h4 className="font-semibold text-xs sm:text-[13px] text-[var(--text-heading)]">
-                              {look.title}
-                            </h4>
-                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                              {look.subtitle}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1432,9 +2039,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   
                   {/* 1. WEATHER & LOCATION CARD (Screenshot 3) */}
                   <div className="rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 space-y-2 shadow-xs">
-                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                      <MapPin className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                      <span className="font-medium">Hyderabad, India</span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
+                        <span className="font-medium">Hyderabad, India</span>
+                      </div>
+                      <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--gold-primary)]">
+                        Sample Forecast
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
@@ -1457,11 +2069,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        resetStylistSession(2);
                         setActiveTab('stylist');
-                        setPlannerStep(2);
                       }}
                       aria-label="View stylist recommendations for today's weather"
-                      className="w-full pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-body)] hover:text-[var(--gold-primary)] cursor-pointer bg-transparent text-left border-x-0 border-b-0 focus:outline-none focus-visible:underline"
+                      className="w-full pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-[11px] text-[var(--text-body)] hover:text-[var(--gold-primary)] cursor-pointer bg-transparent text-left border-x-0 border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus-visible:underline rounded-lg"
                     >
                       <span>Perfect weather for a light, breathable outfit.</span>
                       <ArrowRight className="w-3.5 h-3.5 shrink-0" />
@@ -1531,40 +2143,44 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                      {[
-                        {
-                          category: 'Tops',
-                          count: closet.filter((i) => i.category === 'tops').length,
-                          img: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=200&q=80',
-                        },
-                        {
-                          category: 'Bottoms',
-                          count: closet.filter((i) => i.category === 'bottoms').length,
-                          img: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=200&q=80',
-                        },
-                        {
-                          category: 'Outerwear',
-                          count: closet.filter((i) => i.category === 'outerwear').length,
-                          img: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=200&q=80',
-                        },
-                        {
-                          category: 'Shoes',
-                          count: closet.filter((i) => i.category === 'footwear').length,
-                          img: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?auto=format&fit=crop&w=200&q=80',
-                        },
-                      ].map((cat, i) => (
+                    <div className="grid grid-cols-2 min-[380px]:grid-cols-4 gap-2 text-center text-xs">
+                      {(
+                        [
+                          {
+                            category: 'Tops',
+                            filter: 'tops' as ClosetItem['category'],
+                            count: closet.filter((i) => i.category === 'tops').length,
+                            img: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=200&q=80',
+                          },
+                          {
+                            category: 'Bottoms',
+                            filter: 'bottoms' as ClosetItem['category'],
+                            count: closet.filter((i) => i.category === 'bottoms').length,
+                            img: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=200&q=80',
+                          },
+                          {
+                            category: 'Outerwear',
+                            filter: 'outerwear' as ClosetItem['category'],
+                            count: closet.filter((i) => i.category === 'outerwear').length,
+                            img: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=200&q=80',
+                          },
+                          {
+                            category: 'Shoes',
+                            filter: 'footwear' as ClosetItem['category'],
+                            count: closet.filter((i) => i.category === 'footwear').length,
+                            img: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?auto=format&fit=crop&w=200&q=80',
+                          },
+                        ] as const
+                      ).map((cat) => (
                         <button
                           type="button"
-                          key={i}
+                          key={cat.filter}
                           onClick={() => {
                             setActiveTab('closet');
-                            setClosetCategoryFilter(
-                              cat.category === 'Shoes' ? 'footwear' : (cat.category.toLowerCase() as any)
-                            );
+                            setClosetCategoryFilter(cat.filter);
                           }}
                           aria-label={`View ${cat.category} in Digital Closet (${cat.count} items)`}
-                          className="p-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]/40 hover:border-[var(--gold-primary)] transition-all cursor-pointer group text-left w-full focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--gold-primary)]"
+                          className="p-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--pill-bg)]/40 hover:border-[var(--gold-primary)] transition-all cursor-pointer group text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)]"
                         >
                           <div className="h-12 w-full rounded-lg overflow-hidden bg-neutral-900 mb-1">
                             <img
@@ -1644,7 +2260,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 2: AI STYLIST WIZARD (Matching Screenshots 1 & 2) */}
           {/* ========================================================================= */}
           {activeTab === 'stylist' && (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               
               {/* Stepper Header (Screenshots 1 & 2) */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[var(--border-card)] pb-4">
@@ -1721,16 +2337,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Party', img: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Wedding', img: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Office', img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=300&q=80' },
-                          { name: 'College', img: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=300&q=80' },
+                          { name: 'College', img: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Travel', img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=300&q=80' },
                           { name: 'More (8+)', isMore: true },
                         ].map((occ) => {
                           const isSelected = selectedOccasion === occ.name;
                           return (
-                            <div
+                            <button
                               key={occ.name}
-                              role="button"
-                              tabIndex={0}
+                              type="button"
                               aria-pressed={isSelected}
                               onClick={() => {
                                 if (occ.isMore) {
@@ -1739,14 +2354,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                   setSelectedOccasion(occ.name);
                                 }
                               }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  if (occ.isMore) setIsOccasionModalOpen(true);
-                                  else setSelectedOccasion(occ.name);
-                                }
-                              }}
-                              className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
+                              className={`w-full text-left rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                                 isSelected
                                   ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
@@ -1770,7 +2378,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               <span className="text-xs font-bold block text-center truncate">
                                 {occ.name}
                               </span>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -1821,7 +2429,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           onChange={(e) => setDestinationSearch(e.target.value)}
                           placeholder="e.g. L'amore, Soho House, or enter any destination name..."
                           aria-label="Destination or venue"
-                          className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] font-semibold outline-none focus:border-[var(--gold-primary)]"
+                          className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)]"
                         />
                         {destinationSearch && (
                           <button
@@ -1841,7 +2449,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Restaurant', img: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Café', img: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Bar / Club', img: 'https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=300&q=80' },
-                          { name: 'Mall', img: 'https://images.unsplash.com/photo-1567449303078-57ad995bd301?auto=format&fit=crop&w=300&q=80' },
+                          { name: 'Mall', img: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Movie / Theater', img: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Resort', img: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80' },
                           { name: 'Outdoor', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80' },
@@ -1849,10 +2457,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         ].map((cat) => {
                           const isSelected = selectedVenueCategory === cat.name;
                           return (
-                            <div
+                            <button
                               key={cat.name}
-                              role="button"
-                              tabIndex={0}
+                              type="button"
                               aria-pressed={isSelected}
                               onClick={() => {
                                 if (cat.isMore) {
@@ -1861,14 +2468,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                   setSelectedVenueCategory(cat.name);
                                 }
                               }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  if (cat.isMore) setIsVenueCategoryModalOpen(true);
-                                  else setSelectedVenueCategory(cat.name);
-                                }
-                              }}
-                              className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
+                              className={`w-full text-left rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                                 isSelected
                                   ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
@@ -1892,7 +2492,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               <span className="text-xs font-bold block text-center truncate">
                                 {cat.name}
                               </span>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -2087,11 +2687,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                     key={w.name}
                                     type="button"
                                     onClick={() => {
+                                      setIsWeatherSkipped(false);
                                       setSelectedWeatherCond(w.name);
                                       setWeatherNote(w.note);
                                     }}
                                     className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                                      selectedWeatherCond === w.name
+                                      !isWeatherSkipped && selectedWeatherCond === w.name
                                         ? 'bg-black text-white dark:bg-white dark:text-black font-semibold'
                                         : 'bg-[var(--bg-card)] border-[var(--border-card)] text-[var(--text-body)]'
                                     }`}
@@ -2131,66 +2732,217 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                   {/* Right Column (4 cols): Venue Preview Card (Screenshot 2) */}
                   <div className="lg:col-span-4 space-y-4">
-                    <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-lg">
-                      <div className="h-44 bg-neutral-900 relative">
-                        <img
-                          src={selectedVenue.img}
-                          alt={selectedVenue.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      <div className="p-5 space-y-4">
-                        <div>
-                          <h4 className="font-playfair text-xl font-bold text-[var(--text-heading)]">
-                            {selectedVenue.name}
-                          </h4>
-                          <p className="text-xs text-[var(--gold-primary)] flex items-center gap-1 mt-0.5">
-                            <MapPin className="w-3.5 h-3.5" />
-                            <span>{selectedVenue.location}</span>
-                          </p>
+                    {matchedCuratedVenue ? (
+                      <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-lg">
+                        <div className="h-44 bg-neutral-900 relative">
+                          <img
+                            src={matchedCuratedVenue.img}
+                            alt={matchedCuratedVenue.name}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
 
-                        {/* Venue Tabs */}
-                        <div className="flex border-b border-[var(--border-card)] text-xs">
-                          {(['about', 'ambience', 'dress_code', 'photos'] as const).map((tab) => (
-                            <button
-                              key={tab}
-                              onClick={() => setVenueInfoTab(tab)}
-                              className={`pb-2 px-2 capitalize font-semibold transition-colors cursor-pointer ${
-                                venueInfoTab === tab
-                                  ? 'border-b-2 border-black dark:border-white text-[var(--text-heading)]'
-                                  : 'text-[var(--text-muted)]'
-                              }`}
-                            >
-                              {tab.replace('_', ' ')}
-                            </button>
-                          ))}
+                        <div className="p-5 space-y-4">
+                          <div>
+                            <h4 className="font-playfair text-xl font-bold text-[var(--text-heading)]">
+                              {matchedCuratedVenue.name}
+                            </h4>
+                            <p className="text-xs text-[var(--gold-primary)] flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-3.5 h-3.5" />
+                              <span>{matchedCuratedVenue.location}</span>
+                            </p>
+                          </div>
+
+                          {/* Venue Tabs */}
+                          <div
+                            role="tablist"
+                            aria-label="Venue details"
+                            className="flex border-b border-[var(--border-card)] text-xs"
+                          >
+                            {(['about', 'ambience', 'dress_code', 'photos'] as const).map((tab, tabIdx, tabList) => {
+                              const isTabSelected = venueInfoTab === tab;
+                              const tabLabel =
+                                tab === 'dress_code'
+                                  ? 'Dress Code'
+                                  : tab.charAt(0).toUpperCase() + tab.slice(1);
+                              return (
+                                <button
+                                  key={tab}
+                                  type="button"
+                                  role="tab"
+                                  id={`venue-tab-${tab}`}
+                                  aria-selected={isTabSelected}
+                                  aria-controls="venue-tabpanel"
+                                  tabIndex={isTabSelected ? 0 : -1}
+                                  onClick={() => setVenueInfoTab(tab)}
+                                  onKeyDown={(e) => {
+                                    let nextIdx: number | null = null;
+                                    if (e.key === 'ArrowRight') nextIdx = (tabIdx + 1) % tabList.length;
+                                    else if (e.key === 'ArrowLeft') nextIdx = (tabIdx - 1 + tabList.length) % tabList.length;
+                                    else if (e.key === 'Home') nextIdx = 0;
+                                    else if (e.key === 'End') nextIdx = tabList.length - 1;
+                                    if (nextIdx !== null) {
+                                      e.preventDefault();
+                                      const nextTab = tabList[nextIdx];
+                                      setVenueInfoTab(nextTab);
+                                      window.requestAnimationFrame(() => {
+                                        document.getElementById(`venue-tab-${nextTab}`)?.focus();
+                                      });
+                                    }
+                                  }}
+                                  className={`pb-2 px-2.5 font-semibold transition-colors cursor-pointer ${
+                                    isTabSelected
+                                      ? 'border-b-2 border-black dark:border-white text-[var(--text-heading)]'
+                                      : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'
+                                  }`}
+                                >
+                                  {tabLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div
+                            role="tabpanel"
+                            id="venue-tabpanel"
+                            aria-labelledby={`venue-tab-${venueInfoTab}`}
+                            className="space-y-3"
+                          >
+                            {venueInfoTab === 'about' && (
+                              <>
+                                <p className="text-xs text-[var(--text-body)] leading-relaxed">
+                                  {matchedCuratedVenue.description || 'Editorial venue preview tailored to your styling context.'}
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Category</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.category}</strong>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Setting</span>
+                                    <strong className="text-[var(--text-heading)]">
+                                      {matchedCuratedVenue.isIndoor ? 'Indoor Venue' : 'Open-Air Setting'}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {venueInfoTab === 'ambience' && (
+                              <>
+                                <p className="text-xs text-[var(--text-body)] leading-relaxed">
+                                  Atmosphere profile for {matchedCuratedVenue.name} in {matchedCuratedVenue.location}.
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Ambience</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.ambience}</strong>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Vibe</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.vibe}</strong>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Crowd</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.crowd}</strong>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Environment</span>
+                                    <strong className="text-[var(--text-heading)]">
+                                      {matchedCuratedVenue.isIndoor ? 'Indoor Lounge / Dining' : 'Outdoor / Alfresco'}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {venueInfoTab === 'dress_code' && (
+                              <>
+                                <div className="p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-1">
+                                  <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-bold block">
+                                    Recommended Dress Code
+                                  </span>
+                                  <p className="text-sm font-playfair font-bold text-[var(--text-heading)]">
+                                    {matchedCuratedVenue.dressCode}
+                                  </p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Typical Climate</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.tempRange}</strong>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
+                                    <span className="text-[var(--text-muted)] block text-[10px]">Venue Type</span>
+                                    <strong className="text-[var(--text-heading)]">{matchedCuratedVenue.category}</strong>
+                                  </div>
+                                </div>
+                                <p className="text-[11px] text-[var(--text-body)] leading-relaxed">
+                                  Curated for {matchedCuratedVenue.category.toLowerCase()} styling with a {matchedCuratedVenue.vibe.toLowerCase()} tone and {matchedCuratedVenue.dressCode.toLowerCase()} polish.
+                                </p>
+                              </>
+                            )}
+
+                            {venueInfoTab === 'photos' && (
+                              <div className="space-y-2.5">
+                                <div className="flex items-center gap-3 p-2.5 rounded-2xl border border-[var(--border-card)] bg-[var(--pill-bg)]/60">
+                                  <img
+                                    src={matchedCuratedVenue.img}
+                                    alt={`${matchedCuratedVenue.name} editorial reference`}
+                                    className="w-16 h-16 rounded-xl object-cover shrink-0 bg-neutral-900"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="text-[10px] uppercase font-mono font-bold text-[var(--gold-primary)] block">
+                                      Curated Venue Preview
+                                    </span>
+                                    <p className="text-xs font-semibold text-[var(--text-heading)] truncate">
+                                      {matchedCuratedVenue.name}
+                                    </p>
+                                    <p className="text-[11px] text-[var(--text-muted)] truncate">
+                                      {matchedCuratedVenue.location}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                  Showing the primary curated reference photo for {matchedCuratedVenue.name}. Additional multi-angle venue gallery photos are not included in this preview.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Pro Tip Card */}
+                          <div className="p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] text-xs text-[var(--text-body)] space-y-1">
+                            <div className="flex items-center gap-1.5 font-bold text-[var(--gold-primary)]">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Pro Tip</span>
+                            </div>
+                            <p className="text-[11px] leading-snug">
+                              Based on the venue, time and weather, we'll suggest outfits that match the ambience and your personal style.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-lg p-5 space-y-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[var(--gold-primary)] block">
+                              {resolvedDestinationName ? 'Custom Venue' : 'Setting Archetype'}
+                            </span>
+                            <h4 className="font-playfair text-xl font-bold text-[var(--text-heading)] mt-0.5 break-words">
+                              {resolvedDestinationName || `${selectedVenueCategory} Setting`}
+                            </h4>
+                            <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-1">
+                              <MapPin className="w-3.5 h-3.5 text-[var(--gold-primary)] shrink-0" />
+                              <span>{selectedVenueCategory}</span>
+                            </p>
+                          </div>
                         </div>
 
                         <p className="text-xs text-[var(--text-body)] leading-relaxed">
-                          {selectedVenue.description}
+                          {resolvedDestinationName
+                            ? `Tailoring your silhouette and dress code for ${resolvedDestinationName} (${selectedVenueCategory}).`
+                            : `No specific venue entered. Outfits will be calibrated to your ${selectedVenueCategory} setting archetype and occasion.`}
                         </p>
-
-                        {/* Venue Metadata Badges */}
-                        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                          <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
-                            <span className="text-[var(--text-muted)] block text-[10px]">Ambience</span>
-                            <strong className="text-[var(--text-heading)]">{selectedVenue.ambience}</strong>
-                          </div>
-                          <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
-                            <span className="text-[var(--text-muted)] block text-[10px]">Vibe</span>
-                            <strong className="text-[var(--text-heading)]">{selectedVenue.vibe}</strong>
-                          </div>
-                          <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
-                            <span className="text-[var(--text-muted)] block text-[10px]">Dress Code</span>
-                            <strong className="text-[var(--text-heading)]">{selectedVenue.dressCode}</strong>
-                          </div>
-                          <div className="p-2 rounded-xl bg-[var(--pill-bg)]">
-                            <span className="text-[var(--text-muted)] block text-[10px]">Temperature</span>
-                            <strong className="text-[var(--text-heading)]">{selectedVenue.tempRange}</strong>
-                          </div>
-                        </div>
 
                         {/* Pro Tip Card */}
                         <div className="p-3 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] text-xs text-[var(--text-body)] space-y-1">
@@ -2203,7 +2955,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           </p>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                 </div>
@@ -2217,7 +2969,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <div className="lg:col-span-8 space-y-6">
                     
                     {/* 1. What's your mood today? (Multi-select up to 2) */}
-                    <div className="space-y-3">
+                    <div id="stylist-mood-section" className="space-y-3 scroll-mt-20">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
@@ -2253,10 +3005,9 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         ].map((m) => {
                           const isSelected = selectedMoods.includes(m.id);
                           return (
-                            <div
+                            <button
                               key={m.id}
-                              role="button"
-                              tabIndex={0}
+                              type="button"
                               aria-pressed={isSelected}
                               onClick={() => {
                                 if (m.isCustom) {
@@ -2265,14 +3016,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                   handleToggleMood(m.id);
                                 }
                               }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  if (m.isCustom) setIsCustomVibeActive(!isCustomVibeActive);
-                                  else handleToggleMood(m.id);
-                                }
-                              }}
-                              className={`rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all ${
+                              className={`w-full text-left rounded-2xl overflow-hidden border p-2 cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                                 isSelected
                                   ? 'border-black bg-black text-white dark:bg-white dark:text-black shadow-md scale-[1.01]'
                                   : 'border-[var(--border-card)] bg-[var(--bg-card)] text-[var(--text-heading)] hover:border-[var(--gold-primary)]'
@@ -2296,7 +3040,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               <span className="text-xs font-bold block text-center truncate">
                                 {m.label}
                               </span>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -2304,11 +3048,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       {/* Custom Vibe Input Trigger */}
                       {isCustomVibeActive && (
                         <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-card)] space-y-2 animate-in fade-in">
-                          <span className="text-[11px] font-semibold text-[var(--text-heading)] block">
+                          <label htmlFor="custom-vibe-input" className="text-[11px] font-semibold text-[var(--text-heading)] block">
                             Define your unique style vibe:
-                          </span>
+                          </label>
                           <div className="flex gap-2">
                             <input
+                              id="custom-vibe-input"
                               type="text"
                               value={customVibeInput}
                               onChange={(e) => setCustomVibeInput(e.target.value)}
@@ -2319,7 +3064,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                                 }
                               }}
                               placeholder="e.g. Vintage Riviera, Stealth Wealth, Cyber Minimal..."
-                              className="flex-1 px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)]"
+                              className="flex-1 px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)]"
                             />
                             <button
                               type="button"
@@ -2336,17 +3081,32 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                     {/* 2. What's the weather like? (Synchronized Weather Context) */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <div>
                           <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
                             2. What's the weather like?
                           </h3>
                           <p className="text-xs text-[var(--text-muted)]">We'll adjust layer weight and textures accordingly.</p>
                         </div>
-                        <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
-                          {selectedWeatherCond}
-                        </span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-[11px] font-mono text-[var(--gold-primary)] font-bold">
+                            {isWeatherSkipped ? 'Climate-Agnostic' : selectedWeatherCond}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setIsWeatherSkipped(!isWeatherSkipped)}
+                            className="text-[11px] text-[var(--gold-primary)] font-semibold hover:underline cursor-pointer"
+                          >
+                            {isWeatherSkipped ? 'Add Weather' : 'Skip Weather'}
+                          </button>
+                        </div>
                       </div>
+
+                      {isWeatherSkipped && (
+                        <div className="p-2.5 rounded-xl bg-[var(--pill-bg)] border border-[var(--border-card)] text-[11px] text-[var(--text-muted)] italic">
+                          Weather context skipped. Select any condition below or click Add Weather to re-enable climate biasing.
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 sm:grid-cols-7 gap-2.5">
                         {[
@@ -2359,12 +3119,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           { name: 'Hot', icon: Thermometer, color: 'text-rose-500', note: '34°C • High Heat & Breathable' },
                         ].map((w) => {
                           const Icon = w.icon;
-                          const isSelected = selectedWeatherCond === w.name;
+                          const isSelected = !isWeatherSkipped && selectedWeatherCond === w.name;
                           return (
                             <button
                               key={w.name}
                               type="button"
                               onClick={() => {
+                                setIsWeatherSkipped(false);
                                 setSelectedWeatherCond(w.name);
                                 setWeatherNote(w.note);
                               }}
@@ -2383,7 +3144,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     {/* 3. Any additional preferences? (Comfort & Layering) */}
-                    <div className="space-y-3">
+                    <div id="stylist-preferences-section" className="space-y-3 scroll-mt-20">
                       <h3 className="font-playfair text-base font-bold text-[var(--text-heading)]">
                         3. Any additional preferences? <span className="text-[11px] text-[var(--text-muted)] font-normal">(Optional)</span>
                       </h3>
@@ -2428,20 +3189,25 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     {/* 4. Explicit Garment Constraints (Include & Avoid) */}
-                    <GarmentConstraintsSection
-                      mustInclude={mustInclude}
-                      avoidItems={avoidItems}
-                      onAddInclude={handleAddInclude}
-                      onRemoveInclude={handleRemoveInclude}
-                      onAddAvoid={handleAddAvoid}
-                      onRemoveAvoid={handleRemoveAvoid}
-                    />
+                    <div id="stylist-constraints-section" className="scroll-mt-20">
+                      <GarmentConstraintsSection
+                        mustInclude={mustInclude}
+                        avoidItems={avoidItems}
+                        onAddInclude={handleAddInclude}
+                        onRemoveInclude={handleRemoveInclude}
+                        onAddAvoid={handleAddAvoid}
+                        onRemoveAvoid={handleRemoveAvoid}
+                      />
+                    </div>
 
                     {/* Navigation Buttons */}
                     <div className="pt-2 flex items-center justify-between">
                       <button
                         type="button"
-                        onClick={() => setPlannerStep(1)}
+                        onClick={() => {
+                          setPlannerStep(1);
+                          window.requestAnimationFrame(() => scrollStudioSection());
+                        }}
                         className="px-5 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold hover:bg-[var(--pill-bg)] cursor-pointer transition-colors"
                       >
                         ← Back to Occasion & Destination
@@ -2449,7 +3215,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setPlannerStep(3)}
+                        onClick={() => {
+                          if (!requireRegisteredUser('personalized-styling', '/stylist', 'Generate Curated Outfit')) {
+                            return;
+                          }
+                          resetStylistSession(3);
+                          setIsSynthesizingOutfit(true);
+                          window.requestAnimationFrame(() => scrollStudioSection());
+                        }}
                         className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-md"
                       >
                         <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
@@ -2464,10 +3237,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <div className="lg:col-span-4 space-y-4">
                     <StylistReviewSummary
                       selectedOccasion={selectedOccasion}
-                      selectedDestination={destinationSearch}
+                      selectedDestination={resolvedDestinationName}
                       selectedVenueCategory={selectedVenueCategory}
-                      selectedVenueImg={selectedVenue.img}
-                      selectedVenueName={selectedVenue.name}
+                      selectedVenueImg={matchedCuratedVenue?.img}
+                      selectedVenueName={matchedCuratedVenue?.name}
                       selectedDate={selectedDate}
                       selectedTime={selectedTime}
                       weatherSummary={isWeatherSkipped ? 'Climate context skipped' : weatherNote}
@@ -2477,21 +3250,24 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       selectedPreferences={selectedPreferences}
                       mustInclude={mustInclude}
                       avoidItems={avoidItems}
-                      onEditOccasion={() => setPlannerStep(1)}
-                      onEditDestination={() => setPlannerStep(1)}
-                      onEditMoods={() => {
-                        window.scrollTo({ top: 200, behavior: 'smooth' });
+                      onEditOccasion={() => {
+                        setPlannerStep(1);
+                        window.requestAnimationFrame(() => scrollStudioSection());
                       }}
-                      onEditPreferences={() => {
-                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      onEditDestination={() => {
+                        setPlannerStep(1);
+                        window.requestAnimationFrame(() => scrollStudioSection());
                       }}
-                      onEditConstraints={() => {
-                        window.scrollTo({ top: 600, behavior: 'smooth' });
-                      }}
+                      onEditMoods={() => scrollStudioSection('stylist-mood-section')}
+                      onEditPreferences={() => scrollStudioSection('stylist-preferences-section')}
+                      onEditConstraints={() => scrollStudioSection('stylist-constraints-section')}
                       onGenerate={() => {
+                        if (!requireRegisteredUser('personalized-styling', '/stylist', 'Generate Curated Outfit')) {
+                          return;
+                        }
+                        resetStylistSession(3, { resetChat: true });
                         setIsSynthesizingOutfit(true);
-                        setPlannerStep(3);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        window.requestAnimationFrame(() => scrollStudioSection());
                       }}
                     />
                   </div>
@@ -2501,16 +3277,70 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
               {/* STEP 3: AVATAR-FIRST OUTFIT RESULT EXPERIENCE */}
               {plannerStep === 3 && (
+                !isAuthenticated && effectiveRestoredLook?.sourceKind !== 'curated-default' ? (
+                  <div className="max-w-xl mx-auto my-8 rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-card)] p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] mx-auto">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="font-playfair text-2xl font-bold text-[var(--text-heading)]">
+                        Sign in for personalized outfit curation
+                      </h3>
+                      <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
+                        Guest Demo lets you explore sample saved looks and curated venue plans. Create a free account to generate and refine outfits from your own closet.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requireRegisteredUser('personalized-styling', '/stylist', 'Generate Personalized Outfits')
+                        }
+                        className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                      >
+                        Create Free Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resetStylistSession(1)}
+                        className="px-4 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                      >
+                        Back to Planner
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="max-w-7xl mx-auto w-full space-y-6 pb-12 animate-fadeIn">
                   {isSynthesizingOutfit ? (
                     <OutfitGenerationLoader
                       occasion={selectedOccasion}
-                      venueName={selectedVenue.name || destinationSearch}
+                      venueName={resolvedDestinationName}
                       onComplete={() => setIsSynthesizingOutfit(false)}
                       durationMs={1300}
                     />
                   ) : (
                     <>
+                      {!isAuthenticated && effectiveRestoredLook?.sourceKind === 'curated-default' && (
+                        <div className="p-3.5 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)]/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 text-[var(--text-body)]">
+                            <Eye className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
+                            <span>
+                              <strong className="text-[var(--text-heading)]">Sample Look Preview:</strong>{' '}
+                              Explore how OTD structures garments across five slots. Create an account to save favorites or customize pieces from your own closet.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              requireRegisteredUser('personalized-styling', '/stylist', 'Customize Outfits with Your Closet')
+                            }
+                            className="px-3.5 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[11px] font-bold shrink-0 cursor-pointer hover:opacity-90 transition-opacity self-start sm:self-center"
+                          >
+                            Create Free Account
+                          </button>
+                        </div>
+                      )}
+
                       {/* Toast Feedback for Garment Swap */}
                       {swapToast && (
                         <div className="p-3 rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs font-semibold text-center flex items-center justify-center gap-2 shadow-lg animate-fadeIn border border-[var(--border-gold)]">
@@ -2521,10 +3351,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                       {/* SECTION A: Refined Outfit Header */}
                       <OutfitResultHeader
-                        title={synthesizedOutfit.title}
-                        subtitle={synthesizedOutfit.subtitle}
+                        title={activeOutfitTitle}
+                        subtitle={activeOutfitSubtitle}
                         occasion={selectedOccasion}
-                        destination={selectedVenue.name || destinationSearch}
+                        destination={resolvedDestinationName}
                         venueCategory={selectedVenueCategory}
                         selectedDate={selectedDate}
                         selectedTime={selectedTime}
@@ -2542,15 +3372,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             slots={effectiveSlots}
                             profile={profile}
                             occasion={selectedOccasion}
-                            outfitTitle={synthesizedOutfit.title}
+                            outfitTitle={activeOutfitTitle}
                             isLoading={isSynthesizingOutfit}
-                            onSlotSelect={handleOpenSwapModal}
+                            selectedSlotKey={selectedOutfitSlotKey}
+                            onActiveSlotChange={setSelectedOutfitSlotKey}
+                            onSlotSelect={isAuthenticated ? handleOpenSwapModal : undefined}
                             onChangeSlotItem={handleOpenSwapModal}
                           />
 
                           <OutfitRationaleCard
                             occasion={selectedOccasion}
-                            venueName={selectedVenue.name || destinationSearch}
+                            venueName={resolvedDestinationName}
                             venueCategory={selectedVenueCategory}
                             weatherCondition={selectedWeatherCond}
                             weatherSummary={weatherNote}
@@ -2566,12 +3398,22 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         {/* Right Column (5 cols): Actions Toolbar, 5 Standardized Slots & Preserved Stylist Concierge */}
                         <div className="lg:col-span-5 space-y-6">
                           <OutfitActionToolbar
-                            isSaved={likedLooks.includes(`curated-ensemble-${outfitVariationIndex}-${Object.keys(slotOverrides).join('-') || 'base'}`)}
+                            isSaved={isAuthenticated && isCurrentOutfitSaved}
+                            isGuestPreview={!isAuthenticated}
                             onSave={handleSaveCurrentLook}
                             onRegenerate={() => {
+                              if (
+                                !requireRegisteredUser(
+                                  'personalized-styling',
+                                  '/stylist',
+                                  'Generate Another Outfit Variation',
+                                )
+                              ) {
+                                return;
+                              }
+                              resetStylistSession(3, { keepVariation: true });
                               setIsSynthesizingOutfit(true);
                               setOutfitVariationIndex((prev) => prev + 1);
-                              setSlotOverrides({});
                             }}
                             onRefineWithChat={() => {
                               const chatElem = document.getElementById('stylist-concierge-chat');
@@ -2580,26 +3422,34 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                               }
                             }}
                             onAdjustPlan={() => setPlannerStep(2)}
-                            onNewPlan={() => {
-                              setPlannerStep(1);
-                              setSlotOverrides({});
-                            }}
+                            onNewPlan={() => resetStylistSession(1)}
                             isRegenerating={isSynthesizingOutfit}
-                            outfitTitle={synthesizedOutfit.title}
+                            outfitTitle={activeOutfitTitle}
                             occasion={selectedOccasion}
                           />
 
                           <OutfitSlotsList
                             slots={effectiveSlots}
                             closet={closet}
-                            onSlotClick={handleOpenSwapModal}
+                            selectedSlotKey={selectedOutfitSlotKey}
+                            onSlotClick={
+                              isAuthenticated
+                                ? handleOpenSwapModal
+                                : (slot) => setSelectedOutfitSlotKey(slot.slot)
+                            }
                             onSlotChangeClick={handleOpenSwapModal}
                             outfitContext={{
                               occasion: selectedOccasion,
-                              venue: selectedVenue.name || destinationSearch,
-                              outfitTitle: synthesizedOutfit.title,
+                              venue: resolvedDestinationName,
+                              outfitTitle: activeOutfitTitle,
                             }}
                             onNavigateToShopping={() => setActiveTab('shopping')}
+                            onNavigateToUpload={() => {
+                              requireRegisteredUser('upload', '/closet/add', 'Upload Garments to Closet');
+                            }}
+                            onRequireRegistration={(action, actionTitle) =>
+                              requireRegisteredUser(action, '/stylist', actionTitle)
+                            }
                           />
 
                           {/* Preserved Stylist Concierge Chat Box with Responsive Height (DEF-05) */}
@@ -2608,21 +3458,21 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             className="rounded-3xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden shadow-sm flex flex-col h-[360px] sm:h-[440px] md:h-[490px] max-h-[60vh] sm:max-h-[70vh]"
                           >
                             {/* Stylist Concierge Header */}
-                            <div className="p-4 border-b border-[var(--border-card)] flex items-center justify-between bg-[var(--bg-header)]">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-[#FAF5ED] p-1 border border-[#D5C29D] flex items-center justify-center">
+                            <div className="p-3.5 sm:p-4 border-b border-[var(--border-card)] flex flex-wrap items-center justify-between gap-2 bg-[var(--bg-header)]">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-[#FAF5ED] p-1 border border-[#D5C29D] flex items-center justify-center shrink-0">
                                   <img src="/otd_logo.png" alt="OTD" className="w-full h-full object-contain" />
                                 </div>
-                                <div>
-                                  <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)]">
+                                <div className="min-w-0">
+                                  <h4 className="font-playfair text-sm font-bold text-[var(--text-heading)] truncate">
                                     OTD AI Stylist Concierge
                                   </h4>
                                   <p className="text-[10px] text-emerald-500 font-medium flex items-center gap-1">
-                                    <span>● Active Refinement Engine</span>
+                                    <span>● Demo Assistant · Local Preview</span>
                                   </p>
                                 </div>
                               </div>
-                              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--gold-primary)]">
+                              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] text-[var(--gold-primary)] shrink-0">
                                 Local Calibration
                               </span>
                             </div>
@@ -2688,11 +3538,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                             <div className="p-3 border-t border-[var(--border-card)] flex items-center gap-2">
                               <input
                                 type="text"
+                                aria-label="Custom stylist instruction"
                                 placeholder="Custom instruction (e.g. 'Swap in something darker or more relaxed')..."
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                                className="flex-1 py-2 px-3.5 text-xs rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] focus:outline-none focus:border-[var(--gold-primary)]"
+                                className="flex-1 py-2 px-3.5 text-xs rounded-full bg-[var(--bg-card)] border border-[var(--border-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)]"
                               />
                               <button
                                 type="button"
@@ -2708,18 +3559,21 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </div>
 
                       {/* Modal for Individual Garment Swapping */}
-                      <GarmentSwapModal
-                        key={activeSwapSlot ? activeSwapSlot.slot : 'none'}
-                        isOpen={isGarmentSwapOpen}
-                        onClose={() => setIsGarmentSwapOpen(false)}
-                        slot={activeSwapSlot}
-                        allSlots={effectiveSlots}
-                        closet={closet}
-                        onApplySwap={handleApplySwap}
-                      />
+                      {isGarmentSwapOpen && activeSwapSlot && (
+                        <GarmentSwapModal
+                          key={`${activeSwapSlot.slot}:${activeSwapSlot.closetItemId ?? 'empty'}`}
+                          isOpen={isGarmentSwapOpen}
+                          onClose={handleCloseSwapModal}
+                          slot={activeSwapSlot}
+                          allSlots={effectiveSlots}
+                          closet={closet}
+                          onApplySwap={handleApplySwap}
+                        />
+                      )}
                     </>
                   )}
                 </div>
+                )
               )}
 
             </div>
@@ -2730,12 +3584,63 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* ========================================================================= */}
           {activeTab === 'closet' && (
             isUploadRoute ? (
-              <ClosetUploadView
-                onBack={onBackFromUpload || (() => setActiveTab('closet'))}
-                onComplete={onBackFromUpload || (() => setActiveTab('closet'))}
-              />
+              isAuthenticated ? (
+                <Suspense
+                  fallback={
+                    <div
+                      role="status"
+                      className="p-8 lg:p-12 max-w-4xl mx-auto w-full flex flex-col items-center justify-center gap-3 text-xs text-[var(--text-muted)]"
+                    >
+                      <div className="w-8 h-8 rounded-full border-2 border-[var(--border-gold)] border-t-[var(--gold-primary)] animate-spin" />
+                      <span>Opening garment acquisition intake...</span>
+                    </div>
+                  }
+                >
+                  <ClosetUploadView
+                    onBack={onBackFromUpload || (() => setActiveTab('closet'))}
+                    onComplete={onBackFromUpload || (() => setActiveTab('closet'))}
+                  />
+                </Suspense>
+              ) : (
+                <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-2xl mx-auto w-full my-8">
+                  <div className="rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-card)] p-8 text-center space-y-4 shadow-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-[var(--pill-bg)] border border-[var(--border-gold)] flex items-center justify-center text-[var(--gold-primary)] mx-auto">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--gold-primary)] font-bold block">
+                        Account Required
+                      </span>
+                      <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
+                        Register to Upload Your Garments
+                      </h2>
+                      <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+                        Guest mode includes a sample wardrobe to explore. Create a free account or sign in to upload personal clothing photos and build your digital closet.
+                      </p>
+                    </div>
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requireRegisteredUser('upload', '/closet/add', 'Upload Personal Clothing Items')
+                        }
+                        className="px-6 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                      >
+                        Create Free Account / Sign In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onBackFromUpload || (() => setActiveTab('closet'))}
+                        className="px-5 py-2.5 rounded-full border border-[var(--border-card)] text-xs font-semibold text-[var(--text-heading)] hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
+                      >
+                        Explore Sample Closet
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
             ) : (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               {/* Storage Quota Warning Banner */}
               {storageWarning && (
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
@@ -2766,7 +3671,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
                   {/* View Mode Toggle: Active vs. Archived */}
                   <div
                     role="tablist"
@@ -2809,7 +3714,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
 
                   <button
-                    onClick={onNavigateToUpload || onOpenAddPiece}
+                    onClick={() => {
+                      if (!requireRegisteredUser('upload', '/closet/add', 'Upload Personal Garment')) return;
+                      if (onNavigateToUpload) {
+                        onNavigateToUpload();
+                      } else {
+                        onOpenAddPiece();
+                      }
+                    }}
                     className="px-4 sm:px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
                   >
                     <Plus className="w-4 h-4" />
@@ -2844,14 +3756,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                       type="text"
+                      maxLength={CLOSET_SEARCH_MAX_LENGTH}
                       placeholder="Search garments by name, brand, color, or fabric..."
                       value={closetSearch}
                       onChange={(e) => setClosetSearch(e.target.value)}
                       aria-label="Search garments in closet"
-                      className="w-full pl-10 pr-9 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--gold-primary)]"
+                      className="w-full pl-10 pr-9 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)]"
                     />
                     {closetSearch && (
                       <button
+                        type="button"
                         onClick={() => setClosetSearch('')}
                         aria-label="Clear search"
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-heading)]"
@@ -2871,7 +3785,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         )
                       }
                       aria-label="Filter by formality tier"
-                      className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] cursor-pointer"
+                      className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer"
                     >
                       <option value="all">All Formality Tiers</option>
                       <option value={1}>Tier 1: Casual / Street</option>
@@ -2885,9 +3799,20 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <div className="relative flex-1 sm:flex-initial">
                       <select
                         value={closetSortOption}
-                        onChange={(e) => setClosetSortOption(e.target.value as any)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (
+                            val === 'recent' ||
+                            val === 'oldest' ||
+                            val === 'formality-desc' ||
+                            val === 'formality-asc' ||
+                            val === 'name-asc'
+                          ) {
+                            setClosetSortOption(val);
+                          }
+                        }}
                         aria-label="Sort wardrobe garments"
-                        className="w-full px-3.5 py-2 pr-8 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] outline-none focus:border-[var(--gold-primary)] cursor-pointer appearance-none font-medium"
+                        className="w-full px-3.5 py-2 pr-8 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] text-xs text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] focus:border-[var(--gold-primary)] cursor-pointer appearance-none font-medium"
                       >
                         <option value="recent">Recently Added</option>
                         <option value="oldest">Oldest</option>
@@ -2902,17 +3827,20 @@ export const AppStudio: React.FC<AppStudioProps> = ({
 
                 {/* Category Filter Tabs */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {[
-                    { id: 'all', label: `All (${currentPool.length})` },
-                    { id: 'tops', label: `Tops (${currentPool.filter((i) => i.category === 'tops').length})` },
-                    { id: 'bottoms', label: `Bottoms (${currentPool.filter((i) => i.category === 'bottoms').length})` },
-                    { id: 'outerwear', label: `Outerwear (${currentPool.filter((i) => i.category === 'outerwear').length})` },
-                    { id: 'footwear', label: `Footwear (${currentPool.filter((i) => i.category === 'footwear').length})` },
-                    { id: 'accessories', label: `Accessories (${currentPool.filter((i) => i.category === 'accessories').length})` },
-                  ].map((tab) => (
+                  {(
+                    [
+                      { id: 'all', label: `All (${currentPool.length})` },
+                      { id: 'tops', label: `Tops (${currentPool.filter((i) => i.category === 'tops').length})` },
+                      { id: 'bottoms', label: `Bottoms (${currentPool.filter((i) => i.category === 'bottoms').length})` },
+                      { id: 'outerwear', label: `Outerwear (${currentPool.filter((i) => i.category === 'outerwear').length})` },
+                      { id: 'footwear', label: `Footwear (${currentPool.filter((i) => i.category === 'footwear').length})` },
+                      { id: 'accessories', label: `Accessories (${currentPool.filter((i) => i.category === 'accessories').length})` },
+                    ] satisfies Array<{ id: 'all' | ClosetItem['category']; label: string }>
+                  ).map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => setClosetCategoryFilter(tab.id as any)}
+                      type="button"
+                      onClick={() => setClosetCategoryFilter(tab.id)}
                       className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                         closetCategoryFilter === tab.id
                           ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
@@ -2942,7 +3870,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   </div>
                   <div className="pt-2 flex justify-center">
                     <button
-                      onClick={onNavigateToUpload || onOpenAddPiece}
+                      onClick={() => {
+                        if (!requireRegisteredUser('upload', '/closet/add', 'Upload Your First Garment')) return;
+                        if (onNavigateToUpload) {
+                          onNavigateToUpload();
+                        } else {
+                          onOpenAddPiece();
+                        }
+                      }}
                       className="px-6 py-3 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
                     >
                       <Plus className="w-4 h-4" />
@@ -2996,25 +3931,18 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 /* RESPONSIVE GARMENT MATRIX GRID */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {filteredAndSortedClosetItems.map((piece) => (
-                    <div
+                    <button
                       key={piece.id}
-                      role="button"
-                      tabIndex={0}
+                      type="button"
                       aria-label={`Inspect ${piece.name}, ${piece.brand || ''} ${piece.category}`}
                       onClick={() => setSelectedClosetItem(piece)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedClosetItem(piece);
-                        }
-                      }}
-                      className={`rounded-2xl border bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
+                      className={`w-full text-left rounded-2xl border bg-[var(--bg-card)] overflow-hidden flex flex-col group shadow-xs hover:shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] ${
                         piece.isArchived
                           ? 'border-amber-500/40 opacity-85 hover:opacity-100 hover:border-amber-500'
                           : 'border-[var(--border-card)] hover:border-[var(--gold-primary)]'
                       }`}
                     >
-                      <div className="h-44 bg-neutral-900 relative overflow-hidden flex items-center justify-center p-2">
+                      <div className="h-44 w-full bg-neutral-900 relative overflow-hidden flex items-center justify-center p-2">
                         {piece.imageUrl ? (
                           <img
                             src={piece.imageUrl}
@@ -3036,7 +3964,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="p-3 space-y-1">
+                      <div className="p-3 space-y-1 w-full">
                         <h5 className="text-xs font-bold text-[var(--text-heading)] truncate">
                           {piece.name}
                         </h5>
@@ -3046,14 +3974,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                         </div>
                         <div className="flex items-center justify-between pt-1">
                           <span className="text-[10px] text-[var(--gold-primary)] font-mono font-semibold truncate">
-                            {piece.brand}
+                            {piece.brand || 'Personal Piece'}
                           </span>
                           <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-[var(--pill-bg)] text-[var(--text-muted)] border border-[var(--border-card)]">
                             Tier {piece.formality}
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -3065,7 +3993,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 4: DESTINATIONS MODE (Eliminating Dead Screen) */}
           {/* ========================================================================= */}
           {activeTab === 'destinations' && (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               <div>
                 <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
                   Destination Mode & Venues
@@ -3134,7 +4062,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 5: CALENDAR & UPCOMING PLANS (Eliminating Dead Screen) */}
           {/* ========================================================================= */}
           {activeTab === 'calendar' && (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
@@ -3146,8 +4074,8 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 </div>
                 <button
                   onClick={() => {
+                    resetStylistSession(1);
                     setActiveTab('stylist');
-                    setPlannerStep(1);
                   }}
                   className="px-5 py-2.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
                 >
@@ -3182,18 +4110,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     </div>
 
                     {item.planned ? (
-                      <div
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
                         onClick={() => setSelectedCalendarDay(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedCalendarDay(item);
-                          }
-                        }}
                         aria-label={`View planned look for ${item.name}, ${item.occasion}`}
-                        className="space-y-1.5 cursor-pointer group text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--gold-primary)] rounded-xl"
+                        className="w-full space-y-1.5 cursor-pointer group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-primary)] rounded-xl"
                       >
                         <div className="h-28 rounded-xl overflow-hidden bg-neutral-900 relative">
                           <img src={item.img} alt={item.occasion} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -3210,16 +4131,16 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                           <span className="text-emerald-600 font-semibold">✓ Planned</span>
                           <span className="text-[var(--gold-primary)] font-medium underline">Preview</span>
                         </div>
-                      </div>
+                      </button>
                     ) : (
                       <div className="py-7 text-center space-y-1.5 flex flex-col items-center justify-center">
                         <span className="text-xs text-[var(--text-muted)] block">No plan yet</span>
                         <button
                           type="button"
                           onClick={() => {
+                            resetStylistSession(1);
                             setSelectedOccasion(item.occasion || 'Smart Casual');
                             setActiveTab('stylist');
-                            setPlannerStep(1);
                           }}
                           className="px-3 py-1.5 rounded-full border border-[var(--border-gold)] text-[10px] text-[var(--gold-primary)] font-bold hover:bg-[var(--pill-bg)] transition-colors cursor-pointer"
                         >
@@ -3257,7 +4178,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 6: OUTFIT IDEAS / LOOKBOOK GALLERY (Eliminating Dead Screen) */}
           {/* ========================================================================= */}
           {activeTab === 'ideas' && (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               <div>
                 <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
                   Haute Lookbook & Outfit Ideas
@@ -3311,8 +4232,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                       </p>
                       <button
                         onClick={() => {
+                          if (
+                            !requireRegisteredUser(
+                              'personalized-styling',
+                              '/stylist',
+                              `Recreate "${idea.title}" with Your Closet`,
+                            )
+                          ) {
+                            return;
+                          }
+                          resetStylistSession(3);
                           setActiveTab('stylist');
-                          setPlannerStep(3);
                           setCurrentOutfitTitle(idea.title);
                         }}
                         className="w-full py-2.5 rounded-xl border border-[var(--border-gold)] bg-[var(--pill-bg)] hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
@@ -3331,14 +4261,14 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 7: SAVED LOOKS & FAVORITES (Eliminating Dead Screen) */}
           {/* ========================================================================= */}
           {activeTab === 'saved' && (
-            <div className="p-5 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-7xl mx-auto w-full space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
                     Saved Looks & Favorites
                   </h2>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    {savedLooksList.length} curated ensembles bookmarked for fast instant reuse
+                    {savedLooksList.length} curated {savedLooksList.length === 1 ? 'ensemble' : 'ensembles'} bookmarked • {favoriteLooksCount} favorited
                   </p>
                 </div>
               </div>
@@ -3353,7 +4283,11 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     When you find an outfit you love in the AI Stylist or Lookbook, tap the heart icon to save it here.
                   </p>
                   <button
-                    onClick={() => setActiveTab('stylist')}
+                    type="button"
+                    onClick={() => {
+                      resetStylistSession(1);
+                      setActiveTab('stylist');
+                    }}
                     className="px-5 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-bold cursor-pointer"
                   >
                     Go to AI Stylist
@@ -3368,42 +4302,78 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     >
                       <div>
                         <div className="h-52 bg-neutral-900 relative">
-                          <img src={look.img} alt={look.title} className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => {
-                              setSavedLooksList((prev) => prev.filter((l) => l.id !== look.id));
-                              setLikedLooks((prev) => prev.filter((id) => id !== look.id));
+                          <img
+                            src={look.imageUrl || SAFE_LOOK_FALLBACK_IMAGE}
+                            alt={look.title}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (target.dataset.fallbackApplied === 'true') return;
+                              target.dataset.fallbackApplied = 'true';
+                              target.src = SAFE_LOOK_FALLBACK_IMAGE;
                             }}
-                            className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-rose-400 hover:text-rose-600 transition-colors cursor-pointer"
-                            title="Remove from saved"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFavoriteSavedLook(look.id)}
+                              aria-label={look.isFavorite ? `Unfavorite ${look.title}` : `Favorite ${look.title}`}
+                              aria-pressed={look.isFavorite}
+                              className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
+                              title={look.isFavorite ? 'Remove from Favorites' : 'Mark as Favorite'}
+                            >
+                              <Heart
+                                className={`w-3.5 h-3.5 ${
+                                  look.isFavorite ? 'fill-rose-500 text-rose-500' : 'text-white'
+                                }`}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSavedLook(look.id)}
+                              aria-label={`Delete ${look.title} from saved looks`}
+                              className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-rose-400 hover:text-rose-500 transition-colors cursor-pointer"
+                              title="Remove from saved"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-bold">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] uppercase font-mono text-[var(--gold-primary)] font-bold truncate">
                               {look.occasion}
                             </span>
-                            <span className="text-[10px] text-[var(--text-muted)]">{look.date}</span>
+                            <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                              {formatSavedLookDateLabel(look)}
+                            </span>
                           </div>
                           <h4 className="font-playfair text-base font-bold text-[var(--text-heading)]">
                             {look.title}
                           </h4>
                           <p className="text-xs text-[var(--text-body)] line-clamp-2">
-                            {look.piecesSummary}
+                            {formatSavedLookPiecesSummary(look)}
                           </p>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] text-[var(--text-muted)]">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] font-mono">
+                              {look.garmentIds.length > 0
+                                ? `${look.garmentIds.length} closet ${look.garmentIds.length === 1 ? 'piece' : 'pieces'}`
+                                : 'Editorial look'}
+                            </span>
+                            {look.venue && (
+                              <span className="px-2 py-0.5 rounded-full bg-[var(--pill-bg)] border border-[var(--border-card)] truncate max-w-[160px]">
+                                {look.venue}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div className="p-4 pt-0">
                         <button
-                          onClick={() => {
-                            setActiveTab('stylist');
-                            setPlannerStep(3);
-                            setCurrentOutfitTitle(look.title);
-                          }}
+                          type="button"
+                          onClick={() => handleWearSavedLook(look)}
                           className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -3421,7 +4391,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB 8: VIRTUAL TRY-ON STUDIO (Polished & Honest) */}
           {/* ========================================================================= */}
           {activeTab === 'tryon' && (
-            <div className="p-5 lg:p-7 max-w-4xl mx-auto w-full text-center space-y-6">
+            <div className="p-5 pb-24 md:pb-7 lg:p-7 max-w-4xl mx-auto w-full text-center space-y-6">
               <div>
                 <div className="flex items-center justify-center gap-2">
                   <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[var(--text-heading)]">
@@ -3447,12 +4417,12 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <p className="font-playfair text-base sm:text-lg font-bold">
                       {userDisplayName} ({profile.height || '178 cm'} • {profile.bodyShape || 'Athletic'})
                     </p>
-                    <p className="text-xs text-amber-300 font-mono">Draped: {synthesizedOutfit.title} (Size M)</p>
+                    <p className="text-xs text-amber-300 font-mono">Draped: {activeOutfitTitle} (Size M)</p>
                   </div>
                 </div>
 
                 {/* Capability & Architecture Status Grid */}
-                <div className="grid grid-cols-3 gap-2 text-[10px] font-mono py-1">
+                <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2 text-[10px] font-mono py-1">
                   <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold">
                     <span>✓ 2D Drape</span>
                   </div>
@@ -3487,17 +4457,39 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           {/* TAB: WARDROBE-AWARE SHOPPING LIST (TASK 8) */}
           {/* ========================================================================= */}
           {activeTab === 'shopping' && (
-            <ShoppingListView
-              onNavigateToStylist={() => {
-                setActiveTab('stylist');
-                setPlannerStep(1);
-              }}
-              onNavigateToCloset={(searchTerm) => {
-                if (searchTerm) setClosetSearch(searchTerm);
-                setActiveTab('closet');
-              }}
-              onOpenAddPiece={onOpenAddPiece}
-            />
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  className="p-8 lg:p-12 max-w-4xl mx-auto w-full flex flex-col items-center justify-center gap-3 text-xs text-[var(--text-muted)]"
+                >
+                  <div className="w-8 h-8 rounded-full border-2 border-[var(--border-gold)] border-t-[var(--gold-primary)] animate-spin" />
+                  <span>Loading Wardrobe Wishlist...</span>
+                </div>
+              }
+            >
+              <ShoppingListView
+                onNavigateToStylist={() => {
+                  resetStylistSession(1);
+                  setActiveTab('stylist');
+                }}
+                onNavigateToCloset={(searchTerm) => {
+                  if (searchTerm) setClosetSearch(searchTerm);
+                  setActiveTab('closet');
+                }}
+                onOpenAddPiece={() => {
+                  if (!requireRegisteredUser('upload', '/closet/add', 'Add Garment to Your Closet')) return;
+                  if (onNavigateToUpload) {
+                    onNavigateToUpload();
+                  } else {
+                    onOpenAddPiece();
+                  }
+                }}
+                onRequireRegistration={(action, actionTitle) =>
+                  requireRegisteredUser(action, '/shopping', actionTitle)
+                }
+              />
+            </Suspense>
           )}
 
         </main>
@@ -3649,6 +4641,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <User className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span>My Profile</span>
               </button>
+              {isGuest && onOpenAuth ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAuth();
+                  }}
+                  className="p-3 rounded-xl border border-[var(--border-gold)] bg-[var(--pill-bg)] text-left flex items-center justify-between font-semibold col-span-2 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <span className="text-[var(--text-heading)]">Guest Demo Mode — Sign In</span>
+                  <ArrowRight className="w-4 h-4 text-[var(--gold-primary)]" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -3659,6 +4664,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
         <div
           role="dialog"
           aria-modal="true"
+          aria-hidden={Boolean(itemToEdit) || Boolean(itemToDelete) ? true : undefined}
           aria-labelledby="garment-inspection-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
           onClick={() => setSelectedClosetItem(null)}
@@ -3710,7 +4716,7 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 {selectedClosetItem.name}
               </h4>
               <p className="text-[11px] text-[var(--gold-primary)] font-mono font-semibold">
-                {selectedClosetItem.brand} • {selectedClosetItem.subType}
+                {formatGarmentMetaParts([selectedClosetItem.brand, selectedClosetItem.subType]) || 'Personal Collection'}
               </p>
               {selectedClosetItem.description && (
                 <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-relaxed bg-[var(--pill-bg)] p-2 rounded-lg border border-[var(--border-card)]">
@@ -3745,8 +4751,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      restoreClosetItem(selectedClosetItem.id);
+                      const itemName = selectedClosetItem.name;
+                      const itemId = selectedClosetItem.id;
                       setSelectedClosetItem(null);
+                      if (
+                        !requireRegisteredUser(
+                          'manage-closet',
+                          '/closet',
+                          `Restore "${itemName}"`,
+                        )
+                      ) {
+                        return;
+                      }
+                      restoreClosetItem(itemId);
                     }}
                     className="flex-1 py-2.5 px-3 rounded-xl border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                   >
@@ -3757,7 +4774,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                   <>
                     <button
                       type="button"
-                      onClick={() => setItemToEdit(selectedClosetItem)}
+                      onClick={() => {
+                        const target = selectedClosetItem;
+                        if (!isAuthenticated) {
+                          setSelectedClosetItem(null);
+                          requireRegisteredUser(
+                            'manage-closet',
+                            '/closet',
+                            `Edit "${target.name}"`,
+                          );
+                          return;
+                        }
+                        setItemToEdit(target);
+                      }}
                       className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--border-gold)] text-[var(--gold-primary)] hover:bg-[var(--pill-bg)] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Edit className="w-3.5 h-3.5" />
@@ -3767,8 +4796,19 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        archiveClosetItem(selectedClosetItem.id);
+                        const itemName = selectedClosetItem.name;
+                        const itemId = selectedClosetItem.id;
                         setSelectedClosetItem(null);
+                        if (
+                          !requireRegisteredUser(
+                            'manage-closet',
+                            '/closet',
+                            `Archive "${itemName}"`,
+                          )
+                        ) {
+                          return;
+                        }
+                        archiveClosetItem(itemId);
                       }}
                       className="flex-1 py-2.5 px-3 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
@@ -3783,8 +4823,17 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setItemToDelete(selectedClosetItem);
+                    const target = selectedClosetItem;
                     setSelectedClosetItem(null);
+                    if (!isAuthenticated) {
+                      requireRegisteredUser(
+                        'manage-closet',
+                        '/closet',
+                        `Remove "${target.name}"`,
+                      );
+                      return;
+                    }
+                    setItemToDelete(target);
                   }}
                   className="flex-1 py-2 px-3 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors text-[11px]"
                 >
@@ -3845,8 +4894,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    archiveClosetItem(itemToDelete.id);
+                    const itemName = itemToDelete.name;
+                    const itemId = itemToDelete.id;
                     setItemToDelete(null);
+                    if (!requireRegisteredUser('manage-closet', '/closet', `Archive "${itemName}"`)) {
+                      return;
+                    }
+                    archiveClosetItem(itemId);
                   }}
                   className="flex-1 py-2.5 rounded-xl border border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold cursor-pointer transition-colors"
                 >
@@ -3856,8 +4910,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  deleteClosetItem(itemToDelete.id);
+                  const itemName = itemToDelete.name;
+                  const itemId = itemToDelete.id;
                   setItemToDelete(null);
+                  if (!requireRegisteredUser('manage-closet', '/closet', `Delete "${itemName}"`)) {
+                    return;
+                  }
+                  deleteClosetItem(itemId);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 cursor-pointer shadow-md transition-colors"
               >
@@ -3890,7 +4949,13 @@ export const AppStudio: React.FC<AppStudioProps> = ({
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onSignOut={() => {
+        signOutLabel={isAuthenticated ? 'Sign Out' : 'Exit Guest Mode'}
+        onSignOut={async () => {
+          if (isAuthenticated) {
+            await logout();
+          } else if (isGuest) {
+            exitGuestMode();
+          }
           setIsSettingsOpen(false);
           if (onBackToLanding) onBackToLanding();
         }}
@@ -4018,10 +5083,10 @@ export const AppStudio: React.FC<AppStudioProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  resetStylistSession(1);
                   setSelectedOccasion(selectedCalendarDay.occasion);
                   setSelectedCalendarDay(null);
                   setActiveTab('stylist');
-                  setPlannerStep(1);
                 }}
                 className="w-full py-2.5 rounded-xl bg-black text-white dark:bg-white dark:text-black font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:scale-[1.02] transition-all"
               >
@@ -4039,6 +5104,15 @@ export const AppStudio: React.FC<AppStudioProps> = ({
           </div>
         </div>
       )}
+
+      {/* Registration Prompt Modal for Guest Personal-Data Actions */}
+      <GuestRegistrationPromptModal
+        isOpen={!isAuthenticated && guestPromptState !== null}
+        action={guestPromptState?.action || 'manage-closet'}
+        actionTitle={guestPromptState?.actionTitle}
+        redirectTo={guestPromptState?.redirectTo || '/closet'}
+        onClose={() => setGuestPromptState(null)}
+      />
 
     </div>
   );

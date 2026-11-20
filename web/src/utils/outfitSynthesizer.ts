@@ -4,7 +4,7 @@ import type { OutfitSlotItem } from '../components/ui/AvatarOutfitCanvas';
 export interface SynthesizedOutfit {
   title: string;
   subtitle: string;
-  harmonyScore: number;
+  harmonyScore: number | null;
   slots: OutfitSlotItem[];
 }
 
@@ -116,7 +116,8 @@ export function synthesizeOutfitResult({
   const isHotWeather =
     weatherCondition.toLowerCase().includes('hot') ||
     weatherCondition.toLowerCase().includes('sunny') ||
-    selectedPreferences.includes('Ultra-Light');
+    selectedPreferences.includes('Ultra-Light') ||
+    selectedPreferences.includes('Light & Breezy');
 
   const slots: OutfitSlotItem[] = [];
 
@@ -306,18 +307,15 @@ export function synthesizeOutfitResult({
   const subtitle = subtitles[variationIndex % subtitles.length];
 
   // Transparent Sartorial Harmony Calculation (Frontend Calibrated Index)
-  // 1. Wardrobe ownership ratio: up to 60 points
+  // Return null (unavailable) when zero owned garments exist rather than fabricating a score.
   const ownedCount = slots.filter((s) => s.status === 'owned').length;
-  const wardrobeOwnershipPts = Math.round((ownedCount / Math.max(1, slots.length)) * 60);
-
-  // 2. Formality & Dress-Code compliance: 28-30 points
-  const formalityPts = isFormal ? 29 : isCasual ? 28 : 30;
-
-  // 3. Climate & Comfort balance: 8-9 points
-  const climateComfortPts = isHotWeather ? 8 : 9;
-
-  // Total calibrated score
-  const harmonyScore = Math.min(99, Math.max(70, wardrobeOwnershipPts + formalityPts + climateComfortPts));
+  let harmonyScore: number | null = null;
+  if (ownedCount > 0 && slots.length > 0) {
+    const wardrobeOwnershipPts = Math.round((ownedCount / slots.length) * 60);
+    const formalityPts = isFormal ? 29 : isCasual ? 28 : 30;
+    const climateComfortPts = isHotWeather ? 8 : 9;
+    harmonyScore = Math.min(99, Math.max(0, wardrobeOwnershipPts + formalityPts + climateComfortPts));
+  }
 
   return {
     title,

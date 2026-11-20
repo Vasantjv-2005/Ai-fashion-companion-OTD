@@ -1,4 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { subscribeAuthSessionEvents } from '../services/authSession';
+import {
+  getScopedStorageKey,
+  getWorkspaceScopeId,
+  resolveWorkspaceScope,
+  setActivePrivateCacheOwnerId,
+  type OtdWorkspaceScope,
+} from '../utils/authStorage';
 
 export interface ClosetItem {
   id: string;
@@ -273,7 +282,7 @@ const DEFAULT_PROFILE: UserProfile = {
   weight: '70 kg',
   bodyShape: 'Athletic / V-Taper',
   stylePersonas: ['Old Money Heritage', 'Clean Minimalist'],
-  preferredFit: 'Tailored / Regular',
+  preferredFit: 'Regular Classic',
   palettePreferences: ['Espresso & Earth', 'Ivory & Cream', 'Charcoal & Navy'],
   avatarOption: 'archetype',
   avatarArchetype: 'classic_tailored',
@@ -308,85 +317,340 @@ const INITIAL_CLOSET: ClosetItem[] = [
   { id: 'a2', category: 'accessories', subType: 'Leather Belt', name: 'Hand-Stitched Bridle Leather Belt', brand: 'Hermès', color: 'Burgundy Noir', fit: 'Regular', formality: 4, icon: '🎗️', isArchived: false, createdAt: '2026-10-17T10:00:00.000Z' },
 ];
 
-const ClosetContext = createContext<ClosetContextType | undefined>(undefined);
+interface ScopedClosetWorkspace {
+  scopeId: string;
+  profile: UserProfile;
+  closet: ClosetItem[];
+  shoppingList: ShoppingListItem[];
+  currentOutfit: OutfitRecommendation | null;
+  isGenerating: boolean;
+  history: string[];
+}
 
-export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem('otd_user_profile');
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
-    } catch {
-      return DEFAULT_PROFILE;
+function cloneDefaultProfile(): UserProfile {
+  return {
+    ...DEFAULT_PROFILE,
+    stylePersonas: [...DEFAULT_PROFILE.stylePersonas],
+    palettePreferences: [...DEFAULT_PROFILE.palettePreferences],
+  };
+}
+
+function createNeutralProfile(name = ''): UserProfile {
+  return {
+    name: name.trim(),
+    wardrobeFocus: 'personalize',
+    height: '',
+    weight: '',
+    bodyShape: '',
+    stylePersonas: [],
+    preferredFit: '',
+    palettePreferences: [],
+    avatarArchetype: 'classic_tailored',
+  };
+}
+
+function cloneInitialCloset(): ClosetItem[] {
+  return INITIAL_CLOSET.map((item) => ({
+    ...item,
+    season: item.season ? [...item.season] : undefined,
+  }));
+}
+
+function normalizeStoredProfile(raw: unknown, fallbackProfile: UserProfile): UserProfile {
+  if (typeof raw !== 'object' || raw === null) {
+    return fallbackProfile;
+  }
+  const candidate = raw as Partial<UserProfile>;
+  return {
+    ...fallbackProfile,
+    ...candidate,
+    name:
+      typeof candidate.name === 'string' && candidate.name.trim().length > 0
+        ? candidate.name
+        : fallbackProfile.name,
+    height: typeof candidate.height === 'string' ? candidate.height : fallbackProfile.height,
+    weight: typeof candidate.weight === 'string' ? candidate.weight : fallbackProfile.weight,
+    bodyShape:
+      typeof candidate.bodyShape === 'string' ? candidate.bodyShape : fallbackProfile.bodyShape,
+    preferredFit:
+      typeof candidate.preferredFit === 'string'
+        ? candidate.preferredFit
+        : fallbackProfile.preferredFit,
+    stylePersonas: Array.isArray(candidate.stylePersonas)
+      ? candidate.stylePersonas.filter((v): v is string => typeof v === 'string')
+      : fallbackProfile.stylePersonas,
+    palettePreferences: Array.isArray(candidate.palettePreferences)
+      ? candidate.palettePreferences.filter((v): v is string => typeof v === 'string')
+      : fallbackProfile.palettePreferences,
+  };
+}
+
+function normalizeStoredCloset(raw: unknown): ClosetItem[] | null {
+  if (!Array.isArray(raw)) return null;
+  const now = Date.now();
+  return raw
+    .filter(
+      (entry): entry is ClosetItem =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as Partial<ClosetItem>).id === 'string' &&
+        typeof (entry as Partial<ClosetItem>).name === 'string'
+    )
+    .map((item, index) => ({
+      ...item,
+      isArchived: Boolean(item.isArchived),
+      createdAt:
+        item.createdAt || new Date(now - (raw.length - index) * 3600000 * 24).toISOString(),
+    }));
+}
+
+function normalizeStoredShoppingList(raw: unknown): ShoppingListItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (entry): entry is ShoppingListItem =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as Partial<ShoppingListItem>).id === 'string' &&
+        typeof (entry as Partial<ShoppingListItem>).name === 'string'
+    )
+    .map((item) => ({
+      ...item,
+      estimatedBudget:
+        typeof item.estimatedBudget === 'number' &&
+        !isNaN(item.estimatedBudget) &&
+        item.estimatedBudget >= 0
+          ? item.estimatedBudget
+          : undefined,
+    }));
+}
+
+function loadScopedWorkspace(
+  scope: OtdWorkspaceScope,
+  userName?: string
+): ScopedClosetWorkspace {
+  const scopeId = getWorkspaceScopeId(scope);
+
+  if (scope.kind === 'none') {
+    if (scope.reason === 'unauthenticated') {
+      return {
+        scopeId,
+        profile: cloneDefaultProfile(),
+        closet: cloneInitialCloset(),
+        shoppingList: [],
+        currentOutfit: null,
+        isGenerating: false,
+        history: [],
+      };
     }
-  });
 
-  const [closet, setCloset] = useState<ClosetItem[]>(() => {
+    return {
+      scopeId,
+      profile: createNeutralProfile(''),
+      closet: [],
+      shoppingList: [],
+      currentOutfit: null,
+      isGenerating: false,
+      history: [],
+    };
+  }
+
+  const profileKey = getScopedStorageKey(scope, 'user_profile');
+  const closetKey = getScopedStorageKey(scope, 'closet_items');
+  const shoppingKey = getScopedStorageKey(scope, 'shopping_list');
+
+  if (scope.kind === 'guest') {
+    const fallbackProfile = cloneDefaultProfile();
+    let profile = fallbackProfile;
     try {
-      const saved = localStorage.getItem('otd_closet_items');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // Normalize existing data: ensure isArchived and createdAt are populated
-          return parsed.map((item, index) => ({
-            ...item,
-            isArchived: Boolean(item.isArchived),
-            createdAt: item.createdAt || new Date(Date.now() - (parsed.length - index) * 3600000 * 24).toISOString(),
-          }));
+      const savedProfile = profileKey ? localStorage.getItem(profileKey) : null;
+      if (savedProfile) {
+        profile = normalizeStoredProfile(JSON.parse(savedProfile), fallbackProfile);
+      }
+    } catch {
+      profile = fallbackProfile;
+    }
+
+    let closet = cloneInitialCloset();
+    try {
+      const savedCloset = closetKey ? localStorage.getItem(closetKey) : null;
+      if (savedCloset) {
+        const normalized = normalizeStoredCloset(JSON.parse(savedCloset));
+        if (normalized) {
+          closet = normalized;
         }
       }
     } catch (e) {
       console.warn('Failed to parse otd_closet_items from localStorage:', e);
     }
-    return INITIAL_CLOSET;
-  });
 
-  const [currentOutfit, setCurrentOutfit] = useState<OutfitRecommendation | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
-
-  // Task 8 & 10: Wardrobe-Aware Personal Wishlist state
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => {
+    let shoppingList: ShoppingListItem[] = [];
     try {
-      const saved = localStorage.getItem('otd_shopping_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map((item) => ({
-            ...item,
-            estimatedBudget:
-              typeof item.estimatedBudget === 'number' && !isNaN(item.estimatedBudget) && item.estimatedBudget >= 0
-                ? item.estimatedBudget
-                : undefined,
-          }));
-        }
+      const savedShopping = shoppingKey ? localStorage.getItem(shoppingKey) : null;
+      if (savedShopping) {
+        shoppingList = normalizeStoredShoppingList(JSON.parse(savedShopping));
       }
     } catch (e) {
       console.warn('Failed to parse otd_shopping_list from localStorage:', e);
     }
-    return [];
-  });
+
+    return {
+      scopeId,
+      profile,
+      closet,
+      shoppingList,
+      currentOutfit: null,
+      isGenerating: false,
+      history: [],
+    };
+  }
+
+  // Authenticated account scope (`otd_private:<userId>:*`):
+  // Never reads guest keys or seeds Guest Demo INITIAL_CLOSET / DEFAULT_PROFILE.
+  const neutralProfile = createNeutralProfile(userName || '');
+  let profile = neutralProfile;
+  try {
+    const savedProfile = profileKey ? localStorage.getItem(profileKey) : null;
+    if (savedProfile) {
+      profile = normalizeStoredProfile(JSON.parse(savedProfile), neutralProfile);
+    }
+  } catch {
+    profile = neutralProfile;
+  }
+
+  let closet: ClosetItem[] = [];
+  try {
+    const savedCloset = closetKey ? localStorage.getItem(closetKey) : null;
+    if (savedCloset) {
+      const normalized = normalizeStoredCloset(JSON.parse(savedCloset));
+      if (normalized) {
+        closet = normalized;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to parse authenticated closet cache from localStorage:', e);
+  }
+
+  let shoppingList: ShoppingListItem[] = [];
+  try {
+    const savedShopping = shoppingKey ? localStorage.getItem(shoppingKey) : null;
+    if (savedShopping) {
+      shoppingList = normalizeStoredShoppingList(JSON.parse(savedShopping));
+    }
+  } catch (e) {
+    console.warn('Failed to parse authenticated shopping list cache from localStorage:', e);
+  }
+
+  return {
+    scopeId,
+    profile,
+    closet,
+    shoppingList,
+    currentOutfit: null,
+    isGenerating: false,
+    history: [],
+  };
+}
+
+const ClosetContext = createContext<ClosetContextType | undefined>(undefined);
+
+export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { status, user } = useAuth();
+  const workspaceScope = useMemo(
+    () => resolveWorkspaceScope(status, user?.id),
+    [status, user?.id]
+  );
+  const targetScopeId = getWorkspaceScopeId(workspaceScope);
+
+  const [workspace, setWorkspace] = useState<ScopedClosetWorkspace>(() =>
+    loadScopedWorkspace(workspaceScope, user?.name)
+  );
+
+  // Synchronously reconcile workspace state during render on any auth/user scope transition
+  // so children never observe a mixed-scope frame and persistence effects never write stale data.
+  const activeWorkspace =
+    workspace.scopeId === targetScopeId
+      ? workspace
+      : loadScopedWorkspace(workspaceScope, user?.name);
+
+  if (workspace.scopeId !== targetScopeId) {
+    setWorkspace(activeWorkspace);
+  }
+
+  const activeScopeIdRef = useRef<string>(targetScopeId);
+  const scopeGenerationRef = useRef<number>(0);
+  const generateTimerRef = useRef<number | null>(null);
+  const modifyTimerRef = useRef<number | null>(null);
+  const ownerUserId = workspaceScope.kind === 'authenticated' ? workspaceScope.userId : null;
+
+  useLayoutEffect(() => {
+    // Only refresh active owner when ClosetProvider is mounted for an authenticated scope.
+    // Do NOT clear owner to null on unmount so AuthContext logout/guest teardown retains
+    // the outgoing owner ID even if ClosetProvider unmounts before teardown completes.
+    if (ownerUserId) {
+      setActivePrivateCacheOwnerId(ownerUserId);
+    }
+  }, [ownerUserId]);
+
+  const clearPendingOutfitTimers = () => {
+    if (generateTimerRef.current !== null) {
+      window.clearTimeout(generateTimerRef.current);
+      generateTimerRef.current = null;
+    }
+    if (modifyTimerRef.current !== null) {
+      window.clearTimeout(modifyTimerRef.current);
+      modifyTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
+    activeScopeIdRef.current = targetScopeId;
+    scopeGenerationRef.current += 1;
+    return () => {
+      scopeGenerationRef.current += 1;
+      clearPendingOutfitTimers();
+    };
+  }, [targetScopeId]);
+
+  useEffect(() => {
+    return subscribeAuthSessionEvents({
+      onSessionInvalidated: () => {
+        scopeGenerationRef.current += 1;
+        clearPendingOutfitTimers();
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    if (workspace.scopeId !== targetScopeId) return;
+    const shoppingKey = getScopedStorageKey(workspaceScope, 'shopping_list');
+    if (!shoppingKey) return;
     try {
-      localStorage.setItem('otd_shopping_list', JSON.stringify(shoppingList));
+      localStorage.setItem(shoppingKey, JSON.stringify(workspace.shoppingList));
     } catch (err) {
       if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22)) {
         console.error('LocalStorage quota exceeded when saving shopping list:', err);
       }
     }
-  }, [shoppingList]);
+  }, [workspace.scopeId, workspace.shoppingList, workspaceScope, targetScopeId]);
 
   useEffect(() => {
+    if (workspace.scopeId !== targetScopeId) return;
+    const profileKey = getScopedStorageKey(workspaceScope, 'user_profile');
+    if (!profileKey) return;
     try {
-      localStorage.setItem('otd_user_profile', JSON.stringify(profile));
+      localStorage.setItem(profileKey, JSON.stringify(workspace.profile));
     } catch (e) {
       console.warn('Failed to persist user profile:', e);
     }
-  }, [profile]);
+  }, [workspace.scopeId, workspace.profile, workspaceScope, targetScopeId]);
 
   useEffect(() => {
+    if (workspace.scopeId !== targetScopeId) return;
+    const closetKey = getScopedStorageKey(workspaceScope, 'closet_items');
+    if (!closetKey) return;
     try {
-      localStorage.setItem('otd_closet_items', JSON.stringify(closet));
+      localStorage.setItem(closetKey, JSON.stringify(workspace.closet));
     } catch (err) {
       if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22)) {
         console.error('LocalStorage quota exceeded when saving closet items:', err);
@@ -399,166 +663,488 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         );
       }
     }
-  }, [closet]);
+  }, [workspace.scopeId, workspace.closet, workspaceScope, targetScopeId]);
 
   const updateProfile = (newProfile: Partial<UserProfile>) => {
-    setProfile(prev => ({ ...prev, ...newProfile }));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? { ...prev, profile: { ...prev.profile, ...newProfile } }
+        : prev
+    );
   };
 
   const addClosetItem = (item: Omit<ClosetItem, 'id'>) => {
+    const dispatchedScopeId = targetScopeId;
     const newItem: ClosetItem = {
       ...item,
       id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       isArchived: false,
       createdAt: item.createdAt || new Date().toISOString(),
     };
-    setCloset(prev => [newItem, ...prev]);
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? { ...prev, closet: [newItem, ...prev.closet] }
+        : prev
+    );
   };
 
   const deleteClosetItem = (id: string) => {
-    setCloset(prev => prev.filter(item => item.id !== id));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? { ...prev, closet: prev.closet.filter((item) => item.id !== id) }
+        : prev
+    );
   };
 
   const updateClosetItem = (id: string, updates: Partial<ClosetItem>) => {
-    setCloset(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? {
+            ...prev,
+            closet: prev.closet.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+          }
+        : prev
+    );
   };
 
   const archiveClosetItem = (id: string) => {
-    setCloset(prev => prev.map(item => item.id === id ? { ...item, isArchived: true } : item));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? {
+            ...prev,
+            closet: prev.closet.map((item) =>
+              item.id === id ? { ...item, isArchived: true } : item
+            ),
+          }
+        : prev
+    );
   };
 
   const restoreClosetItem = (id: string) => {
-    setCloset(prev => prev.map(item => item.id === id ? { ...item, isArchived: false } : item));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? {
+            ...prev,
+            closet: prev.closet.map((item) =>
+              item.id === id ? { ...item, isArchived: false } : item
+            ),
+          }
+        : prev
+    );
   };
 
   const generateOutfit = (context: { venue: string; occasion: string; vibe: string; weather: string }) => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      // Intelligent matching strictly from the user's active (non-archived) closet
-      const activeCloset = closet.filter(i => !i.isArchived);
-      if (activeCloset.length === 0) {
-        setIsGenerating(false);
+    const dispatchedScopeId = targetScopeId;
+    const dispatchedGeneration = scopeGenerationRef.current;
+    if (generateTimerRef.current !== null) {
+      window.clearTimeout(generateTimerRef.current);
+      generateTimerRef.current = null;
+    }
+
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId ? { ...prev, isGenerating: true } : prev
+    );
+
+    generateTimerRef.current = window.setTimeout(() => {
+      generateTimerRef.current = null;
+      if (
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedGeneration
+      ) {
         return;
       }
 
-      let selectedTop = activeCloset.find(i => i.category === 'tops' && i.formality >= 3) || activeCloset.find(i => i.category === 'tops') || activeCloset[0];
-      let selectedBottom = activeCloset.find(i => i.category === 'bottoms' && i.formality >= 3) || activeCloset.find(i => i.category === 'bottoms') || activeCloset[0];
-      let selectedOuterwear = activeCloset.find(i => i.category === 'outerwear' && (context.weather.includes('Breezy') || context.weather.includes('Cool'))) || activeCloset.find(i => i.category === 'outerwear');
-      let selectedShoe = activeCloset.find(i => i.category === 'footwear' && i.formality >= 3) || activeCloset.find(i => i.category === 'footwear') || activeCloset[0];
-      let selectedAcc = activeCloset.find(i => i.category === 'accessories') || activeCloset[0];
+      setWorkspace((prev) => {
+        if (prev.scopeId !== dispatchedScopeId) {
+          return prev;
+        }
 
-      // Context adjustments based on destination/vibe
-      if (context.vibe.toLowerCase().includes('relaxed') || context.occasion.toLowerCase().includes('casual')) {
-        selectedTop = activeCloset.find(i => i.id === 't3' || i.id === 't4') || selectedTop;
-        selectedBottom = activeCloset.find(i => i.id === 'b2' || i.id === 'b3') || selectedBottom;
-        selectedShoe = activeCloset.find(i => i.id === 'f3' || i.id === 'f2') || selectedShoe;
-      } else if (context.occasion.toLowerCase().includes('date') || context.venue.toLowerCase().includes('rooftop')) {
-        selectedTop = activeCloset.find(i => i.id === 't1') || selectedTop; // Silk-Cashmere High Neck
-        selectedBottom = activeCloset.find(i => i.id === 'b1') || selectedBottom; // Forward Pleat Flannel
-        selectedOuterwear = activeCloset.find(i => i.id === 'o1') || selectedOuterwear; // Navy Blazer
-        selectedShoe = activeCloset.find(i => i.id === 'f2') || selectedShoe; // Suede Tassel Loafer
-      }
+        // Intelligent matching strictly from the user's active (non-archived) closet
+        const activeCloset = prev.closet.filter((i) => !i.isArchived);
+        if (activeCloset.length === 0) {
+          return { ...prev, currentOutfit: null, isGenerating: false };
+        }
 
-      const pieces: ClosetItem[] = [selectedTop, selectedBottom];
-      if (selectedOuterwear) pieces.push(selectedOuterwear);
-      pieces.push(selectedShoe);
-      if (selectedAcc && selectedAcc.category === 'accessories') pieces.push(selectedAcc);
+        let selectedTop =
+          activeCloset.find((i) => i.category === 'tops' && i.formality >= 3) ||
+          activeCloset.find((i) => i.category === 'tops') ||
+          null;
+        let selectedBottom =
+          activeCloset.find((i) => i.category === 'bottoms' && i.formality >= 3) ||
+          activeCloset.find((i) => i.category === 'bottoms') ||
+          null;
+        let selectedOuterwear =
+          activeCloset.find(
+            (i) =>
+              i.category === 'outerwear' &&
+              (context.weather.includes('Breezy') || context.weather.includes('Cool'))
+          ) ||
+          activeCloset.find((i) => i.category === 'outerwear') ||
+          null;
+        let selectedShoe =
+          activeCloset.find((i) => i.category === 'footwear' && i.formality >= 3) ||
+          activeCloset.find((i) => i.category === 'footwear') ||
+          null;
+        const selectedAcc = activeCloset.find((i) => i.category === 'accessories') || null;
 
-      setCurrentOutfit({
-        id: `otd_${Date.now()}`,
-        title: `${context.vibe} at ${context.venue}`,
-        occasion: context.occasion,
-        venue: context.venue,
-        vibe: context.vibe,
-        weather: context.weather,
-        pieces,
-        rationale: {
-          venueAlignment: `Selected to match the ambience of ${context.venue}. The ${selectedTop.name} sets an alluring, refined tone without looking excessively corporate.`,
-          weatherComfort: `Calibrated for ${context.weather}. Breathable natural fabrics prevent overheating while retaining structure in the breeze.`,
-          paletteHarmony: `The pairing of ${selectedTop.color} against ${selectedBottom.color} creates high-contrast visual balance calibrated to your ${profile.palettePreferences[0] || 'subtle tonal'} preference.`
-        },
-        harmonyScore: 98.6
+        // Context adjustments using strictly semantic wardrobe attributes (never demo IDs)
+        if (
+          context.vibe.toLowerCase().includes('relaxed') ||
+          context.occasion.toLowerCase().includes('casual')
+        ) {
+          selectedTop =
+            activeCloset.find((i) => i.category === 'tops' && i.formality <= 2) ||
+            selectedTop;
+          selectedBottom =
+            activeCloset.find((i) => i.category === 'bottoms' && i.formality <= 3) ||
+            selectedBottom;
+          selectedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                (i.subType.toLowerCase().includes('sneaker') || i.formality <= 3)
+            ) || selectedShoe;
+        } else if (
+          context.occasion.toLowerCase().includes('date') ||
+          context.venue.toLowerCase().includes('rooftop')
+        ) {
+          selectedTop =
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                (i.subType.toLowerCase().includes('knit') ||
+                  i.name.toLowerCase().includes('cashmere') ||
+                  i.formality >= 3)
+            ) || selectedTop;
+          selectedBottom =
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                !i.subType.toLowerCase().includes('jean') &&
+                i.formality >= 3
+            ) || selectedBottom;
+          selectedOuterwear =
+            activeCloset.find(
+              (i) =>
+                i.category === 'outerwear' &&
+                (i.subType.toLowerCase().includes('blazer') || i.formality >= 3)
+            ) || selectedOuterwear;
+          selectedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                (i.subType.toLowerCase().includes('loafer') || i.formality >= 3)
+            ) || selectedShoe;
+        }
+
+        const pieces: ClosetItem[] = [];
+        if (selectedTop) pieces.push(selectedTop);
+        if (selectedBottom) pieces.push(selectedBottom);
+        if (selectedOuterwear) pieces.push(selectedOuterwear);
+        if (selectedShoe) pieces.push(selectedShoe);
+        if (selectedAcc) pieces.push(selectedAcc);
+
+        if (pieces.length === 0) {
+          return { ...prev, currentOutfit: null, isGenerating: false };
+        }
+
+        const primaryAnchor = selectedTop || pieces[0];
+        const secondaryAnchor = selectedBottom || pieces[1] || pieces[0];
+        const coverageScore = Math.round((Math.min(4, pieces.length) / 4) * 60);
+        const computedHarmonyScore = Math.min(99, coverageScore + 38);
+
+        return {
+          ...prev,
+          currentOutfit: {
+            id: `otd_${Date.now()}`,
+            title: `${context.vibe} at ${context.venue}`,
+            occasion: context.occasion,
+            venue: context.venue,
+            vibe: context.vibe,
+            weather: context.weather,
+            pieces,
+            rationale: {
+              venueAlignment: `Selected to match the ambience of ${context.venue}. The ${primaryAnchor.name} sets a refined tone anchored to your owned wardrobe.`,
+              weatherComfort: `Calibrated for ${context.weather}. Breathable natural fabrics prevent overheating while retaining structure in the breeze.`,
+              paletteHarmony: `The pairing of ${primaryAnchor.color} against ${secondaryAnchor.color} creates balanced visual contrast calibrated to your ${prev.profile.palettePreferences[0] || 'subtle tonal'} preference.`,
+            },
+            harmonyScore: computedHarmonyScore,
+          },
+          isGenerating: false,
+        };
       });
-      setIsGenerating(false);
     }, 600);
   };
 
   const modifyOutfit = (instruction: string) => {
-    if (!currentOutfit) return;
-    setIsGenerating(true);
-    setHistory(prev => [...prev, instruction]);
+    if (!activeWorkspace.currentOutfit) return;
+    const dispatchedScopeId = targetScopeId;
+    const dispatchedGeneration = scopeGenerationRef.current;
+    if (modifyTimerRef.current !== null) {
+      window.clearTimeout(modifyTimerRef.current);
+      modifyTimerRef.current = null;
+    }
 
-    setTimeout(() => {
-      const activeCloset = closet.filter(i => !i.isArchived);
-      let updatedPieces = [...currentOutfit.pieces];
-      let newRationale = { ...currentOutfit.rationale };
-      const lower = instruction.toLowerCase();
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId && prev.currentOutfit
+        ? {
+            ...prev,
+            isGenerating: true,
+            history: [...prev.history, instruction],
+          }
+        : prev
+    );
 
-      if (lower.includes('casual') || lower.includes('relax')) {
-        // Swap shoes for sneakers
-        const sneakers = activeCloset.find(i => i.subType === 'Clean Sneaker') || activeCloset.find(i => i.category === 'footwear');
-        if (sneakers) {
-          updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? sneakers : p);
-        }
-        // Swap formal pants for relaxed chinos/denim
-        const chinos = activeCloset.find(i => i.id === 'b2') || activeCloset.find(i => i.category === 'bottoms');
-        if (chinos) {
-          updatedPieces = updatedPieces.map(p => p.category === 'bottoms' ? chinos : p);
-        }
-        newRationale.venueAlignment = `Modified for a more relaxed, approachable casual energy while retaining clean lines.`;
-      } else if (lower.includes('shoes') || lower.includes('shoe') || lower.includes('boot')) {
-        // Swap footwear to boots or alternative loafers
-        const currentShoe = updatedPieces.find(p => p.category === 'footwear');
-        const nextShoe = activeCloset.find(i => i.category === 'footwear' && i.id !== currentShoe?.id) || currentShoe;
-        if (nextShoe) {
-          updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? nextShoe : p);
-          newRationale.venueAlignment = `Footwear adjusted to ${nextShoe.name} to alter the ground posture and silhouette weight.`;
-        }
-      } else if (lower.includes('no jeans') || lower.includes('dont use jeans') || lower.includes("don't use jeans")) {
-        const trousers = activeCloset.find(i => i.id === 'b1' || i.id === 'b2')!;
-        if (trousers) {
-          updatedPieces = updatedPieces.map(p => p.category === 'bottoms' ? trousers : p);
-          newRationale.venueAlignment = `Substituted denim with tailored ${trousers.name} for greater sartorial formality.`;
-        }
-      } else if (lower.includes('attractive') || lower.includes('date') || lower.includes('sharp')) {
-        const luxuryKnit = activeCloset.find(i => i.id === 't1')!;
-        const chelseaBoots = activeCloset.find(i => i.id === 'f4') || activeCloset.find(i => i.id === 'f2')!;
-        if (luxuryKnit) {
-          updatedPieces = updatedPieces.map(p => p.category === 'tops' ? luxuryKnit : p);
-        }
-        if (chelseaBoots) {
-          updatedPieces = updatedPieces.map(p => p.category === 'footwear' ? chelseaBoots : p);
-        }
-        newRationale.venueAlignment = `Elevated allure: Swapped in ${luxuryKnit?.name || 'knitwear'} and ${chelseaBoots?.name || 'boots'} for high-definition night appeal.`;
-      } else {
-        // Generic smart tweak
-        newRationale.venueAlignment = `Customized based on instruction: "${instruction}". Balanced with existing wardrobe synergy.`;
+    modifyTimerRef.current = window.setTimeout(() => {
+      modifyTimerRef.current = null;
+      if (
+        activeScopeIdRef.current !== dispatchedScopeId ||
+        scopeGenerationRef.current !== dispatchedGeneration
+      ) {
+        return;
       }
 
-      setCurrentOutfit(prev => prev ? {
-        ...prev,
-        pieces: updatedPieces,
-        rationale: newRationale,
-        harmonyScore: Math.min(99.4, prev.harmonyScore + 0.3)
-      } : null);
+      setWorkspace((prev) => {
+        if (prev.scopeId !== dispatchedScopeId || !prev.currentOutfit) {
+          return prev;
+        }
 
-      setIsGenerating(false);
+        const activeCloset = prev.closet.filter((i) => !i.isArchived);
+        let updatedPieces = [...prev.currentOutfit.pieces];
+        const newRationale = { ...prev.currentOutfit.rationale };
+        const lower = instruction.toLowerCase();
+        let didModify = false;
+
+        if (lower.includes('casual') || lower.includes('relax')) {
+          const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+          const casualShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                (i.subType.toLowerCase().includes('sneaker') || i.formality <= 2)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                i.formality < (currentShoe?.formality ?? 5)
+            );
+          if (casualShoe) {
+            updatedPieces = updatedPieces.map((p) => (p.category === 'footwear' ? casualShoe : p));
+            didModify = true;
+          }
+
+          const currentBottom = updatedPieces.find((p) => p.category === 'bottoms');
+          const casualBottom =
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                i.id !== currentBottom?.id &&
+                (i.subType.toLowerCase().includes('chino') ||
+                  i.subType.toLowerCase().includes('jean') ||
+                  i.formality <= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'bottoms' &&
+                i.id !== currentBottom?.id &&
+                i.formality < (currentBottom?.formality ?? 5)
+            );
+          if (casualBottom) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'bottoms' ? casualBottom : p
+            );
+            didModify = true;
+          }
+
+          newRationale.venueAlignment = didModify
+            ? `Modified for a more relaxed, approachable casual energy while preserving your other outfit pieces.`
+            : `No more casual footwear or bottoms were found in your active closet; existing pieces were kept.`;
+        } else if (lower.includes('shoes') || lower.includes('shoe') || lower.includes('boot')) {
+          const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+          const wantsBoot = lower.includes('boot');
+          const nextShoe =
+            (wantsBoot
+              ? activeCloset.find(
+                  (i) =>
+                    i.category === 'footwear' &&
+                    i.id !== currentShoe?.id &&
+                    (i.name.toLowerCase().includes('boot') ||
+                      i.subType.toLowerCase().includes('boot'))
+                )
+              : undefined) ||
+            activeCloset.find((i) => i.category === 'footwear' && i.id !== currentShoe?.id);
+
+          if (nextShoe) {
+            updatedPieces = updatedPieces.map((p) => (p.category === 'footwear' ? nextShoe : p));
+            didModify = true;
+            newRationale.venueAlignment = `Footwear adjusted to ${nextShoe.name} to alter the ground posture and silhouette weight.`;
+          } else {
+            newRationale.venueAlignment = `No alternative footwear item was found in your active closet; existing pieces were preserved.`;
+          }
+        } else if (
+          lower.includes('no jeans') ||
+          lower.includes('dont use jeans') ||
+          lower.includes("don't use jeans")
+        ) {
+          const isDenim = (i: ClosetItem) =>
+            i.name.toLowerCase().includes('jean') ||
+            i.subType.toLowerCase().includes('jean') ||
+            i.subType.toLowerCase().includes('denim');
+          const nonDenimBottoms = activeCloset.filter(
+            (i) => i.category === 'bottoms' && !isDenim(i)
+          );
+          const currentBottom = updatedPieces.find((p) => p.category === 'bottoms');
+          const tailoredTrouser =
+            nonDenimBottoms.find((i) => i.formality >= 3 && i.id !== currentBottom?.id) ||
+            nonDenimBottoms.find((i) => i.id !== currentBottom?.id) ||
+            (currentBottom && isDenim(currentBottom) ? nonDenimBottoms[0] : undefined);
+
+          if (tailoredTrouser) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'bottoms' ? tailoredTrouser : p
+            );
+            didModify = true;
+            newRationale.venueAlignment = `Substituted denim with tailored ${tailoredTrouser.name} for greater sartorial formality.`;
+          } else {
+            newRationale.venueAlignment = `No non-denim tailored bottoms were found in your active closet; existing pieces were preserved.`;
+          }
+        } else if (
+          lower.includes('attractive') ||
+          lower.includes('date') ||
+          lower.includes('sharp')
+        ) {
+          const currentTop = updatedPieces.find((p) => p.category === 'tops');
+          const currentShoe = updatedPieces.find((p) => p.category === 'footwear');
+
+          const elevatedTop =
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                i.id !== currentTop?.id &&
+                (i.subType.toLowerCase().includes('knit') ||
+                  i.name.toLowerCase().includes('cashmere') ||
+                  i.formality >= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'tops' &&
+                i.id !== currentTop?.id &&
+                i.formality > (currentTop?.formality ?? 0)
+            );
+          const elevatedShoe =
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                (i.subType.toLowerCase().includes('boot') ||
+                  i.subType.toLowerCase().includes('loafer') ||
+                  i.formality >= 3)
+            ) ||
+            activeCloset.find(
+              (i) =>
+                i.category === 'footwear' &&
+                i.id !== currentShoe?.id &&
+                i.formality > (currentShoe?.formality ?? 0)
+            );
+
+          if (elevatedTop) {
+            updatedPieces = updatedPieces.map((p) => (p.category === 'tops' ? elevatedTop : p));
+            didModify = true;
+          }
+          if (elevatedShoe) {
+            updatedPieces = updatedPieces.map((p) =>
+              p.category === 'footwear' ? elevatedShoe : p
+            );
+            didModify = true;
+          }
+
+          newRationale.venueAlignment = didModify
+            ? `Elevated allure: Swapped in ${elevatedTop?.name || currentTop?.name || 'refined top'} and ${elevatedShoe?.name || currentShoe?.name || 'tailored footwear'} from your active wardrobe.`
+            : `No sharper evening alternatives matched in your active closet; existing pieces were preserved.`;
+        } else if (lower.includes('lighter') || lower.includes('layer')) {
+          const currentOuterwear = updatedPieces.find((p) => p.category === 'outerwear');
+          const lighterOuterwear =
+            activeCloset.find(
+              (i) =>
+                i.category === 'outerwear' &&
+                i.id !== currentOuterwear?.id &&
+                (i.formality ?? 3) <= 3
+            ) ||
+            activeCloset.find(
+              (i) => i.category === 'outerwear' && i.id !== currentOuterwear?.id
+            );
+          if (
+            lighterOuterwear &&
+            (!currentOuterwear ||
+              (lighterOuterwear.formality ?? 3) <= (currentOuterwear.formality ?? 3))
+          ) {
+            updatedPieces = currentOuterwear
+              ? updatedPieces.map((p) => (p.category === 'outerwear' ? lighterOuterwear : p))
+              : [...updatedPieces.slice(0, 1), lighterOuterwear, ...updatedPieces.slice(1)];
+            didModify = true;
+            newRationale.venueAlignment = `Layered with ${lighterOuterwear.name} for breathable, lightweight versatility.`;
+          } else if (currentOuterwear) {
+            updatedPieces = updatedPieces.filter((p) => p.category !== 'outerwear');
+            didModify = true;
+            newRationale.venueAlignment = `Removed ${currentOuterwear.name} for a cleaner, lighter unlayered silhouette.`;
+          } else {
+            newRationale.venueAlignment = `Maintained a breathable, unlayered base silhouette; no alternate outerwear was changed.`;
+          }
+        } else {
+          // Generic smart tweak (preserves existing slots cleanly)
+          newRationale.venueAlignment = `Noted instruction "${instruction}". Unaffected wardrobe slots remain preserved.`;
+        }
+
+        return {
+          ...prev,
+          currentOutfit: {
+            ...prev.currentOutfit,
+            pieces: updatedPieces,
+            rationale: newRationale,
+            harmonyScore: didModify
+              ? Math.min(99.4, prev.currentOutfit.harmonyScore + 0.3)
+              : prev.currentOutfit.harmonyScore,
+          },
+          isGenerating: false,
+        };
+      });
     }, 450);
   };
 
-  const checkItemOwnership = (garment: { name: string; category?: string; subType?: string; color?: string }): OwnershipMatchResult => {
-    return checkGarmentInCloset(closet, garment);
+  const checkItemOwnership = (garment: {
+    name: string;
+    category?: string;
+    subType?: string;
+    color?: string;
+  }): OwnershipMatchResult => {
+    return checkGarmentInCloset(activeWorkspace.closet, garment);
   };
 
-  const isItemInShoppingList = (query: { name: string; color?: string; subType?: string } | string): boolean => {
+  const isItemInShoppingList = (
+    query: { name: string; color?: string; subType?: string } | string
+  ): boolean => {
     const nameToMatch = (typeof query === 'string' ? query : query.name).trim().toLowerCase();
-    const colorToMatch = typeof query === 'object' && query.color ? query.color.trim().toLowerCase() : '';
-    const subTypeToMatch = typeof query === 'object' && query.subType ? query.subType.trim().toLowerCase() : '';
+    const colorToMatch =
+      typeof query === 'object' && query.color ? query.color.trim().toLowerCase() : '';
+    const subTypeToMatch =
+      typeof query === 'object' && query.subType ? query.subType.trim().toLowerCase() : '';
 
-    return shoppingList.some((item) => {
+    return activeWorkspace.shoppingList.some((item) => {
       const itemName = item.name.trim().toLowerCase();
       if (itemName === nameToMatch) return true;
-      if (nameToMatch.length > 6 && (itemName.includes(nameToMatch) || nameToMatch.includes(itemName))) return true;
+      if (
+        nameToMatch.length > 6 &&
+        (itemName.includes(nameToMatch) || nameToMatch.includes(itemName))
+      ) {
+        return true;
+      }
 
       if (subTypeToMatch && colorToMatch && item.subType && item.color) {
         const itemSubType = item.subType.trim().toLowerCase();
@@ -577,7 +1163,9 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   };
 
-  const addToShoppingList = (itemData: Omit<ShoppingListItem, 'id' | 'addedAt'>): AddShoppingListResult => {
+  const addToShoppingList = (
+    itemData: Omit<ShoppingListItem, 'id' | 'addedAt'>
+  ): AddShoppingListResult => {
     // 1. Guard against adding garments already owned in active closet
     const ownership = checkItemOwnership({
       name: itemData.name,
@@ -602,7 +1190,9 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       subType: itemData.subType,
     });
     if (isDuplicate) {
-      const existing = shoppingList.find((i) => i.name.trim().toLowerCase() === itemData.name.trim().toLowerCase());
+      const existing = activeWorkspace.shoppingList.find(
+        (i) => i.name.trim().toLowerCase() === itemData.name.trim().toLowerCase()
+      );
       return {
         success: false,
         isAlreadyOwned: false,
@@ -612,14 +1202,19 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     }
 
-    // 3. Create fresh entry
+    // 3. Create fresh entry scoped cleanly to current session
+    const dispatchedScopeId = targetScopeId;
     const newItem: ShoppingListItem = {
       ...itemData,
       id: `shop_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       addedAt: new Date().toISOString(),
     };
 
-    setShoppingList((prev) => [newItem, ...prev]);
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? { ...prev, shoppingList: [newItem, ...prev.shoppingList] }
+        : prev
+    );
 
     return {
       success: true,
@@ -630,53 +1225,74 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   };
 
-  const updateShoppingListItem = (id: string, updates: Partial<Omit<ShoppingListItem, 'id' | 'addedAt'>>) => {
-    setShoppingList((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const updated = { ...item, ...updates };
-        if (updates.estimatedBudget !== undefined) {
-          updated.estimatedBudget =
-            typeof updates.estimatedBudget === 'number' && !isNaN(updates.estimatedBudget) && updates.estimatedBudget >= 0
-              ? updates.estimatedBudget
-              : undefined;
-        }
-        return updated;
-      })
-    );
+  const updateShoppingListItem = (
+    id: string,
+    updates: Partial<Omit<ShoppingListItem, 'id' | 'addedAt'>>
+  ) => {
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) => {
+      if (prev.scopeId !== dispatchedScopeId) return prev;
+      return {
+        ...prev,
+        shoppingList: prev.shoppingList.map((item) => {
+          if (item.id !== id) return item;
+          const updated = { ...item, ...updates };
+          if (updates.estimatedBudget !== undefined) {
+            updated.estimatedBudget =
+              typeof updates.estimatedBudget === 'number' &&
+              !isNaN(updates.estimatedBudget) &&
+              updates.estimatedBudget >= 0
+                ? updates.estimatedBudget
+                : undefined;
+          }
+          return updated;
+        }),
+      };
+    });
   };
 
   const removeFromShoppingList = (id: string) => {
-    setShoppingList((prev) => prev.filter((item) => item.id !== id));
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId
+        ? {
+            ...prev,
+            shoppingList: prev.shoppingList.filter((item) => item.id !== id),
+          }
+        : prev
+    );
   };
 
   const clearShoppingList = () => {
-    setShoppingList([]);
+    const dispatchedScopeId = targetScopeId;
+    setWorkspace((prev) =>
+      prev.scopeId === dispatchedScopeId ? { ...prev, shoppingList: [] } : prev
+    );
   };
 
   return (
     <ClosetContext.Provider
       value={{
-        profile,
+        profile: activeWorkspace.profile,
         updateProfile,
-        closet,
+        closet: activeWorkspace.closet,
         addClosetItem,
         deleteClosetItem,
         updateClosetItem,
         archiveClosetItem,
         restoreClosetItem,
-        currentOutfit,
+        currentOutfit: activeWorkspace.currentOutfit,
         generateOutfit,
         modifyOutfit,
-        isGenerating,
-        history,
-        shoppingList,
+        isGenerating: activeWorkspace.isGenerating,
+        history: activeWorkspace.history,
+        shoppingList: activeWorkspace.shoppingList,
         addToShoppingList,
         updateShoppingListItem,
         removeFromShoppingList,
         clearShoppingList,
         isItemInShoppingList,
-        checkItemOwnership
+        checkItemOwnership,
       }}
     >
       {children}
